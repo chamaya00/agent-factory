@@ -1,0 +1,24 @@
+{
+  "name": "agent-factory",
+  "owner": {
+    "name": "chamaya00",
+    "url": "https://github.com/chamaya00"
+  },
+  "plugins": [
+    {
+      "name": "agent-factory",
+      "source": "./plugins/agent-factory",
+      "description": "Agent roles, house rules, and repo provisioning commands for turning objectives into shipped code.",
+      "version": "1.0.0",
+      "author": {
+        "name": "chamaya00",
+        "url": "https://github.com/chamaya00"
+      },
+      "homepage": "https://github.com/chamaya00/agent-factory",
+      "repository": "https://github.com/chamaya00/agent-factory",
+      "license": "MIT",
+      "keywords": ["agents", "orchestration", "github", "process"],
+      "category": "workflow"
+    }
+  ]
+}
