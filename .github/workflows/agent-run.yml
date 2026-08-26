@@ -95,7 +95,9 @@ jobs:
     permissions:
       contents: read
       issues: write
-      pull-requests: read
+      # write, not read: a run refused on a pull request still has to label it
+      # agent:blocked and say why, or a refusal reads as a flake.
+      pull-requests: write
     outputs:
       should-run: ${{ steps.decide.outputs.should-run }}
       role: ${{ steps.decide.outputs.role }}
