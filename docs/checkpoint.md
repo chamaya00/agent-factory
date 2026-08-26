@@ -1,12 +1,37 @@
-# Checkpoint: the five things only you can do
+# Checkpoint: the things only you can do
 
-Everything in phases 1 to 5 is built and merged. These five steps need a human
-with account access, and nothing agent-side works until steps 1 and 2 are done.
+Everything in phases 1 to 5 is built and merged. These steps need a human with
+account access. Step 0 is thirty seconds and everything downstream depends on
+it; nothing agent-side works until steps 1 and 2 are done either.
 
 All of it is doable from an iPhone. Step 3 is the fiddly one, and the note about
 the private key is the part that catches people out.
 
 ---
+
+## 0. Tag `main` as `v1`
+
+Every caller workflow in every project resolves
+`chamaya00/agent-factory/.github/workflows/ci.yml@v1`. Until that reference
+exists, a project's checks fail before they start, with an error about an
+invalid workflow reference rather than anything to do with the code.
+
+From the web, on the phone:
+
+1. Open `github.com/chamaya00/agent-factory/releases/new`.
+2. Tap **Choose a tag**, type `v1`, then **Create new tag: v1 on publish**.
+3. Target: `main`.
+4. Title `v1`. Leave the body empty or paste the first paragraph of the README.
+5. **Publish release**. That creates the tag.
+
+The tag is load-bearing and it is mutable: moving it changes what every project
+runs, immediately, with no pull request anywhere. When the factory changes in a
+way projects should not pick up automatically, cut `v2` and let each project
+move its callers when it is ready.
+
+To move it deliberately later, delete the `v1` release and republish it against
+the newer commit.
+
 
 ## 1. Generate the subscription token
 
@@ -131,6 +156,6 @@ here.
 
 ## When you are done
 
-Reply with which of the five are done. Then phase 7 proves the gate before any
+Reply with which of these are done. Then phase 7 proves the gate before any
 agent is pointed at it - that ordering matters, and the reason is in
 `docs/proving-the-gate.md`.
