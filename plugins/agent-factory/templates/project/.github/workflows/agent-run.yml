@@ -1,0 +1,32 @@
+name: agent-run
+
+# Thin caller. One agent at a time, queued at the repo level by the factory
+# workflow, capped in turns and minutes.
+#
+# Requires the repository secret CLAUDE_CODE_OAUTH_TOKEN. The App id and key
+# are optional but strongly preferred: without them, pull requests land in an
+# approval-required state and every one has to be approved by hand.
+
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      issue-number:
+        description: Issue to work.
+        required: true
+        type: string
+
+jobs:
+  agent:
+    uses: chamaya00/agent-factory/.github/workflows/agent-run.yml@v1
+    with:
+      issue-number: ${{ inputs.issue-number || '' }}
+      max-turns: 15
+      timeout-minutes: 20
+    secrets:
+      claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      app-id: ${{ secrets.AGENT_APP_ID }}
+      app-private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}

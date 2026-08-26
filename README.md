@@ -21,6 +21,7 @@ plugins/agent-factory/
   agents/                            the four roles
   skills/                            the process instructions
   commands/                          slash commands
+  templates/project/                 what /new-project drops into a fresh repo
 .github/workflows/                   reusable workflows plus the factory's own guard
 scripts/                             the guard's checks
 ```
@@ -33,6 +34,23 @@ Everything except the two manifests sits at the plugin root, not inside `.claude
 - `researcher` - investigates options and constraints, writes to `docs/research/`. No source access.
 - `designer` - produces flows, states, and component specs, writes to `docs/design/`. No source access.
 - `engineer` - implements against the acceptance criteria, writes the tests, opens the pull request.
+
+## Commands
+
+- `/new-project <owner/repo>` - provisions a fresh repo: Actions permissions first, then labels, caller workflows, `CLAUDE.md`, memory files, and branch protection.
+- `/decompose <issue>` - runs the orchestrator on one issue by hand.
+- `/retro` - proposes memory updates for the current repo as a pull request.
+
+## Workflows
+
+All the logic lives here; projects get thin callers that point at `@v1`.
+
+| Workflow | Called as | What it does |
+|---|---|---|
+| `ci.yml` | `workflow_call` | typecheck, lint, test, build. No model involved. This is the gate. |
+| `agent-run.yml` | `workflow_call` | one agent run: repo-wide concurrency, queued not cancelled, capped turns and minutes, refuses a fourth attempt on the same issue. |
+| `project-guard.yml` | `workflow_call` | in each project: memory files stay inside the 40-line cap, and nobody but a maintainer edits the files that gate the repo. |
+| `guard.yml` | this repo only | the checks below. |
 
 ## Guard
 
@@ -49,3 +67,13 @@ python3 scripts/validate_workflows.py
 /plugin marketplace add chamaya00/agent-factory
 /plugin install agent-factory@agent-factory
 ```
+
+Both lines are needed. Adding the marketplace without installing the plugin is the usual reason the commands do not appear.
+
+## Standing up a project
+
+In order, and the order is the point:
+
+1. `docs/checkpoint.md` - the five things only a human can do: the subscription token, the secrets, the agent identity App, the plugin install, the preview provider. Written for an iPhone, since that is the only device involved.
+2. `docs/proving-the-gate.md` - prove a red check blocks a merge, by hand, on a throwaway repo, before any agent is pointed at it. An agent aimed at a gate you do not trust produces work you have to read line by line, which is the thing the system exists to avoid.
+3. `docs/smoke-test.md` - one objective through the whole loop, with what to watch for at each of the six steps and the five failure modes worth recognising on sight.

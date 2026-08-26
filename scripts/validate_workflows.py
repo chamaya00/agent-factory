@@ -14,7 +14,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOWS = ROOT / ".github" / "workflows"
-TEMPLATES = ROOT / "templates"
+TEMPLATES = ROOT / "plugins" / "agent-factory" / "templates"
 
 # An agent that can rewrite its own gates has no gates.
 FORBIDDEN_PERMISSIONS = {"actions": {"write"}}

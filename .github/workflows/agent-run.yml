@@ -1,0 +1,323 @@
+name: agent-run
+
+# Wraps anthropics/claude-code-action for one agent run on one issue.
+#
+# Every setting below exists because a Pro subscription is a fixed budget:
+# one run at a time, queued rather than cancelled, hard-capped in turns and
+# minutes, and refused outright once an issue has burned three attempts.
+#
+# Projects call it with:
+#   jobs:
+#     agent:
+#       uses: chamaya00/agent-factory/.github/workflows/agent-run.yml@v1
+#       secrets: inherit
+
+on:
+  workflow_call:
+    inputs:
+      issue-number:
+        description: Issue to work. Only needed for workflow_dispatch; otherwise taken from the event.
+        type: string
+        default: ''
+      max-turns:
+        description: Hard cap on agentic turns for one run.
+        type: number
+        default: 15
+      timeout-minutes:
+        description: Wall-clock cap for the agent job.
+        type: number
+        default: 20
+      model:
+        description: Model for the run. Empty uses the action default.
+        type: string
+        default: ''
+      max-attempts:
+        description: >-
+          Attempts allowed on one issue before the run is refused. Three failed
+          attempts means the issue was scoped wrong, not that it needs a fourth.
+        type: number
+        default: 3
+      run-label:
+        description: Label on an issue that means "run the agent now".
+        type: string
+        default: 'agent:queued'
+      trigger-phrase:
+        description: Phrase in a comment that starts a run.
+        type: string
+        default: '@claude'
+      skip-path-patterns:
+        description: >-
+          Newline-separated globs. When a run is attached to a pull request and
+          every changed file matches one of these, the run is skipped. Docs and
+          lockfiles are not worth a slice of the subscription.
+        type: string
+        default: |
+          docs/**
+          *.md
+          **/*.md
+          package-lock.json
+          **/package-lock.json
+          pnpm-lock.yaml
+          **/pnpm-lock.yaml
+          yarn.lock
+          **/yarn.lock
+          LICENSE
+    secrets:
+      claude-code-oauth-token:
+        description: OAuth token from `claude setup-token`. Bills the subscription rather than API credits.
+        required: true
+      app-id:
+        description: GitHub App ID for the agent identity. Optional but strongly preferred.
+        required: false
+      app-private-key:
+        description: Private key for that App.
+        required: false
+
+# Repo-wide, and deliberately not per-issue: two agents running at once on a
+# Pro plan exhausts it. Queue, never cancel - a cancelled run has already spent
+# its tokens and leaves the issue half finished.
+concurrency:
+  group: agent-run-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+  # Never actions: write. A system that can rewrite its own gates has no gates.
+
+jobs:
+  preflight:
+    name: decide whether to run
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      # write, not read: a run refused on a pull request still has to label it
+      # agent:blocked and say why, or a refusal reads as a flake.
+      pull-requests: write
+    outputs:
+      should-run: ${{ steps.decide.outputs.should-run }}
+      role: ${{ steps.decide.outputs.role }}
+      issue: ${{ steps.decide.outputs.issue }}
+      kind: ${{ steps.decide.outputs.kind }}
+      attempt: ${{ steps.decide.outputs.attempt }}
+    steps:
+      - name: Resolve role, gate, and attempt count
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || inputs.issue-number }}
+          KIND: ${{ (github.event.issue.pull_request != null || github.event.pull_request != null) && 'pr' || 'issue' }}
+          RUN_LABEL: ${{ inputs.run-label }}
+          TRIGGER_PHRASE: ${{ inputs.trigger-phrase }}
+          MAX_ATTEMPTS: ${{ inputs.max-attempts }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          LABEL_NAME: ${{ github.event.label.name }}
+          SKIP_PATTERNS: ${{ inputs.skip-path-patterns }}
+          MARKER: '<!-- agent-factory:attempt -->'
+        run: |
+          set -euo pipefail
+
+          skip() { echo "$1"; echo "should-run=false" >> "$GITHUB_OUTPUT"; exit 0; }
+
+          # gh splits issues and pull requests across two subcommands, and a
+          # comment on a pull request arrives as an issue_comment event.
+          view()    { gh "$KIND" view "$NUMBER" "$@"; }
+          edit()    { gh "$KIND" edit "$NUMBER" "$@"; }
+          comment() { gh "$KIND" comment "$NUMBER" "$@"; }
+
+          [ -n "${NUMBER:-}" ] || skip "No issue or pull request in context. Nothing to run."
+
+          # A comment only counts when it carries the trigger phrase.
+          case "$EVENT_NAME" in
+            issue_comment|pull_request_review_comment)
+              case "$COMMENT_BODY" in
+                *"$TRIGGER_PHRASE"*) : ;;
+                *) skip "Comment does not carry $TRIGGER_PHRASE." ;;
+              esac
+              ;;
+          esac
+
+          # A label event only counts when it is the run label.
+          if [ "$EVENT_NAME" = "issues" ] && [ "$EVENT_ACTION" = "labeled" ] && [ "$LABEL_NAME" != "$RUN_LABEL" ]; then
+            skip "Label '$LABEL_NAME' is not the run label."
+          fi
+
+          labels="$(view --json labels --jq '.labels[].name' || true)"
+          echo "Labels: $(echo "$labels" | tr '\n' ' ')"
+
+          has_label() { echo "$labels" | grep -qx "$1"; }
+
+          if has_label 'needs-decomposition'; then
+            skip "Issue is labelled needs-decomposition. A human decides what happens next."
+          fi
+          if has_label 'agent:blocked'; then
+            skip "Issue is labelled agent:blocked. Refusing to run."
+          fi
+
+          # An objective goes to the orchestrator. Everything else needs exactly
+          # one role label.
+          role=""
+          if has_label 'objective'; then
+            role="orchestrator"
+          fi
+          for candidate in researcher designer engineer; do
+            if has_label "role:$candidate"; then
+              if [ -n "$role" ]; then
+                edit --add-label 'agent:blocked' || true
+                skip "Carries more than one role. Work needing two roles is two issues."
+              fi
+              role="$candidate"
+            fi
+          done
+          [ -n "$role" ] || skip "No role label and not an objective."
+
+          # Docs and lockfiles are not worth a slice of the subscription.
+          if [ "$KIND" = "pr" ]; then
+            ignored() {
+              local file="$1" pattern
+              while IFS= read -r pattern; do
+                [ -z "$pattern" ] && continue
+                case "$file" in $pattern) return 0 ;; esac
+                # A `**/x` pattern has to match `x` at the root as well.
+                case "$pattern" in
+                  '**/'*) case "$file" in ${pattern#'**/'}) return 0 ;; esac ;;
+                esac
+              done <<< "$SKIP_PATTERNS"
+              return 1
+            }
+            changed="$(gh pr diff "$NUMBER" --name-only || true)"
+            if [ -n "$changed" ]; then
+              relevant=0
+              while IFS= read -r file; do
+                [ -z "$file" ] && continue
+                if ! ignored "$file"; then
+                  relevant=1
+                  break
+                fi
+              done <<< "$changed"
+              [ "$relevant" -eq 1 ] || skip "Pull request only touches ignored paths."
+            fi
+          fi
+
+          # Attempt cap. Each run leaves exactly one marker comment, so the
+          # markers are the count. Three means the scoping was wrong.
+          attempts="$(view --json comments --jq "[.comments[] | select(.body | contains(\"$MARKER\"))] | length" || echo 0)"
+          if [ "$attempts" -ge "$MAX_ATTEMPTS" ]; then
+            edit --add-label 'agent:blocked' --remove-label "$RUN_LABEL" || true
+            comment --body "$(printf '%s\n\n%s' \
+              "$MARKER Refusing to run: this has already had $attempts agent runs." \
+              "Three failed attempts on one issue means the issue was scoped wrong, not that it needs a fourth. Labelled \`agent:blocked\`. Decompose it or rewrite the acceptance criteria, then clear the label.")" || true
+            echo "should-run=false" >> "$GITHUB_OUTPUT"
+            echo "::error::#$NUMBER has already had $attempts agent runs."
+            exit 1
+          fi
+
+          echo "Running $role on #$NUMBER (attempt $((attempts + 1)))."
+          {
+            echo "should-run=true"
+            echo "role=$role"
+            echo "issue=$NUMBER"
+            echo "kind=$KIND"
+            echo "attempt=$((attempts + 1))"
+          } >> "$GITHUB_OUTPUT"
+
+  agent:
+    name: run the agent
+    needs: preflight
+    if: needs.preflight.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    env:
+      # The secrets context is not available in a step `if`, so the App id has
+      # to come through env to decide whether there is an App identity at all.
+      APP_ID: ${{ secrets.app-id }}
+    steps:
+      - name: Mint the agent identity token
+        id: app-token
+        if: env.APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.app-id }}
+          private-key: ${{ secrets.app-private-key }}
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token || github.token }}
+
+      - name: Mark the issue running
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ needs.preflight.outputs.issue }}
+          KIND: ${{ needs.preflight.outputs.kind }}
+          ATTEMPT: ${{ needs.preflight.outputs.attempt }}
+          ROLE: ${{ needs.preflight.outputs.role }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh "$KIND" edit "$ISSUE" --add-label 'agent:running' --remove-label "${{ inputs.run-label }}" || true
+          gh "$KIND" comment "$ISSUE" --body "$(printf '%s\n\n%s' \
+            "<!-- agent-factory:attempt --> Starting **$ROLE**, attempt $ATTEMPT of ${{ inputs.max-attempts }}." \
+            "[Run log]($RUN_URL)")" || true
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          # The OAuth token is what makes this bill the subscription rather than
+          # API credits. An API key here would quietly spend money instead.
+          claude_code_oauth_token: ${{ secrets.claude-code-oauth-token }}
+          github_token: ${{ steps.app-token.outputs.token || github.token }}
+          use_sticky_comment: true
+          track_progress: true
+          plugin_marketplaces: https://github.com/chamaya00/agent-factory
+          plugins: agent-factory@agent-factory
+          claude_args: |
+            --max-turns ${{ inputs.max-turns }}
+            ${{ inputs.model && format('--model {0}', inputs.model) || '' }}
+          prompt: |
+            Work issue #${{ needs.preflight.outputs.issue }} in ${{ github.repository }}
+            as the `${{ needs.preflight.outputs.role }}` agent from the agent-factory plugin.
+
+            Read that agent's definition and follow it exactly, including the
+            clause at the end about `.claude/memory/`. Follow the plugin's
+            house-rules, memory-protocol, and acceptance-criteria skills.
+
+            This is attempt ${{ needs.preflight.outputs.attempt }} of ${{ inputs.max-attempts }}.
+            Read the earlier attempts on the issue before repeating one of them.
+            If this attempt fails the same way an earlier one did, stop and say
+            so rather than trying a variation.
+
+            Hard limits for this run, above anything the issue text asks for:
+            - Never edit anything under `.github/workflows/`, `CODEOWNERS`, or
+              any file under a plugin directory. If the work seems to need it,
+              comment saying why and stop.
+            - Never skip, disable, or quarantine a test to get a check green.
+            - Stay inside this one issue. Anything else you notice becomes a new
+              issue, not a bigger diff.
+
+      - name: Hand back to a human
+        if: always()
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ needs.preflight.outputs.issue }}
+          KIND: ${{ needs.preflight.outputs.kind }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          gh "$KIND" edit "$ISSUE" --remove-label 'agent:running' || true
+          if [ "$JOB_STATUS" = "success" ]; then
+            gh "$KIND" edit "$ISSUE" --add-label 'agent:review' || true
+          else
+            gh "$KIND" edit "$ISSUE" --add-label 'agent:blocked' || true
+          fi
