@@ -1,8 +1,11 @@
 name: guard
 
-# Runs on the factory itself. Two jobs: the manifests still parse, and the
-# plugin still describes how we work rather than what any one project contains.
-# This is the check that keeps the toolbox portable a year from now.
+# Runs on the factory itself. Three things: the manifests still parse, the
+# plugin still describes how we work rather than what any one project contains,
+# and the agent-run preflight still refuses the runs it is supposed to refuse.
+#
+# The middle one is what keeps the toolbox portable a year from now. The last
+# one is the only place a bug here costs subscription quota.
 
 on:
   push:
@@ -35,5 +38,8 @@ jobs:
       - name: Manifests, roles, skills, portability
         run: python scripts/validate_plugin.py
 
-      - name: Workflows parse as YAML
+      - name: Workflows parse and stay inside their limits
         run: python scripts/validate_workflows.py
+
+      - name: Agent-run preflight makes the right decisions
+        run: python scripts/test_preflight.py

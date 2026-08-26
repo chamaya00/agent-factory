@@ -1,0 +1,16 @@
+name: ci
+
+# Thin caller. All the logic lives in the factory so every project moves at
+# once when the gate changes.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    uses: chamaya00/agent-factory/.github/workflows/ci.yml@v1
+    with:
+      node-version: '20'
+      checks: 'typecheck,lint,test,build'

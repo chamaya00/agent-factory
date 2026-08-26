@@ -1,0 +1,118 @@
+name: ci
+
+# The gate. Deterministic on purpose: no model runs here, and every check
+# either passes or fails without anyone having to interpret it. If a check
+# needs judgment, it is not a gate and it does not belong in this file.
+#
+# Projects call it with:
+#   jobs:
+#     ci:
+#       uses: chamaya00/agent-factory/.github/workflows/ci.yml@v1
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Node version to run the checks on.
+        type: string
+        default: '20'
+      working-directory:
+        description: Directory holding package.json.
+        type: string
+        default: '.'
+      checks:
+        description: >-
+          Comma-separated package.json scripts to run, in order. Every named
+          script must exist; a missing script fails rather than being skipped,
+          because a gate that silently skips is not a gate.
+        type: string
+        default: 'typecheck,lint,test,build'
+      upload-build:
+        description: Upload the build output as an artifact.
+        type: boolean
+        default: false
+      build-output-path:
+        description: Path to upload when upload-build is true.
+        type: string
+        default: 'dist'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect package manager
+        id: pm
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            echo "name=pnpm" >> "$GITHUB_OUTPUT"
+            echo "install=pnpm install --frozen-lockfile" >> "$GITHUB_OUTPUT"
+          elif [ -f yarn.lock ]; then
+            echo "name=yarn" >> "$GITHUB_OUTPUT"
+            echo "install=yarn install --frozen-lockfile" >> "$GITHUB_OUTPUT"
+          elif [ -f package-lock.json ]; then
+            echo "name=npm" >> "$GITHUB_OUTPUT"
+            echo "install=npm ci" >> "$GITHUB_OUTPUT"
+          else
+            echo "No lockfile found. Commit one so installs are reproducible." >&2
+            exit 1
+          fi
+
+      - name: Enable pnpm
+        if: steps.pm.outputs.name == 'pnpm'
+        uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: ${{ steps.pm.outputs.name }}
+          cache-dependency-path: ${{ inputs.working-directory }}/${{ steps.pm.outputs.name == 'pnpm' && 'pnpm-lock.yaml' || steps.pm.outputs.name == 'yarn' && 'yarn.lock' || 'package-lock.json' }}
+
+      - name: Install
+        run: ${{ steps.pm.outputs.install }}
+
+      - name: Confirm every required script exists
+        run: |
+          missing=""
+          IFS=',' read -ra names <<< "${{ inputs.checks }}"
+          for name in "${names[@]}"; do
+            script="$(echo "$name" | tr -d '[:space:]')"
+            [ -z "$script" ] && continue
+            if ! node -e "process.exit(require('./package.json').scripts?.['$script'] ? 0 : 1)"; then
+              missing="$missing $script"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "package.json is missing required script(s):$missing" >&2
+            echo "Add them, or narrow the 'checks' input on the caller." >&2
+            exit 1
+          fi
+
+      - name: Run checks
+        run: |
+          IFS=',' read -ra names <<< "${{ inputs.checks }}"
+          for name in "${names[@]}"; do
+            script="$(echo "$name" | tr -d '[:space:]')"
+            [ -z "$script" ] && continue
+            echo "::group::${{ steps.pm.outputs.name }} run $script"
+            ${{ steps.pm.outputs.name }} run "$script"
+            echo "::endgroup::"
+          done
+
+      - name: Upload build output
+        if: inputs.upload-build
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: ${{ inputs.working-directory }}/${{ inputs.build-output-path }}
+          if-no-files-found: error
+          retention-days: 7

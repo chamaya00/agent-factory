@@ -21,6 +21,7 @@ plugins/agent-factory/
   agents/                            the four roles
   skills/                            the process instructions
   commands/                          slash commands
+  templates/project/                 what /new-project drops into a fresh repo
 .github/workflows/                   reusable workflows plus the factory's own guard
 scripts/                             the guard's checks
 ```
@@ -33,6 +34,23 @@ Everything except the two manifests sits at the plugin root, not inside `.claude
 - `researcher` - investigates options and constraints, writes to `docs/research/`. No source access.
 - `designer` - produces flows, states, and component specs, writes to `docs/design/`. No source access.
 - `engineer` - implements against the acceptance criteria, writes the tests, opens the pull request.
+
+## Commands
+
+- `/new-project <owner/repo>` - provisions a fresh repo: Actions permissions first, then labels, caller workflows, `CLAUDE.md`, memory files, and branch protection.
+- `/decompose <issue>` - runs the orchestrator on one issue by hand.
+- `/retro` - proposes memory updates for the current repo as a pull request.
+
+## Workflows
+
+All the logic lives here; projects get thin callers that point at `@v1`.
+
+| Workflow | Called as | What it does |
+|---|---|---|
+| `ci.yml` | `workflow_call` | typecheck, lint, test, build. No model involved. This is the gate. |
+| `agent-run.yml` | `workflow_call` | one agent run: repo-wide concurrency, queued not cancelled, capped turns and minutes, refuses a fourth attempt on the same issue. |
+| `project-guard.yml` | `workflow_call` | in each project: memory files stay inside the 40-line cap, and nobody but a maintainer edits the files that gate the repo. |
+| `guard.yml` | this repo only | the checks below. |
 
 ## Guard
 

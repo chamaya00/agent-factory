@@ -1,0 +1,105 @@
+name: project-guard
+
+# The containment check, run inside each project rather than in the factory.
+#
+# Two things it enforces, both of which an agent would otherwise be able to
+# undo quietly: memory files stay inside their cap, and nothing that gates the
+# repo gets edited by whoever the gates apply to.
+#
+# Projects call it with:
+#   jobs:
+#     guard:
+#       uses: chamaya00/agent-factory/.github/workflows/project-guard.yml@v1
+
+on:
+  workflow_call:
+    inputs:
+      memory-line-cap:
+        description: >-
+          Line cap for each `.claude/memory/<role>.md`. Past the cap the retro
+          rewrites the file rather than appending to it, which is the point of
+          the cap rather than a side effect of it.
+        type: number
+        default: 40
+      protected-paths:
+        description: Newline-separated globs only a human may change.
+        type: string
+        default: |
+          .github/workflows/*
+          .github/workflows/**
+          CODEOWNERS
+          .github/CODEOWNERS
+      maintainers:
+        description: >-
+          Comma-separated logins allowed to change the protected paths. Empty
+          means the repository owner alone.
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  guard:
+    name: memory cap and protected paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Memory files stay inside the cap
+        env:
+          CAP: ${{ inputs.memory-line-cap }}
+        run: |
+          set -euo pipefail
+          failed=0
+          shopt -s nullglob
+          for file in .claude/memory/*.md; do
+            lines="$(grep -cve '^[[:space:]]*$' "$file" || true)"
+            if [ "$lines" -gt "$CAP" ]; then
+              echo "::error file=$file::$lines lines, cap is $CAP. The retro rewrites past the cap - merge or drop entries to make room, do not append."
+              failed=1
+            fi
+          done
+          [ "$failed" -eq 0 ] && echo "Memory files are inside the cap."
+          exit "$failed"
+
+      - name: Nothing that gates this repo was edited
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          MAINTAINERS: ${{ inputs.maintainers || github.repository_owner }}
+          PROTECTED: ${{ inputs.protected-paths }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          case ",$MAINTAINERS," in
+            *",$AUTHOR,"*)
+              echo "$AUTHOR is a maintainer. Nothing to check."
+              exit 0
+              ;;
+          esac
+
+          changed="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+          failed=0
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            while IFS= read -r pattern; do
+              [ -z "$pattern" ] && continue
+              case "$file" in
+                $pattern)
+                  echo "::error file=$file::$AUTHOR may not change this. A system that can rewrite its own gates has no gates."
+                  failed=1
+                  ;;
+              esac
+            done <<< "$PROTECTED"
+          done <<< "$changed"
+          [ "$failed" -eq 0 ] && echo "No protected path was touched."
+          exit "$failed"
