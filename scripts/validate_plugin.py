@@ -55,7 +55,10 @@ def split_frontmatter(text: str, path: Path) -> tuple[dict[str, str], str]:
     """Parse the leading --- block as flat key: value pairs.
 
     Deliberately not a YAML parser: the frontmatter we require is flat, and a
-    hand-rolled reader keeps this script dependency-free.
+    hand-rolled reader keeps this script runnable with no dependencies. Where
+    PyYAML is available the block is parsed for real as well, since this reader
+    happily accepts things a real YAML parser rejects - an unquoted value
+    containing `: ` being the one that will actually happen.
     """
     if not text.startswith("---\n"):
         fail(path, "missing YAML frontmatter (file must start with ---)")
@@ -66,6 +69,7 @@ def split_frontmatter(text: str, path: Path) -> tuple[dict[str, str], str]:
         return {}, text
     block = text[4:end]
     body = text[end + 5 :]
+    strict_parse(block, path)
     fields: dict[str, str] = {}
     for line in block.splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
@@ -76,6 +80,21 @@ def split_frontmatter(text: str, path: Path) -> tuple[dict[str, str], str]:
         key, value = line.split(":", 1)
         fields[key.strip()] = value.strip()
     return fields, body
+
+
+def strict_parse(block: str, path: Path) -> None:
+    """Second opinion from a real YAML parser, when there is one to ask."""
+    try:
+        import yaml
+    except ImportError:
+        return
+    try:
+        parsed = yaml.safe_load(block)
+    except yaml.YAMLError as exc:
+        fail(path, f"frontmatter is not valid YAML: {exc}")
+        return
+    if not isinstance(parsed, dict):
+        fail(path, "frontmatter does not parse to a mapping")
 
 
 def check_json(path: Path) -> dict | None:
