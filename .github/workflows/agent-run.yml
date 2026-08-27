@@ -31,6 +31,18 @@ on:
         description: Model for the run. Empty uses the action default.
         type: string
         default: ''
+      plugin-ref:
+        description: >-
+          Tag, branch, or commit of the factory the agent's roles and skills
+          are taken from. It defaults to the major tag this file ships under,
+          so what an agent believes moves when `release` moves the workflows
+          around it rather than on a merge to main.
+
+          Cutting a new major means changing this default in the same commit.
+          A `v2` of this file still pointing at `v1` is the one way the two
+          can drift apart again.
+        type: string
+        default: 'v1'
       max-attempts:
         description: >-
           Attempts allowed on one issue before the run is refused. Three failed
@@ -272,6 +284,45 @@ jobs:
             "<!-- agent-factory:attempt --> Starting **$ROLE**, attempt $ATTEMPT of ${{ inputs.max-attempts }}." \
             "[Run log]($RUN_URL)")" || true
 
+      # `plugin_marketplaces` takes a git URL with no way to name a ref, and
+      # `claude plugin marketplace add` clones the default branch. Passed the
+      # URL directly, a merge to main here would change how agents behave in
+      # every project immediately, while the workflow around them waited for a
+      # release. So the clone happens here, at a ref we choose, and the action
+      # is handed the checkout - a local path, which it accepts.
+      #
+      # Outside the workspace on purpose: a marketplace checked out inside it
+      # shows up as untracked files in the repository the agent is working in.
+      - name: Take the plugin from the factory at a fixed ref
+        id: factory
+        env:
+          PLUGIN_REF: ${{ inputs.plugin-ref }}
+        run: |
+          set -euo pipefail
+
+          dir="$RUNNER_TEMP/agent-factory"
+          rm -rf "$dir"
+
+          # --branch covers a tag or a branch in one fetch. A raw commit needs
+          # the whole history, which is the slower path and the rarer one.
+          if ! git clone --quiet --depth 1 --branch "$PLUGIN_REF" \
+              https://github.com/chamaya00/agent-factory.git "$dir" 2>/dev/null; then
+            rm -rf "$dir"
+            git clone --quiet https://github.com/chamaya00/agent-factory.git "$dir"
+            if ! git -C "$dir" checkout --quiet "$PLUGIN_REF"; then
+              echo "::error::'$PLUGIN_REF' is not a ref or commit in the factory. The agent would otherwise run with no roles at all."
+              exit 1
+            fi
+          fi
+
+          if [ ! -f "$dir/.claude-plugin/marketplace.json" ]; then
+            echo "::error::$PLUGIN_REF has no .claude-plugin/marketplace.json. Nothing to install the plugin from."
+            exit 1
+          fi
+
+          echo "Roles and skills from $PLUGIN_REF ($(git -C "$dir" rev-parse --short HEAD))."
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+
       - uses: anthropics/claude-code-action@v1
         with:
           # The OAuth token is what makes this bill the subscription rather than
@@ -280,7 +331,7 @@ jobs:
           github_token: ${{ steps.app-token.outputs.token || github.token }}
           use_sticky_comment: true
           track_progress: true
-          plugin_marketplaces: https://github.com/chamaya00/agent-factory
+          plugin_marketplaces: ${{ steps.factory.outputs.dir }}
           plugins: agent-factory@agent-factory
           claude_args: |
             --max-turns ${{ inputs.max-turns }}
