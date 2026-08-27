@@ -42,6 +42,9 @@ BANNED_NOUNS = [
 ]
 
 MAX_AGENT_BODY_LINES = 45
+
+# What a template writes instead of a release tag. Provisioning substitutes it.
+PIN_PLACEHOLDER = "__FACTORY_VERSION__"
 ROLES = ["orchestrator", "researcher", "designer", "engineer"]
 
 errors: list[str] = []
@@ -121,6 +124,15 @@ def check_marketplace() -> None:
         for field in ("name", "source"):
             if field not in entry:
                 fail(MARKETPLACE, f"plugin entry missing required field {field!r}")
+        # Declared in both places, plugin.json wins with no warning - so an
+        # edit here would look like a release and install as the version
+        # already cached.
+        if "version" in entry:
+            fail(
+                MARKETPLACE,
+                f"plugin entry {entry.get('name')!r} declares a version; "
+                "plugin.json is the single source and silently overrides this one",
+            )
         source = entry.get("source")
         if isinstance(source, str):
             if not source.startswith("./"):
@@ -225,12 +237,61 @@ def check_no_emoji() -> None:
                 fail(path, f"line {number} contains emoji {found.group()!r}")
 
 
+def check_template_pins() -> None:
+    """Every caller a project receives must be pinned through the placeholder.
+
+    A template that hardcodes a ref ships that ref to every repository
+    provisioned afterwards, and a moving one puts them all back on a live
+    pointer, which is the thing the pinning is for. The placeholder is
+    substituted at provision time, so it is the only correct value here.
+    """
+    templates = PLUGIN_DIR / "templates"
+    if not templates.is_dir():
+        return
+    pattern = re.compile(r"uses:\s*chamaya00/agent-factory/[^@\s]+@(\S+)")
+    for path in sorted(templates.rglob("*.yml")) + sorted(templates.rglob("*.yaml")):
+        for number, line in enumerate(path.read_text().splitlines(), start=1):
+            found = pattern.search(line)
+            if found and found.group(1) != PIN_PLACEHOLDER:
+                fail(
+                    path,
+                    f"line {number} pins the factory at {found.group(1)!r}; "
+                    f"templates must use {PIN_PLACEHOLDER} so provisioning "
+                    "substitutes the installed release",
+                )
+
+
+def check_vendored_roles() -> None:
+    """The roles get copied into each project, so they have to be copyable.
+
+    If the plugin stopped shipping one, the copy would succeed and write
+    nothing. That surfaces as an agent with no rules rather than as an error
+    here, which is the expensive way to find out.
+    """
+    manifest = PLUGIN_DIR / "templates" / "project" / ".claude" / "agent-factory.json"
+    if not manifest.is_file():
+        errors.append(f"{manifest.relative_to(ROOT)}: missing")
+        return
+    data = check_json(manifest)
+    if data is None:
+        return
+    if data.get("version") != PIN_PLACEHOLDER:
+        fail(manifest, f"version must be {PIN_PLACEHOLDER}, substituted at provision time")
+    if set(data.get("roles") or []) != set(ROLES):
+        fail(manifest, f"roles {sorted(data.get('roles') or [])} do not match the plugin's {sorted(ROLES)}")
+    on_disk = {p.parent.name for p in (PLUGIN_DIR / "skills").glob("*/SKILL.md")}
+    if set(data.get("skills") or []) != on_disk:
+        fail(manifest, f"skills {sorted(data.get('skills') or [])} do not match {sorted(on_disk)} on disk")
+
+
 def main() -> int:
     check_marketplace()
     check_plugin_manifest()
     check_agents()
     check_skills()
     check_commands()
+    check_template_pins()
+    check_vendored_roles()
     check_portability()
     check_no_emoji()
     if errors:

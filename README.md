@@ -40,20 +40,20 @@ Everything except the two manifests sits at the plugin root, not inside `.claude
 - `/new-project <owner/repo>` - provisions a fresh repo: caller workflows, `CLAUDE.md`, memory files, and the labels. Three of its steps are handed to a human rather than scripted - see below.
 - `/decompose <issue>` - runs the orchestrator on one issue by hand.
 - `/retro` - proposes memory updates for the current repo as a pull request.
+- `/update-agents [version]` - brings one repo's copy of the roles, skills, and workflow pins up to a release, as one reviewable pull request. Nothing else moves.
 
 ## Workflows
 
-All the logic lives here; projects get thin callers that point at `@v1`.
+All the logic lives here; projects get thin callers pinned to a release tag,
+for example `@v1.1.0`.
 
-`v1` is a tag on `main`, and it is load-bearing. A caller holds an address, not
-a copy: GitHub resolves `@v1` fresh on every run, so moving the tag changes what
-every project executes immediately, with no pull request in any of them. That is
-what makes one edit here reach every project at once, and it is the same reason
-a stale tag is invisible - a project fails with an invalid workflow reference,
-naming nothing about a tag in another repo.
+The pin is the contract. A merge here reaches no project on its own, ever. A
+project moves when somebody runs `/update-agents` there and merges the pull
+request it opens, which bumps the four pins and refreshes the vendored roles
+together. Repositories you never run it in stay where they are indefinitely.
 
-Move it with the `release` workflow rather than by hand, and cut `v2` instead
-when a change should not reach existing projects on its own.
+Release tags are immutable - `release.yml` refuses one that already exists.
+`docs/versioning.md` is the full model.
 
 | Workflow | Called as | What it does |
 |---|---|---|
@@ -62,7 +62,7 @@ when a change should not reach existing projects on its own.
 | `project-guard.yml` | `workflow_call` | in each project: memory files stay inside the 40-line cap, and nobody but a maintainer edits the files that gate the repo. |
 | `bootstrap.yml` | `workflow_call` | run once per project, by hand: creates the nine labels and reports the check names branch protection needs. |
 | `guard.yml` | this repo only | the checks below. |
-| `release.yml` | this repo only, by hand | moves a major tag to a merged commit, once the checks pass on it. |
+| `release.yml` | this repo only, by hand | cuts an immutable release tag on the tip of `main`, named by the plugin manifest, once the checks pass on it. |
 
 ## A project that is not Node
 
@@ -73,7 +73,7 @@ install, script check - is skipped:
 ```yaml
 jobs:
   ci:
-    uses: chamaya00/agent-factory/.github/workflows/ci.yml@v1
+    uses: chamaya00/agent-factory/.github/workflows/ci.yml@v1.1.0
     with:
       check-name: 'typecheck, lint, test'
       commands: |
@@ -108,20 +108,29 @@ python3 scripts/test_release.py
 The last three execute a workflow's own shell rather than reading it, because
 those are the three places a bug is expensive: `ci` decides what may merge in
 every project, the preflight spends subscription quota, and `release` decides
-what every project runs. `ci` is the worst of the three to get wrong - a gate
+what a project can pin to. `ci` is the worst of the three to get wrong - a gate
 that fails a good pull request is noticed within the minute, and one that
 passes a bad one is not noticed at all.
 
 ## Releasing
 
-`release.yml` is `workflow_dispatch` only, from the Actions tab. Leave the
-inputs alone to move `v1` to the tip of `main`; pass an older merged commit to
-roll back, or a different `v<n>` to cut a new major.
+A release starts with a merged pull request bumping `version` in
+`plugins/agent-factory/.claude-plugin/plugin.json`. Then `release.yml`, from
+the Actions tab, input left empty.
 
-It refuses a tag name that is not `v<number>`, a commit that is not already on
-the default branch, and any commit the guard checks do not pass on. The run
-summary lists what every project just picked up and which workflows are callable
-at the tag, which is the thing worth reading after a move.
+The tag name is read from that manifest rather than typed. An installed plugin
+decides whether to update by comparing versions, so a tag that got ahead of the
+manifest would ship new files and then be declined as already up to date; tying
+the two together makes that unrepresentable.
+
+It refuses a tag that already exists, a name that is not `vMAJOR.MINOR.PATCH`,
+one that disagrees with the manifest, and any commit the guard checks do not
+pass on. The run summary says plainly that no project picked anything up, and
+lists the workflows callable at the tag.
+
+Nothing rolls back, because nothing rolled forward. A project on a bad release
+stays on it until somebody moves it, and a project on a good one is unaffected
+by the bad one existing.
 
 Moving the tag is a human step, and it stays one. A session can neither start
 the workflow nor push the tag by hand: dispatching needs `actions: write`,

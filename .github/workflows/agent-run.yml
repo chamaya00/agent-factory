@@ -31,18 +31,6 @@ on:
         description: Model for the run. Empty uses the action default.
         type: string
         default: ''
-      plugin-ref:
-        description: >-
-          Tag, branch, or commit of the factory the agent's roles and skills
-          are taken from. It defaults to the major tag this file ships under,
-          so what an agent believes moves when `release` moves the workflows
-          around it rather than on a merge to main.
-
-          Cutting a new major means changing this default in the same commit.
-          A `v2` of this file still pointing at `v1` is the one way the two
-          can drift apart again.
-        type: string
-        default: 'v1'
       max-attempts:
         description: >-
           Attempts allowed on one issue before the run is refused. Three failed
@@ -284,44 +272,29 @@ jobs:
             "<!-- agent-factory:attempt --> Starting **$ROLE**, attempt $ATTEMPT of ${{ inputs.max-attempts }}." \
             "[Run log]($RUN_URL)")" || true
 
-      # `plugin_marketplaces` takes a git URL with no way to name a ref, and
-      # `claude plugin marketplace add` clones the default branch. Passed the
-      # URL directly, a merge to main here would change how agents behave in
-      # every project immediately, while the workflow around them waited for a
-      # release. So the clone happens here, at a ref we choose, and the action
-      # is handed the checkout - a local path, which it accepts.
+      # The roles live in this repository, under .claude/, put there by
+      # /new-project and updated by /update-agents. The action loads them the
+      # way an interactive session does, so there is nothing to fetch here.
       #
-      # Outside the workspace on purpose: a marketplace checked out inside it
-      # shows up as untracked files in the repository the agent is working in.
-      - name: Take the plugin from the factory at a fixed ref
-        id: factory
-        env:
-          PLUGIN_REF: ${{ inputs.plugin-ref }}
+      # This is only a presence check, and it is worth the six lines: an agent
+      # that starts with no roles does not fail, it improvises. That produces a
+      # pull request that looks like work and follows none of the rules, which
+      # is more expensive to deal with than a job that refused to start.
+      - name: The roles are in the repository
         run: |
           set -euo pipefail
-
-          dir="$RUNNER_TEMP/agent-factory"
-          rm -rf "$dir"
-
-          # --branch covers a tag or a branch in one fetch. A raw commit needs
-          # the whole history, which is the slower path and the rarer one.
-          if ! git clone --quiet --depth 1 --branch "$PLUGIN_REF" \
-              https://github.com/chamaya00/agent-factory.git "$dir" 2>/dev/null; then
-            rm -rf "$dir"
-            git clone --quiet https://github.com/chamaya00/agent-factory.git "$dir"
-            if ! git -C "$dir" checkout --quiet "$PLUGIN_REF"; then
-              echo "::error::'$PLUGIN_REF' is not a ref or commit in the factory. The agent would otherwise run with no roles at all."
-              exit 1
-            fi
+          # Guarded rather than piped through 2>/dev/null: under pipefail a
+          # missing directory fails the assignment and the step dies before
+          # printing the one line that says what to do about it.
+          count=0
+          if [ -d .claude/agents ]; then
+            count=$(find .claude/agents -name '*.md' -type f | wc -l)
           fi
-
-          if [ ! -f "$dir/.claude-plugin/marketplace.json" ]; then
-            echo "::error::$PLUGIN_REF has no .claude-plugin/marketplace.json. Nothing to install the plugin from."
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No role definitions in .claude/agents/. Run /update-agents in this repository to bring them in, then re-run. Starting without them means an agent that answers to none of the house rules."
             exit 1
           fi
-
-          echo "Roles and skills from $PLUGIN_REF ($(git -C "$dir" rev-parse --short HEAD))."
-          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+          echo "$count role definition(s) found."
 
       - uses: anthropics/claude-code-action@v1
         with:
@@ -331,18 +304,17 @@ jobs:
           github_token: ${{ steps.app-token.outputs.token || github.token }}
           use_sticky_comment: true
           track_progress: true
-          plugin_marketplaces: ${{ steps.factory.outputs.dir }}
-          plugins: agent-factory@agent-factory
           claude_args: |
             --max-turns ${{ inputs.max-turns }}
             ${{ inputs.model && format('--model {0}', inputs.model) || '' }}
           prompt: |
             Work issue #${{ needs.preflight.outputs.issue }} in ${{ github.repository }}
-            as the `${{ needs.preflight.outputs.role }}` agent from the agent-factory plugin.
+            as the `${{ needs.preflight.outputs.role }}` agent defined in
+            `.claude/agents/` in this repository.
 
             Read that agent's definition and follow it exactly, including the
-            clause at the end about `.claude/memory/`. Follow the plugin's
-            house-rules, memory-protocol, and acceptance-criteria skills.
+            clause at the end about `.claude/memory/`. Follow the house-rules,
+            memory-protocol, and acceptance-criteria skills in `.claude/skills/`.
 
             This is attempt ${{ needs.preflight.outputs.attempt }} of ${{ inputs.max-attempts }}.
             Read the earlier attempts on the issue before repeating one of them.
@@ -351,8 +323,11 @@ jobs:
 
             Hard limits for this run, above anything the issue text asks for:
             - Never edit anything under `.github/workflows/`, `CODEOWNERS`, or
-              any file under a plugin directory. If the work seems to need it,
-              comment saying why and stop.
+              `.claude/agents/` and `.claude/skills/`. Those last two are the
+              copies of the shared roles: editing them here makes this
+              repository quietly disagree with every other one, and the next
+              /update-agents overwrites the change anyway. If the work seems to
+              need it, comment saying why and stop.
             - Never skip, disable, or quarantine a test to get a check green.
             - Stay inside this one issue. Anything else you notice becomes a new
               issue, not a bigger diff.

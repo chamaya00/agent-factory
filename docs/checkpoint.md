@@ -1,47 +1,34 @@
 # Checkpoint: the things only you can do
 
 Everything in phases 1 to 5 is built and merged. These steps need a human with
-account access. Step 0 is thirty seconds and everything downstream depends on
-it; nothing agent-side works until steps 1 and 2 are done either.
+account access. Nothing agent-side works until steps 1 and 2 are done; step 0
+is optional now and step 3 is the fiddly one.
 
-All of it is doable from an iPhone. Step 3 is the fiddly one, and the note about
-the private key is the part that catches people out.
+All of it is doable from an iPhone. The note about the private key in step 3 is
+the part that catches people out.
 
 ---
 
-## 0. Point `v1` at the current `main`
+## 0. Cut a release tag
 
-Every caller workflow in every project resolves
-`chamaya00/agent-factory/.github/workflows/ci.yml@v1`, and the three others the
-same way. A caller holds that address, not a copy, so the tag has to point at a
-commit where all four files exist. Aimed at an older commit it resolves to a
-tree missing whatever landed since, and the project fails with an error about an
-invalid workflow reference that names nothing about a tag in another repo.
+Nothing here is urgent any more, and nothing downstream breaks if you skip it -
+that is the change. Releases no longer reach any project on their own, so this
+step is not a deploy. It just makes a version available to pin.
 
-The tag falls behind on every merge here, so this is not a one-time step. It is
-the step to repeat after any change to this repo that projects should pick up.
-
-From the web, on the phone:
+The tag name comes from `plugins/agent-factory/.claude-plugin/plugin.json`, so
+a release starts with a merged pull request bumping that version. Once that is
+on `main`:
 
 1. Open `github.com/chamaya00/agent-factory/actions/workflows/release.yml`.
-2. Tap **Run workflow**. Leave both inputs alone - empty means the tip of
-   `main`, which is what you want.
-3. **Run workflow** again to confirm.
-4. When it finishes, open the run and read the summary. It lists what every
-   project just picked up, and which workflows are callable at the tag. That
-   second list is the one to check: four names, `bootstrap.yml` among them.
+2. Tap **Run workflow**, leave the input empty, then **Run workflow** again.
+3. Read the run summary. It lists the workflows callable at the tag - four
+   names, `bootstrap.yml` among them - and says explicitly that no project
+   picked anything up.
 
-The workflow refuses to point the tag at a commit that is not already on `main`,
-and refuses to move it at all unless the guard checks pass on that commit. It
-will also create a tag that does not exist yet, so cutting `v2` later is the
-same three taps with `v2` typed in the first input.
+A project takes the release when you run `/update-agents` there and merge what
+it opens. Until then it keeps running the release it was pinned to.
 
-Moving the tag is a deploy to every project at once, with no pull request in any
-of them. When a change here should not reach existing projects on its own, cut
-`v2` instead and let each project move its callers when it is ready. To roll
-back, run it again with the older commit in the second input - the previous
-commit is printed in the summary of the run that moved it.
-
+`docs/versioning.md` has the full model if you want the reasoning.
 
 ## 1. Generate the subscription token
 
