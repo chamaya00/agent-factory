@@ -1,7 +1,7 @@
 ---
 description: Run the orchestrator on an issue by hand, without waiting for a label event.
 argument-hint: <issue-number>
-allowed-tools: Bash, Read, Glob, Grep
+allowed-tools: Bash, Read, Glob, Grep, mcp__github__issue_read, mcp__github__list_issues, mcp__github__search_issues, mcp__github__add_issue_comment, mcp__github__issue_write, mcp__github__sub_issue_write
 ---
 
 Invoke the `orchestrator` agent on issue `$1` in the current repository.

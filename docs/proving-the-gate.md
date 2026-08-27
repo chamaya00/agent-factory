@@ -19,12 +19,30 @@ looking for.
 /new-project chamaya00/gate-test
 ```
 
-Then confirm by hand, because these are the two that fail silently:
+The command does not run start to finish on its own, by design: a cloud session
+has no way to change a repository setting or create a label, so three of its
+steps are handed to you. Expect to be asked for these, in this order:
 
-- `github.com/chamaya00/gate-test/settings/actions` shows "Read and write
-  permissions" and "Allow GitHub Actions to create and approve pull requests"
-  checked.
+1. **Before anything else**, tick the two Actions settings at
+   `github.com/chamaya00/gate-test/settings/actions` - "Read and write
+   permissions" and "Allow GitHub Actions to create and approve pull requests".
+   This is the one that fails silently: with it off, every later step appears
+   to work and no pull request ever appears.
+2. **Merge the pull request** the command opens with the caller workflows and
+   project files. `workflow_dispatch` only sees workflows already on the
+   default branch, so nothing in step 3 is possible before this merges.
+3. **Run the `bootstrap` workflow** from the Actions tab. It creates the nine
+   labels and prints the check names you need for branch protection.
+4. **Set branch protection** using the names from that run summary.
+
+Then confirm by hand:
+
+- The Actions settings above are actually ticked. Look, do not remember.
 - The repo has all nine labels.
+
+Branch protection stays a human step on purpose, here and forever: setting it
+needs an administration token, and an identity that can set a gate can remove
+one.
 
 ## 2. Add one component and one test
 
