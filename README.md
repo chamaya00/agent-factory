@@ -57,12 +57,41 @@ when a change should not reach existing projects on its own.
 
 | Workflow | Called as | What it does |
 |---|---|---|
-| `ci.yml` | `workflow_call` | typecheck, lint, test, build. No model involved. This is the gate. |
+| `ci.yml` | `workflow_call` | the gate. No model involved. Runs `package.json` scripts by default, or the caller's own shell commands when it passes `commands`, which is how a non-Node project gets a gate. |
 | `agent-run.yml` | `workflow_call` | one agent run: repo-wide concurrency, queued not cancelled, capped turns and minutes, refuses a fourth attempt on the same issue. |
 | `project-guard.yml` | `workflow_call` | in each project: memory files stay inside the 40-line cap, and nobody but a maintainer edits the files that gate the repo. |
 | `bootstrap.yml` | `workflow_call` | run once per project, by hand: creates the nine labels and reports the check names branch protection needs. |
 | `guard.yml` | this repo only | the checks below. |
 | `release.yml` | this repo only, by hand | moves a major tag to a merged commit, once the checks pass on it. |
+
+## A project that is not Node
+
+`ci.yml` runs `package.json` scripts by default. A project on any other stack
+passes `commands` instead, and the whole Node path - lockfile detection,
+install, script check - is skipped:
+
+```yaml
+jobs:
+  ci:
+    uses: chamaya00/agent-factory/.github/workflows/ci.yml@v1
+    with:
+      check-name: 'typecheck, lint, test'
+      commands: |
+        uv sync --frozen
+        uv run mypy .
+        uv run ruff check .
+        uv run pytest
+```
+
+Every line runs in order, under `bash -euo pipefail`, and the first non-zero
+exit fails the run there rather than continuing to report the rest. Blank lines
+and `#` comments are ignored; a value with no runnable line in it fails, since
+a gate that runs nothing is not a gate.
+
+`check-name` is the string branch protection matches on, so it defaults to the
+Node job's name and existing rules keep working untouched. Changing it means
+re-pointing the protection rule in the same sitting - a required check that no
+longer reports blocks every merge, including the one that would fix it.
 
 ## Guard
 
@@ -71,13 +100,17 @@ when a change should not reach existing projects on its own.
 ```
 python3 scripts/validate_plugin.py
 python3 scripts/validate_workflows.py
+python3 scripts/test_ci.py
 python3 scripts/test_preflight.py
 python3 scripts/test_release.py
 ```
 
-The last two execute a workflow's own shell rather than reading it, because
-those are the two places a bug is expensive: the preflight spends subscription
-quota, and `release` decides what every project runs.
+The last three execute a workflow's own shell rather than reading it, because
+those are the three places a bug is expensive: `ci` decides what may merge in
+every project, the preflight spends subscription quota, and `release` decides
+what every project runs. `ci` is the worst of the three to get wrong - a gate
+that fails a good pull request is noticed within the minute, and one that
+passes a bad one is not noticed at all.
 
 ## Releasing
 

@@ -121,6 +121,7 @@ jobs:
           git checkout --quiet --detach "$TARGET"
           python scripts/validate_plugin.py
           python scripts/validate_workflows.py
+          python scripts/test_ci.py
           python scripts/test_preflight.py
 
       - name: Move the tag

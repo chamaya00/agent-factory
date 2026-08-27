@@ -1,13 +1,15 @@
 name: guard
 
-# Runs on the factory itself. Four things: the manifests still parse, the
+# Runs on the factory itself. Five things: the manifests still parse, the
 # plugin still describes how we work rather than what any one project contains,
-# the agent-run preflight still refuses the runs it is supposed to refuse, and
-# release still refuses to point a major tag at unmerged history.
+# the gate still fails what it is supposed to fail, the agent-run preflight
+# still refuses the runs it is supposed to refuse, and release still refuses to
+# point a major tag at unmerged history.
 #
 # The second one is what keeps the toolbox portable a year from now. The last
-# two are the places a bug is expensive: one costs subscription quota, the
-# other changes what every project runs.
+# three are the places a bug is expensive: one lets a bad pull request merge in
+# every project, one costs subscription quota, and one changes what every
+# project runs.
 
 on:
   push:
@@ -42,6 +44,9 @@ jobs:
 
       - name: Workflows parse and stay inside their limits
         run: python scripts/validate_workflows.py
+
+      - name: The gate fails the runs it is supposed to fail
+        run: python scripts/test_ci.py
 
       - name: Agent-run preflight makes the right decisions
         run: python scripts/test_preflight.py

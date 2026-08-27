@@ -4,6 +4,19 @@ name: ci
 # either passes or fails without anyone having to interpret it. If a check
 # needs judgment, it is not a gate and it does not belong in this file.
 #
+# Two modes, and the caller picks by whether it passes `commands`:
+#
+# - `commands` empty, the default: the Node path. Detects the package manager
+#   from the lockfile, installs, and runs the named `package.json` scripts.
+# - `commands` set: every line is a shell command, run in order, in the
+#   working directory. Nothing is installed and no language is assumed, which
+#   is what makes this callable from a Python, Go, or Rust repository. Setting
+#   it ignores `checks`, `node-version`, and the install entirely.
+#
+# Either way the rule is the same one: a named check that is not there fails
+# the run rather than being skipped, because a gate that silently skips is not
+# a gate.
+#
 # Projects call it with:
 #   jobs:
 #     ci:
@@ -12,19 +25,38 @@ name: ci
 on:
   workflow_call:
     inputs:
+      commands:
+        description: >-
+          Newline-separated shell commands, run in order. Any non-zero exit
+          fails the run at that command. Empty means the Node path below.
+          Lines that are blank or start with # are ignored; a value with no
+          runnable line at all fails, since a gate that runs nothing is not
+          a gate.
+        type: string
+        default: ''
+      check-name:
+        description: >-
+          The job name, which is the string branch protection matches on.
+          Leave it alone on a Node project. Change it when `commands` makes
+          the default a lie, and re-point the protection rule in the same
+          sitting - a required check that no longer reports blocks every
+          merge.
+        type: string
+        default: 'typecheck, lint, test, build'
       node-version:
-        description: Node version to run the checks on.
+        description: Node version to run the checks on. Ignored when `commands` is set.
         type: string
         default: '20'
       working-directory:
-        description: Directory holding package.json.
+        description: >-
+          Directory the checks run in. Holds package.json on the Node path.
         type: string
         default: '.'
       checks:
         description: >-
           Comma-separated package.json scripts to run, in order. Every named
-          script must exist; a missing script fails rather than being skipped,
-          because a gate that silently skips is not a gate.
+          script must exist; a missing script fails rather than being skipped.
+          Ignored when `commands` is set.
         type: string
         default: 'typecheck,lint,test,build'
       upload-build:
@@ -41,7 +73,7 @@ permissions:
 
 jobs:
   check:
-    name: typecheck, lint, test, build
+    name: ${{ inputs.check-name }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -50,8 +82,44 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ---------------------------------------------------------------- the
+      # commands path. One step, no toolchain, no assumptions.
+
+      - name: Run the caller's commands
+        if: inputs.commands != ''
+        env:
+          COMMANDS: ${{ inputs.commands }}
+        run: |
+          ran=0
+          while IFS= read -r line; do
+            command="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            [ -z "$command" ] && continue
+            case "$command" in '#'*) continue ;; esac
+
+            ran=$((ran + 1))
+            echo "::group::$command"
+            status=0
+            bash -euo pipefail -c "$command" || status=$?
+            echo "::endgroup::"
+
+            if [ "$status" -ne 0 ]; then
+              echo "::error::\`$command\` exited $status. A gate stops at the first failing check rather than reporting the rest."
+              exit "$status"
+            fi
+          done <<< "$COMMANDS"
+
+          if [ "$ran" -eq 0 ]; then
+            echo "::error::The 'commands' input has no runnable line. A gate that runs nothing is not a gate - remove the input to fall back to the Node path, or give it commands."
+            exit 1
+          fi
+          echo "$ran command(s) passed."
+
+      # ---------------------------------------------------------------- the
+      # Node path, unchanged in behaviour and still the default.
+
       - name: Detect package manager
         id: pm
+        if: inputs.commands == ''
         run: |
           if [ -f pnpm-lock.yaml ]; then
             echo "name=pnpm" >> "$GITHUB_OUTPUT"
@@ -63,31 +131,36 @@ jobs:
             echo "name=npm" >> "$GITHUB_OUTPUT"
             echo "install=npm ci" >> "$GITHUB_OUTPUT"
           else
-            echo "No lockfile found. Commit one so installs are reproducible." >&2
+            echo "No lockfile found. Commit one so installs are reproducible, or pass the 'commands' input if this is not a Node project." >&2
             exit 1
           fi
 
       - name: Enable pnpm
-        if: steps.pm.outputs.name == 'pnpm'
+        if: inputs.commands == '' && steps.pm.outputs.name == 'pnpm'
         uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4
+        if: inputs.commands == ''
         with:
           node-version: ${{ inputs.node-version }}
           cache: ${{ steps.pm.outputs.name }}
           cache-dependency-path: ${{ inputs.working-directory }}/${{ steps.pm.outputs.name == 'pnpm' && 'pnpm-lock.yaml' || steps.pm.outputs.name == 'yarn' && 'yarn.lock' || 'package-lock.json' }}
 
       - name: Install
+        if: inputs.commands == ''
         run: ${{ steps.pm.outputs.install }}
 
       - name: Confirm every required script exists
+        if: inputs.commands == ''
+        env:
+          CHECKS: ${{ inputs.checks }}
         run: |
           missing=""
-          IFS=',' read -ra names <<< "${{ inputs.checks }}"
+          IFS=',' read -ra names <<< "$CHECKS"
           for name in "${names[@]}"; do
             script="$(echo "$name" | tr -d '[:space:]')"
             [ -z "$script" ] && continue
-            if ! node -e "process.exit(require('./package.json').scripts?.['$script'] ? 0 : 1)"; then
+            if ! SCRIPT="$script" node -e "process.exit(require('./package.json').scripts?.[process.env.SCRIPT] ? 0 : 1)"; then
               missing="$missing $script"
             fi
           done
@@ -98,13 +171,17 @@ jobs:
           fi
 
       - name: Run checks
+        if: inputs.commands == ''
+        env:
+          CHECKS: ${{ inputs.checks }}
+          PM: ${{ steps.pm.outputs.name }}
         run: |
-          IFS=',' read -ra names <<< "${{ inputs.checks }}"
+          IFS=',' read -ra names <<< "$CHECKS"
           for name in "${names[@]}"; do
             script="$(echo "$name" | tr -d '[:space:]')"
             [ -z "$script" ] && continue
-            echo "::group::${{ steps.pm.outputs.name }} run $script"
-            ${{ steps.pm.outputs.name }} run "$script"
+            echo "::group::$PM run $script"
+            "$PM" run "$script"
             echo "::endgroup::"
           done
 
