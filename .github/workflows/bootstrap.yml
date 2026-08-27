@@ -1,0 +1,98 @@
+name: bootstrap
+
+# Creates a project's label vocabulary from inside a runner, where the GitHub
+# CLI exists and is already authenticated.
+#
+# This workflow exists because of where the person running this system works
+# from. A cloud session has no `gh` binary, and there is no tool available to
+# it for creating a label, so the nine labels are either typed by hand nine
+# times per project on a phone or they are created here. The names are
+# load-bearing - the agent-run preflight matches them exactly - which is the
+# same reason they are defined in one place rather than retyped per project.
+#
+# Idempotent. Safe to re-run whenever a label gets renamed or deleted.
+#
+# Projects call it with:
+#   jobs:
+#     bootstrap:
+#       uses: chamaya00/agent-factory/.github/workflows/bootstrap.yml@v1
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  issues: write
+  checks: read
+
+jobs:
+  bootstrap:
+    name: labels and check names
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Create the labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          label() {
+            gh label create "$1" --color "$2" --description "$3" --force
+            echo "  $1"
+          }
+
+          echo "Labels:"
+          label objective           0B5394 "A goal, not a task. The orchestrator splits it."
+          label agent:queued        1D76DB "A human has released this to run."
+          label agent:running       FBCA04 "An agent holds this right now."
+          label agent:review        0E8A16 "Agent finished. Waiting on a human."
+          label agent:blocked       B60205 "Refused or failed. Needs a human."
+          label needs-decomposition D93F0B "Too big to work as one issue."
+          label role:researcher     5319E7 "Investigates options. Writes to docs/research/."
+          label role:designer       E99695 "Specifies flows and states. Writes to docs/design/."
+          label role:engineer       0052CC "Implements and opens the pull request."
+
+      - name: Report the check names branch protection needs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          # Read the names back rather than assuming them. They follow the job
+          # names, so a renamed job silently stops being a required check -
+          # which reads as green when it is really absent.
+          names="$(gh api "repos/$GH_REPO/commits/$DEFAULT_BRANCH/check-runs" \
+            --jq '.check_runs[].name' 2>/dev/null | sort -u || true)"
+
+          {
+            echo "## Labels created"
+            echo
+            echo "All nine. Re-run this workflow any time one gets renamed or deleted."
+            echo
+            echo "## Required checks for branch protection"
+            echo
+            if [ -n "$names" ]; then
+              echo "These are the check names as actually reported on \`$DEFAULT_BRANCH\`."
+              echo "Copy them verbatim into the branch protection rule:"
+              echo
+              while IFS= read -r name; do
+                [ -z "$name" ] && continue
+                echo "- \`$name\`"
+              done <<< "$names"
+            else
+              echo "No checks have reported on \`$DEFAULT_BRANCH\` yet, so there are no"
+              echo "names to copy. Let ci and guard run once, then re-run this workflow."
+            fi
+            echo
+            echo "## Still to do by hand"
+            echo
+            echo "1. Branch protection on \`$DEFAULT_BRANCH\`, requiring the checks above."
+            echo "   Deliberately not automated: setting it needs an admin token, and"
+            echo "   an identity that can set a gate can remove it."
+            echo "2. The \`CLAUDE_CODE_OAUTH_TOKEN\` secret on this repository."
+            echo "   Nothing agent-side runs without it, and secrets are per repository."
+          } >> "$GITHUB_STEP_SUMMARY"

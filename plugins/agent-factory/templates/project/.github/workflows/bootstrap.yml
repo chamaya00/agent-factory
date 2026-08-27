@@ -1,0 +1,14 @@
+name: bootstrap
+
+# Thin caller. Run once, by hand, from the Actions tab after this lands on the
+# default branch: it creates the nine labels and reports the exact check names
+# to put in the branch protection rule.
+#
+# workflow_dispatch only. Nothing about this should happen automatically.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  bootstrap:
+    uses: chamaya00/agent-factory/.github/workflows/bootstrap.yml@v1

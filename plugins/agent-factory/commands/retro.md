@@ -1,6 +1,6 @@
 ---
 description: Propose memory updates for this repository as a pull request, one file per role.
-allowed-tools: Bash, Read, Write, Edit, Glob, Grep
+allowed-tools: Bash, Read, Write, Edit, Glob, Grep, mcp__github__list_issues, mcp__github__issue_read, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__create_branch, mcp__github__push_files, mcp__github__create_pull_request
 ---
 
 Propose what this repository has learned, as a pull request against `.claude/memory/`.

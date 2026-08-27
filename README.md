@@ -37,7 +37,7 @@ Everything except the two manifests sits at the plugin root, not inside `.claude
 
 ## Commands
 
-- `/new-project <owner/repo>` - provisions a fresh repo: Actions permissions first, then labels, caller workflows, `CLAUDE.md`, memory files, and branch protection.
+- `/new-project <owner/repo>` - provisions a fresh repo: caller workflows, `CLAUDE.md`, memory files, and the labels. Three of its steps are handed to a human rather than scripted - see below.
 - `/decompose <issue>` - runs the orchestrator on one issue by hand.
 - `/retro` - proposes memory updates for the current repo as a pull request.
 
@@ -54,6 +54,7 @@ a change should not reach existing projects on its own.
 | `ci.yml` | `workflow_call` | typecheck, lint, test, build. No model involved. This is the gate. |
 | `agent-run.yml` | `workflow_call` | one agent run: repo-wide concurrency, queued not cancelled, capped turns and minutes, refuses a fourth attempt on the same issue. |
 | `project-guard.yml` | `workflow_call` | in each project: memory files stay inside the 40-line cap, and nobody but a maintainer edits the files that gate the repo. |
+| `bootstrap.yml` | `workflow_call` | run once per project, by hand: creates the nine labels and reports the check names branch protection needs. |
 | `guard.yml` | this repo only | the checks below. |
 
 ## Guard
@@ -63,7 +64,25 @@ a change should not reach existing projects on its own.
 ```
 python3 scripts/validate_plugin.py
 python3 scripts/validate_workflows.py
+python3 scripts/test_preflight.py
 ```
+
+## What a session cannot do for you
+
+A cloud session reaches this account's repositories through tools, not a shell,
+and there is no tool for a repository setting. Three things in provisioning are
+therefore always handed back, and `/new-project` asks for each in place rather
+than pretending:
+
+- **Allow Actions to create and approve pull requests.** Off by default on
+  personal accounts. With it off, every agent run appears to work and no pull
+  request ever appears.
+- **Merging the provisioning pull request, then running `bootstrap`.**
+  `workflow_dispatch` only sees workflows already on the default branch, so the
+  labels cannot be created before that merge.
+- **Branch protection.** Not automated on purpose, not only for lack of a tool:
+  setting it needs an administration token, and an identity that can set a gate
+  can remove one.
 
 ## Install
 
