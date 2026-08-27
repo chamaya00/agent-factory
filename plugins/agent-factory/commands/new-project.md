@@ -17,9 +17,18 @@ command -v gh
 ```
 
 **No `gh`** - the normal case, because this runs in a cloud session. Do the file
-work with the `mcp__github__*` tools named in each step. Three things have no
-tool at all in that environment: the Actions permission, the labels, and branch
-protection. Those are steps 1, 4, and 5, and they are handled without one.
+work with the `mcp__github__*` tools named in each step. Four things cannot be
+done from there at all: creating the repository, the Actions permission, the
+labels, and branch protection. Those are steps 2, 1, 4, and 5, and each is
+handed over in place.
+
+The first two of those fail for the same reason, and it is worth knowing which
+kind of failure to expect. A session token is a GitHub App installation on a
+set of repositories. It can act inside them, within the permissions granted,
+and it holds nothing at the account level - so creating a repository and
+changing a repository setting both come back `403 Resource not accessible by
+integration`. That message names no permission and no fix. Read it as "this
+needs a human", not as a bug to route around.
 
 **`gh` present and authenticated** - you may use it for steps 4 and 5 directly
 instead of handing them over, and should. Step 1 still cannot be scripted from
@@ -50,11 +59,30 @@ Nothing below is worth doing until they confirm. Ask again rather than assuming.
 
 Read the repository root with `mcp__github__get_file_contents`.
 
-- Missing entirely: create it with `mcp__github__create_repository`, passing
-  `autoInit: true`. A repository with no commits has no default branch, and
-  every later step needs one to branch from.
-- Present but empty: ask the human to add a README from the web UI, which
-  creates the first commit.
+**Missing entirely.** Hand it over. A session token is installed on the
+repositories it was granted, and creating a new one is an account-level
+permission no installation carries, so `mcp__github__create_repository` returns
+`403 Resource not accessible by integration` rather than creating anything. Do
+not try it first to see: the failure looks identical to a repository that
+exists but is unreachable, and guessing between the two wastes a turn.
+
+Give them exactly this, and wait:
+
+> 1. Open `github.com/new`
+> 2. Repository name: the name in `$1`
+> 3. **Public**. A private repository cannot call the factory's reusable
+>    workflows, so every check fails before it starts.
+> 4. Tick **Add a README file**. Without a first commit there is no default
+>    branch, and every step below needs one to branch from.
+> 5. **Create repository**
+
+**Present but empty.** Same missing first commit, one tap: ask them to add a
+README from the web UI.
+
+Once it exists, the session may still not be able to see it - a new repository
+is outside whatever the token was granted at the start of the session. If reads
+fail, say so and ask them to grant access to it rather than reporting the
+repository as missing.
 
 Note the default branch name from `mcp__github__list_branches` and use it
 everywhere below rather than assuming it is `main`.
