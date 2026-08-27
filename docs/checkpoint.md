@@ -9,28 +9,38 @@ the private key is the part that catches people out.
 
 ---
 
-## 0. Tag `main` as `v1`
+## 0. Point `v1` at the current `main`
 
 Every caller workflow in every project resolves
-`chamaya00/agent-factory/.github/workflows/ci.yml@v1`. Until that reference
-exists, a project's checks fail before they start, with an error about an
-invalid workflow reference rather than anything to do with the code.
+`chamaya00/agent-factory/.github/workflows/ci.yml@v1`, and the three others the
+same way. A caller holds that address, not a copy, so the tag has to point at a
+commit where all four files exist. Aimed at an older commit it resolves to a
+tree missing whatever landed since, and the project fails with an error about an
+invalid workflow reference that names nothing about a tag in another repo.
+
+The tag falls behind on every merge here, so this is not a one-time step. It is
+the step to repeat after any change to this repo that projects should pick up.
 
 From the web, on the phone:
 
-1. Open `github.com/chamaya00/agent-factory/releases/new`.
-2. Tap **Choose a tag**, type `v1`, then **Create new tag: v1 on publish**.
-3. Target: `main`.
-4. Title `v1`. Leave the body empty or paste the first paragraph of the README.
-5. **Publish release**. That creates the tag.
+1. Open `github.com/chamaya00/agent-factory/actions/workflows/release.yml`.
+2. Tap **Run workflow**. Leave both inputs alone - empty means the tip of
+   `main`, which is what you want.
+3. **Run workflow** again to confirm.
+4. When it finishes, open the run and read the summary. It lists what every
+   project just picked up, and which workflows are callable at the tag. That
+   second list is the one to check: four names, `bootstrap.yml` among them.
 
-The tag is load-bearing and it is mutable: moving it changes what every project
-runs, immediately, with no pull request anywhere. When the factory changes in a
-way projects should not pick up automatically, cut `v2` and let each project
-move its callers when it is ready.
+The workflow refuses to point the tag at a commit that is not already on `main`,
+and refuses to move it at all unless the guard checks pass on that commit. It
+will also create a tag that does not exist yet, so cutting `v2` later is the
+same three taps with `v2` typed in the first input.
 
-To move it deliberately later, delete the `v1` release and republish it against
-the newer commit.
+Moving the tag is a deploy to every project at once, with no pull request in any
+of them. When a change here should not reach existing projects on its own, cut
+`v2` instead and let each project move its callers when it is ready. To roll
+back, run it again with the older commit in the second input - the previous
+commit is printed in the summary of the run that moved it.
 
 
 ## 1. Generate the subscription token

@@ -45,9 +45,15 @@ Everything except the two manifests sits at the plugin root, not inside `.claude
 
 All the logic lives here; projects get thin callers that point at `@v1`.
 
-`v1` is a tag on `main`, and it is load-bearing: moving it changes what every
-project runs, immediately, with no pull request anywhere. Cut `v2` instead when
-a change should not reach existing projects on its own.
+`v1` is a tag on `main`, and it is load-bearing. A caller holds an address, not
+a copy: GitHub resolves `@v1` fresh on every run, so moving the tag changes what
+every project executes immediately, with no pull request in any of them. That is
+what makes one edit here reach every project at once, and it is the same reason
+a stale tag is invisible - a project fails with an invalid workflow reference,
+naming nothing about a tag in another repo.
+
+Move it with the `release` workflow rather than by hand, and cut `v2` instead
+when a change should not reach existing projects on its own.
 
 | Workflow | Called as | What it does |
 |---|---|---|
@@ -56,6 +62,7 @@ a change should not reach existing projects on its own.
 | `project-guard.yml` | `workflow_call` | in each project: memory files stay inside the 40-line cap, and nobody but a maintainer edits the files that gate the repo. |
 | `bootstrap.yml` | `workflow_call` | run once per project, by hand: creates the nine labels and reports the check names branch protection needs. |
 | `guard.yml` | this repo only | the checks below. |
+| `release.yml` | this repo only, by hand | moves a major tag to a merged commit, once the checks pass on it. |
 
 ## Guard
 
@@ -65,7 +72,23 @@ a change should not reach existing projects on its own.
 python3 scripts/validate_plugin.py
 python3 scripts/validate_workflows.py
 python3 scripts/test_preflight.py
+python3 scripts/test_release.py
 ```
+
+The last two execute a workflow's own shell rather than reading it, because
+those are the two places a bug is expensive: the preflight spends subscription
+quota, and `release` decides what every project runs.
+
+## Releasing
+
+`release.yml` is `workflow_dispatch` only, from the Actions tab. Leave the
+inputs alone to move `v1` to the tip of `main`; pass an older merged commit to
+roll back, or a different `v<n>` to cut a new major.
+
+It refuses a tag name that is not `v<number>`, a commit that is not already on
+the default branch, and any commit the guard checks do not pass on. The run
+summary lists what every project just picked up and which workflows are callable
+at the tag, which is the thing worth reading after a move.
 
 ## What a session cannot do for you
 

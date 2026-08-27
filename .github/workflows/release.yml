@@ -1,0 +1,179 @@
+name: release
+
+# Moves a major tag to a commit on the default branch. Runs on the factory
+# itself, by hand, and nothing else triggers it.
+#
+# The tag is an address, not a copy: every project's caller workflows resolve
+# `@v1` fresh on every run, so moving it changes what every project executes
+# immediately, with no pull request anywhere. That is the point of the tag and
+# it is also the risk in it, so this workflow refuses to move one anywhere it
+# should not go:
+#
+# - Only a name matching v<number>. This is not a general ref writer.
+# - Only a commit that is already on the default branch. Picking a feature
+#   branch from the Run workflow dropdown does not tag it.
+# - Only after the same checks that gate a pull request pass on that commit.
+#   A tag is what projects run, so it is held to the gate, not to a dispatch.
+#
+# Rolling back is the same operation: pass an older merged commit.
+#
+# It does not weaken the rule that a human sets the gates. It is dispatch-only,
+# so it takes someone with write access on this repo to start it, and no
+# workflow here grants `actions: write`, which is what an agent would need to
+# start one.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Major tag to move. v1 unless you are cutting a new major.
+        type: string
+        default: v1
+      commit:
+        description: >-
+          Commit to point it at. Empty means the tip of the default branch,
+          which is what you want unless you are rolling back.
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+# Two of these racing would leave the tag wherever the loser finished.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: move the major tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      # The default branch, deliberately, rather than the ref this was
+      # dispatched from. Editing this file on a branch and running it from
+      # there still tags merged history and nothing else.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.repository.default_branch }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install the guard's dependency
+        run: python -m pip install --quiet pyyaml
+
+      - name: Resolve the target commit
+        id: target
+        env:
+          TAG: ${{ inputs.tag }}
+          COMMIT: ${{ inputs.commit }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          if ! echo "$TAG" | grep -Eq '^v[0-9]+$'; then
+            echo "::error::'$TAG' is not a major tag. Expected v followed by a number."
+            exit 1
+          fi
+
+          tip="$(git rev-parse HEAD)"
+
+          if [ -z "$COMMIT" ]; then
+            target="$tip"
+          else
+            target="$(git rev-parse --verify --quiet "${COMMIT}^{commit}" || true)"
+            if [ -z "$target" ]; then
+              echo "::error::'$COMMIT' is not a commit in this repository."
+              exit 1
+            fi
+            # Merged history only. An unmerged commit has not been through the
+            # gate, and pointing the tag at one puts it in every project.
+            if ! git merge-base --is-ancestor "$target" "$tip"; then
+              echo "::error::$COMMIT is not on $DEFAULT_BRANCH. Merge it first."
+              exit 1
+            fi
+          fi
+
+          current="$(git rev-parse --verify --quiet "refs/tags/${TAG}^{commit}" || true)"
+
+          echo "Tag:     $TAG"
+          echo "Current: ${current:-does not exist yet}"
+          echo "Target:  $target"
+
+          {
+            echo "tag=$TAG"
+            echo "target=$target"
+            echo "current=$current"
+            echo "moved=$([ "$current" = "$target" ] && echo false || echo true)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: The gate passes on that commit
+        if: steps.target.outputs.moved == 'true'
+        env:
+          TARGET: ${{ steps.target.outputs.target }}
+        run: |
+          set -euo pipefail
+          git checkout --quiet --detach "$TARGET"
+          python scripts/validate_plugin.py
+          python scripts/validate_workflows.py
+          python scripts/test_preflight.py
+
+      - name: Move the tag
+        if: steps.target.outputs.moved == 'true'
+        env:
+          TAG: ${{ steps.target.outputs.tag }}
+          TARGET: ${{ steps.target.outputs.target }}
+        run: |
+          set -euo pipefail
+          git tag --force "$TAG" "$TARGET"
+          git push --force origin "refs/tags/$TAG"
+
+      - name: Report what every project now runs
+        if: always() && steps.target.outputs.target != ''
+        env:
+          TAG: ${{ steps.target.outputs.tag }}
+          TARGET: ${{ steps.target.outputs.target }}
+          CURRENT: ${{ steps.target.outputs.current }}
+          MOVED: ${{ steps.target.outputs.moved }}
+          STATUS: ${{ job.status }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          set -euo pipefail
+          {
+            if [ "$MOVED" != "true" ]; then
+              echo "## \`$TAG\` was already there"
+              echo
+              echo "Pointing at \`${TARGET:0:7}\`. Nothing moved."
+            elif [ "$STATUS" != "success" ]; then
+              echo "## \`$TAG\` did not move"
+              echo
+              echo "It still points at \`${CURRENT:-nothing}\`. Read the failing step above."
+            else
+              echo "## \`$TAG\` now points at \`${TARGET:0:7}\`"
+              echo
+              echo "Every project resolving \`@$TAG\` runs this commit from its next run onward."
+              echo
+              if [ -n "$CURRENT" ]; then
+                echo "### Picked up by every project"
+                echo
+                git log --format='- %s' "$CURRENT..$TARGET" || true
+                echo
+                echo "To undo: run this again with commit \`$CURRENT\`."
+                echo
+              fi
+              echo "### Workflows callable at \`$TAG\`"
+              echo
+              echo "A caller addressing one that is not listed here fails with an invalid"
+              echo "workflow reference, in the project repo, naming nothing about this tag."
+              echo
+              git ls-tree --name-only "$TARGET" .github/workflows/ \
+                | sed 's|.*/||; s|^|- `|; s|$|`|'
+              echo
+              echo "[Tree at \`$TAG\`]($REPO_URL/tree/$TAG/.github/workflows)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
