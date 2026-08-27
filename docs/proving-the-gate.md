@@ -16,24 +16,36 @@ looking for.
 ## 1. Create the throwaway repo
 
 ```
-/new-project chamaya00/gate-test
+/new-project chamaya00/gate-test-public
 ```
 
 The command does not run start to finish on its own, by design: a cloud session
-has no way to change a repository setting or create a label, so three of its
-steps are handed to you. Expect to be asked for these, in this order:
+holds an installation token on repositories that already exist, so it can
+neither create one nor change a setting on one. Four of its steps are handed to
+you. Expect to be asked for these, in this order:
 
-1. **Before anything else**, tick the two Actions settings at
-   `github.com/chamaya00/gate-test/settings/actions` - "Read and write
+1. **Create the repository yourself**, at `github.com/new`. Name it
+   `gate-test-public`, make it **public**, and tick **Add a README file**.
+   Public because a private repository cannot call the factory's reusable
+   workflows; the README because a repository with no commits has no default
+   branch to branch from. Then tell the session it exists.
+2. **Tick the two Actions settings** at
+   `github.com/chamaya00/gate-test-public/settings/actions` - "Read and write
    permissions" and "Allow GitHub Actions to create and approve pull requests".
    This is the one that fails silently: with it off, every later step appears
    to work and no pull request ever appears.
-2. **Merge the pull request** the command opens with the caller workflows and
+3. **Merge the pull request** the command opens with the caller workflows and
    project files. `workflow_dispatch` only sees workflows already on the
-   default branch, so nothing in step 3 is possible before this merges.
-3. **Run the `bootstrap` workflow** from the Actions tab. It creates the nine
+   default branch, so nothing in step 4 is possible before this merges.
+4. **Run the `bootstrap` workflow** from the Actions tab. It creates the nine
    labels and prints the check names you need for branch protection.
-4. **Set branch protection** using the names from that run summary.
+5. **Set branch protection** using the names from that run summary.
+
+Before any of it, confirm `v1` points at the tip of the factory's `main`. The
+callers this command writes all resolve `@v1`, and the tag falls behind on
+every merge there - `docs/checkpoint.md` step 0 is the three taps that move it.
+A stale tag surfaces here as an invalid workflow reference naming nothing about
+a tag in another repository.
 
 Then confirm by hand:
 
@@ -108,9 +120,9 @@ does touch a workflow file, this check is what catches it.
 ## 6. Only now enable agent-run
 
 When steps 1 to 4 are boring and repeatable, add `CLAUDE_CODE_OAUTH_TOKEN` to
-`gate-test` and let `agent-run.yml` stay as it is - it is already in the repo
-from `/new-project`, and it does nothing until an issue carries the right
-labels.
+`gate-test-public` and let `agent-run.yml` stay as it is - it is already in
+the repo from `/new-project`, and it does nothing until an issue carries the
+right labels.
 
 Then go to phase 8.
 

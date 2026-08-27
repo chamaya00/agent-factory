@@ -123,13 +123,28 @@ the default branch, and any commit the guard checks do not pass on. The run
 summary lists what every project just picked up and which workflows are callable
 at the tag, which is the thing worth reading after a move.
 
+Moving the tag is a human step, and it stays one. A session can neither start
+the workflow nor push the tag by hand: dispatching needs `actions: write`,
+which no workflow here grants and which is exactly the permission an agent
+would need to run its own gates, and the App token is not allowed to write
+refs under `refs/tags/`. Both come back `403`. So this is three taps in the
+Actions tab, by you, after any merge that projects should pick up - and a
+session that says it moved the tag did not.
+
 ## What a session cannot do for you
 
-A cloud session reaches this account's repositories through tools, not a shell,
-and there is no tool for a repository setting. Three things in provisioning are
-therefore always handed back, and `/new-project` asks for each in place rather
-than pretending:
+A cloud session reaches this account's repositories through a GitHub App
+installed on the ones it was granted. That is the shape of the limit: it can
+act inside those repositories, and it holds nothing at the account level and
+nothing over their settings. Both refusals read `403 Resource not accessible by
+integration`, which names no permission and suggests no fix, so the list below
+is worth more than the error message.
 
+Four things in provisioning are therefore always handed back, and
+`/new-project` asks for each in place rather than pretending:
+
+- **Creating the repository.** An account-level permission no installation
+  carries. Public, with a README, from `github.com/new`.
 - **Allow Actions to create and approve pull requests.** Off by default on
   personal accounts. With it off, every agent run appears to work and no pull
   request ever appears.
