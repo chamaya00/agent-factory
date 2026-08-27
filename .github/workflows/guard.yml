@@ -1,11 +1,13 @@
 name: guard
 
-# Runs on the factory itself. Three things: the manifests still parse, the
+# Runs on the factory itself. Four things: the manifests still parse, the
 # plugin still describes how we work rather than what any one project contains,
-# and the agent-run preflight still refuses the runs it is supposed to refuse.
+# the agent-run preflight still refuses the runs it is supposed to refuse, and
+# release still refuses to point a major tag at unmerged history.
 #
-# The middle one is what keeps the toolbox portable a year from now. The last
-# one is the only place a bug here costs subscription quota.
+# The second one is what keeps the toolbox portable a year from now. The last
+# two are the places a bug is expensive: one costs subscription quota, the
+# other changes what every project runs.
 
 on:
   push:
@@ -43,3 +45,6 @@ jobs:
 
       - name: Agent-run preflight makes the right decisions
         run: python scripts/test_preflight.py
+
+      - name: Release resolves the right commit for a major tag
+        run: python scripts/test_release.py
