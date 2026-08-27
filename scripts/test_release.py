@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Run the release workflow's resolve step against real git repositories.
 
-The step decides which commit a major tag lands on, and every project resolves
-that tag on its next run. A bug here is not a failed job; it is a silent change
-to what every project executes. So it gets executed against real history rather
-than read.
+The step decides whether a release tag gets cut and what it is called. A bug
+here is either a tag that disagrees with the plugin manifest, which installs as
+the version already cached and updates nothing, or a release tag that moves,
+which silently changes what a project resolves after its author reviewed and
+pinned it. So it gets executed against real history rather than read.
 
 The step's `run:` block is pulled straight out of the workflow, so these cases
 cannot drift away from what actually ships. Only the `${{ }}` expressions are
@@ -13,6 +14,7 @@ substituted, since those are the runner's job.
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import tempfile
@@ -24,6 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 
 DEFAULT_BRANCH = "main"
+MANIFEST = "plugins/agent-factory/.claude-plugin/plugin.json"
 
 
 def resolve_script() -> str:
@@ -41,30 +44,28 @@ def git(repo: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
-def build_repo(repo: Path) -> dict[str, str]:
-    """Three commits on the default branch, one on a branch that never merged."""
+def build_repo(repo: Path, manifest: dict | None) -> dict[str, str]:
+    """Three commits on the default branch, carrying a plugin manifest."""
     git(repo, "init", "--quiet", "--initial-branch", DEFAULT_BRANCH)
     git(repo, "config", "user.email", "guard@example.invalid")
     git(repo, "config", "user.name", "guard")
 
+    if manifest is not None:
+        path = repo / MANIFEST
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(manifest))
+
     shas = {}
     for name in ("first", "second", "third"):
         (repo / "file").write_text(name)
-        git(repo, "add", "file")
+        git(repo, "add", "-A")
         git(repo, "commit", "--quiet", "-m", name)
         shas[name] = git(repo, "rev-parse", "HEAD")
-
-    git(repo, "checkout", "--quiet", "-b", "unmerged")
-    (repo / "file").write_text("unmerged")
-    git(repo, "add", "file")
-    git(repo, "commit", "--quiet", "-m", "unmerged")
-    shas["unmerged"] = git(repo, "rev-parse", "HEAD")
-    git(repo, "checkout", "--quiet", DEFAULT_BRANCH)
 
     return shas
 
 
-def run_case(script: str, repo: Path, tag: str, commit: str) -> tuple[int, dict[str, str]]:
+def run_case(script: str, repo: Path, version: str) -> tuple[int, dict[str, str]]:
     with tempfile.NamedTemporaryFile("w+", delete=False) as handle:
         output = Path(handle.name)
     result = subprocess.run(
@@ -75,8 +76,7 @@ def run_case(script: str, repo: Path, tag: str, commit: str) -> tuple[int, dict[
         env={
             "PATH": "/usr/bin:/bin:/usr/local/bin",
             "HOME": str(repo),
-            "TAG": tag,
-            "COMMIT": commit,
+            "VERSION": version,
             "DEFAULT_BRANCH": DEFAULT_BRANCH,
             "GITHUB_OUTPUT": str(output),
         },
@@ -94,24 +94,27 @@ def main() -> int:
     script = resolve_script()
     failures = 0
 
-    def case(name, tag, commit, tagged, expected_code, expected_target=None, expected_moved=None):
+    def case(name, version="", manifest=None, existing_tag=None,
+             expected_code=0, expected_tag=None, expected_target=None):
         nonlocal failures
+        if manifest is None:
+            manifest = {"name": "agent-factory", "version": "1.2.0"}
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)
-            shas = build_repo(repo)
-            if tagged:
-                git(repo, "tag", "v1", shas[tagged])
-            target = shas.get(commit, commit)
-            code, outputs = run_case(script, repo, tag, target if commit else "")
+            shas = build_repo(repo, None if manifest is False else manifest)
+            if existing_tag:
+                git(repo, "tag", existing_tag, shas["first"])
+
+            code, outputs = run_case(script, repo, version)
 
             problems = []
             if code != expected_code:
                 problems.append(f"exit {code}, expected {expected_code}")
+            if expected_tag is not None and outputs.get("tag") != expected_tag:
+                problems.append(f"tag {outputs.get('tag') or 'unset'}, expected {expected_tag}")
             if expected_target is not None and outputs.get("target") != shas[expected_target]:
                 got = outputs.get("target", "")
                 problems.append(f"target {got[:7] or 'unset'}, expected {expected_target}")
-            if expected_moved is not None and outputs.get("moved") != expected_moved:
-                problems.append(f"moved {outputs.get('moved')}, expected {expected_moved}")
 
             if problems:
                 failures += 1
@@ -121,35 +124,37 @@ def main() -> int:
             else:
                 print(f"  ok   {name}")
 
-    # The ordinary run: the tag is behind, and it goes to the tip.
-    case("an empty commit input means the tip of the default branch",
-         "v1", "", tagged="first", expected_code=0, expected_target="third", expected_moved="true")
+    # The ordinary run: the manifest names the tag and it lands on the tip.
+    case("an empty version takes the tag from the plugin manifest",
+         expected_tag="v1.2.0", expected_target="third")
 
-    # A tag that never existed is created rather than refused. Cutting v2 is
-    # the same operation as moving v1.
-    case("a tag that does not exist yet is a move like any other",
-         "v2", "", tagged=None, expected_code=0, expected_target="third", expected_moved="true")
+    # Typing it confirms the manifest rather than overriding it.
+    case("a version matching the manifest is accepted",
+         version="v1.2.0", expected_tag="v1.2.0", expected_target="third")
 
-    # Nothing to do, and it has to say so rather than push an identical ref.
-    case("a tag already at the target does not move",
-         "v1", "", tagged="third", expected_code=0, expected_target="third", expected_moved="false")
+    # The one that stops a release from silently updating nothing: an installed
+    # plugin compares versions, so a tag ahead of the manifest is a no-op.
+    case("a version disagreeing with the manifest is refused",
+         version="v1.3.0", expected_code=1)
 
-    # Rolling back is the same operation with an older commit.
-    case("an older merged commit is allowed, which is how a rollback works",
-         "v1", "second", tagged="third", expected_code=0, expected_target="second", expected_moved="true")
+    # The whole difference between a release tag and a pointer.
+    case("a tag that already exists is refused rather than moved",
+         existing_tag="v1.2.0", expected_code=1)
 
-    # The one that matters. An unmerged commit has not been through the gate,
-    # and tagging it puts it in every project.
-    case("a commit that is not on the default branch is refused",
-         "v1", "unmerged", tagged="first", expected_code=1)
+    case("an unrelated existing tag does not block the release",
+         existing_tag="v1.1.0", expected_tag="v1.2.0", expected_target="third")
 
-    case("a commit that does not exist is refused",
-         "v1", "0000000000000000000000000000000000000000", tagged="first", expected_code=1)
+    # A manifest is required, and so is a version in it.
+    case("a missing plugin manifest is refused", manifest=False, expected_code=1)
+    case("a manifest with no version is refused",
+         manifest={"name": "agent-factory"}, expected_code=1)
 
-    # Not a general ref writer.
-    for name in ("main", "v1.2", "latest", "v", "release/v1", "v1; rm -rf /"):
-        case(f"tag name {name!r} is refused",
-             name, "", tagged="first", expected_code=1)
+    # Not a general ref writer, and not a moving major tag either.
+    for bad in ("main", "v1", "v1.2", "latest", "v", "release/v1",
+                "v1.2.0-rc1", "v1.2.0; rm -rf /"):
+        case(f"version {bad!r} is refused", version=bad,
+             manifest={"name": "agent-factory", "version": bad.lstrip("v")},
+             expected_code=1)
 
     print()
     if failures:

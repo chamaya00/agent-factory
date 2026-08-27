@@ -29,6 +29,11 @@ on:
           .github/workflows/**
           CODEOWNERS
           .github/CODEOWNERS
+          .claude/agents/*
+          .claude/agents/**
+          .claude/skills/*
+          .claude/skills/**
+          .claude/agent-factory.json
       maintainers:
         description: >-
           Comma-separated logins allowed to change the protected paths. Empty

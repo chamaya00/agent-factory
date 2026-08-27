@@ -147,6 +147,8 @@ Plugins cannot ship a `CLAUDE.md` - a `CLAUDE.md` at the plugin root is not load
 
 All real logic lives here in the factory. Project repos get thin callers that just point at `@v1`.
 
+> Superseded. `@v1` was a moving tag, so a merge here changed what every project ran with no pull request in any of them. Callers now pin to an immutable release tag, and roles are copied into each project rather than fetched at run time. See `docs/versioning.md`.
+
 **`ci.yml`** (`workflow_call`) - typecheck, lint, test, build. No model involved. This is the gate, and it must stay deterministic: if a check requires judgment, it is not a gate.
 
 **`agent-run.yml`** (`workflow_call`) - wraps `anthropics/claude-code-action@v1`. Triggers on `issues: labeled`, `issue_comment`, `workflow_dispatch`.

@@ -1,52 +1,55 @@
 name: release
 
-# Moves a major tag to a commit on the default branch. Runs on the factory
-# itself, by hand, and nothing else triggers it.
+# Cuts a release tag on the factory. Runs here, by hand, and nothing else
+# triggers it.
 #
-# The tag is an address, not a copy: every project's caller workflows resolve
-# `@v1` fresh on every run, so moving it changes what every project executes
-# immediately, with no pull request anywhere. That is the point of the tag and
-# it is also the risk in it, so this workflow refuses to move one anywhere it
-# should not go:
+# Release tags never move. A project pins a caller to one, and that pin is a
+# decision its author made when they read the diff - so the commit behind it
+# has to keep being the commit they reviewed. Nothing this workflow does
+# changes what any existing project runs. A project picks up a release when
+# somebody bumps the pin there and merges it, and not before.
 #
-# - Only a name matching v<number>. This is not a general ref writer.
-# - Only a commit that is already on the default branch. Picking a feature
-#   branch from the Run workflow dropdown does not tag it.
-# - Only after the same checks that gate a pull request pass on that commit.
-#   A tag is what projects run, so it is held to the gate, not to a dispatch.
+# The tag name is not typed here, it is read from the plugin manifest. That is
+# deliberate: the manifest version is also what decides whether an installed
+# plugin updates, so a tag that disagreed with it would install as the version
+# already cached and the update would silently do nothing. Cutting a release
+# therefore starts with a pull request bumping that version.
 #
-# Rolling back is the same operation: pass an older merged commit.
+# What this refuses:
 #
-# It does not weaken the rule that a human sets the gates. It is dispatch-only,
-# so it takes someone with write access on this repo to start it, and no
-# workflow here grants `actions: write`, which is what an agent would need to
-# start one.
+# - A tag that already exists. Releases are immutable; there is no --force here.
+# - A name that is not vMAJOR.MINOR.PATCH. This is not a general ref writer.
+# - A name that disagrees with the plugin manifest.
+# - Any commit that is not the tip of the default branch, so a feature branch
+#   picked from the Run workflow dropdown does not get tagged.
+# - Anything at all until the same checks that gate a pull request pass on it.
+#
+# It does not hand an agent a way to move the gates. It is dispatch-only, so it
+# takes someone with write access here to start it, and no workflow in this
+# repository grants `actions: write`, which is what an agent would need.
 
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: Major tag to move. v1 unless you are cutting a new major.
-        type: string
-        default: v1
-      commit:
+      version:
         description: >-
-          Commit to point it at. Empty means the tip of the default branch,
-          which is what you want unless you are rolling back.
+          Tag to cut, for example v1.2.0. Leave empty to use the version in
+          the plugin manifest, which is the normal case. Typing one only
+          confirms what the manifest already says; it cannot override it.
         type: string
         default: ''
 
 permissions:
   contents: read
 
-# Two of these racing would leave the tag wherever the loser finished.
+# Two of these racing would both try to create the same ref.
 concurrency:
   group: release
   cancel-in-progress: false
 
 jobs:
   release:
-    name: move the major tag
+    name: cut a release tag
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -67,114 +70,111 @@ jobs:
       - name: Install the guard's dependency
         run: python -m pip install --quiet pyyaml
 
-      - name: Resolve the target commit
+      - name: Resolve the tag
         id: target
         env:
-          TAG: ${{ inputs.tag }}
-          COMMIT: ${{ inputs.commit }}
+          VERSION: ${{ inputs.version }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
 
-          if ! echo "$TAG" | grep -Eq '^v[0-9]+$'; then
-            echo "::error::'$TAG' is not a major tag. Expected v followed by a number."
+          manifest="plugins/agent-factory/.claude-plugin/plugin.json"
+          if [ ! -f "$manifest" ]; then
+            echo "::error::$manifest is missing. The plugin version is what names the tag."
             exit 1
           fi
 
-          tip="$(git rev-parse HEAD)"
-
-          if [ -z "$COMMIT" ]; then
-            target="$tip"
-          else
-            target="$(git rev-parse --verify --quiet "${COMMIT}^{commit}" || true)"
-            if [ -z "$target" ]; then
-              echo "::error::'$COMMIT' is not a commit in this repository."
-              exit 1
-            fi
-            # Merged history only. An unmerged commit has not been through the
-            # gate, and pointing the tag at one puts it in every project.
-            if ! git merge-base --is-ancestor "$target" "$tip"; then
-              echo "::error::$COMMIT is not on $DEFAULT_BRANCH. Merge it first."
-              exit 1
-            fi
+          declared="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("version") or "")' "$manifest")"
+          if [ -z "$declared" ]; then
+            echo "::error::$manifest declares no version. Add one and merge it before cutting a release."
+            exit 1
           fi
 
-          current="$(git rev-parse --verify --quiet "refs/tags/${TAG}^{commit}" || true)"
+          tag="${VERSION:-v$declared}"
 
-          echo "Tag:     $TAG"
-          echo "Current: ${current:-does not exist yet}"
-          echo "Target:  $target"
+          if ! echo "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::'$tag' is not a release version. Expected vMAJOR.MINOR.PATCH, for example v1.2.0."
+            exit 1
+          fi
+
+          # The manifest is the single source. A tag that disagreed with it
+          # would ship files the plugin then refuses to install, because an
+          # unchanged version reads as "already up to date".
+          if [ "$tag" != "v$declared" ]; then
+            echo "::error::$tag disagrees with $manifest, which declares $declared. Bump the version there in a pull request and merge it first."
+            exit 1
+          fi
+
+          # Immutable. This is the whole difference between this and a pointer.
+          if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "::error::$tag already exists and release tags never move - a project pinned to it has to keep resolving the commit its author reviewed. Bump the version in $manifest and cut the next one."
+            exit 1
+          fi
+
+          target="$(git rev-parse HEAD)"
+
+          echo "Tag:    $tag (new)"
+          echo "Commit: $target on $DEFAULT_BRANCH"
 
           {
-            echo "tag=$TAG"
+            echo "tag=$tag"
             echo "target=$target"
-            echo "current=$current"
-            echo "moved=$([ "$current" = "$target" ] && echo false || echo true)"
           } >> "$GITHUB_OUTPUT"
 
       - name: The gate passes on that commit
-        if: steps.target.outputs.moved == 'true'
-        env:
-          TARGET: ${{ steps.target.outputs.target }}
         run: |
           set -euo pipefail
-          git checkout --quiet --detach "$TARGET"
           python scripts/validate_plugin.py
           python scripts/validate_workflows.py
           python scripts/test_ci.py
           python scripts/test_preflight.py
+          python scripts/test_release.py
 
-      - name: Move the tag
-        if: steps.target.outputs.moved == 'true'
+      - name: Cut the tag
         env:
           TAG: ${{ steps.target.outputs.tag }}
           TARGET: ${{ steps.target.outputs.target }}
         run: |
           set -euo pipefail
-          git tag --force "$TAG" "$TARGET"
-          git push --force origin "refs/tags/$TAG"
+          git tag "$TAG" "$TARGET"
+          git push origin "refs/tags/$TAG"
 
-      - name: Report what every project now runs
-        if: always() && steps.target.outputs.target != ''
+      - name: Report what is available to pin
+        if: always() && steps.target.outputs.tag != ''
         env:
           TAG: ${{ steps.target.outputs.tag }}
           TARGET: ${{ steps.target.outputs.target }}
-          CURRENT: ${{ steps.target.outputs.current }}
-          MOVED: ${{ steps.target.outputs.moved }}
           STATUS: ${{ job.status }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
           set -euo pipefail
           {
-            if [ "$MOVED" != "true" ]; then
-              echo "## \`$TAG\` was already there"
+            if [ "$STATUS" != "success" ]; then
+              echo "## \`$TAG\` was not cut"
               echo
-              echo "Pointing at \`${TARGET:0:7}\`. Nothing moved."
-            elif [ "$STATUS" != "success" ]; then
-              echo "## \`$TAG\` did not move"
-              echo
-              echo "It still points at \`${CURRENT:-nothing}\`. Read the failing step above."
+              echo "Nothing changed anywhere. Read the failing step above."
             else
-              echo "## \`$TAG\` now points at \`${TARGET:0:7}\`"
+              echo "## \`$TAG\` is available"
               echo
-              echo "Every project resolving \`@$TAG\` runs this commit from its next run onward."
+              echo "Pointing at \`${TARGET:0:7}\`, permanently."
               echo
-              if [ -n "$CURRENT" ]; then
-                echo "### Picked up by every project"
-                echo
-                git log --format='- %s' "$CURRENT..$TARGET" || true
-                echo
-                echo "To undo: run this again with commit \`$CURRENT\`."
-                echo
-              fi
+              echo "**No project has picked this up.** Nothing running anywhere changed."
+              echo "A project moves when somebody bumps its pin and merges that."
+              echo
+              echo "### To take it into a project"
+              echo
+              echo "Run \`/update-agents\` there. It bumps the four callers and"
+              echo "refreshes the vendored roles in one pull request, so the diff"
+              echo "shows what changes before anything runs."
+              echo
               echo "### Workflows callable at \`$TAG\`"
               echo
               echo "A caller addressing one that is not listed here fails with an invalid"
               echo "workflow reference, in the project repo, naming nothing about this tag."
               echo
               git ls-tree --name-only "$TARGET" .github/workflows/ \
-                | sed 's|.*/||; s|^|- `|; s|$|`|'
+                | sed 's|.*/||; s|^|- \`|; s|$|\`|'
               echo
-              echo "[Tree at \`$TAG\`]($REPO_URL/tree/$TAG/.github/workflows)"
+              echo "[Tree at \`$TAG\`]($REPO_URL/tree/$TAG)"
             fi
           } >> "$GITHUB_STEP_SUMMARY"

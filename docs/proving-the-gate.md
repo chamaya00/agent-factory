@@ -41,16 +41,22 @@ you. Expect to be asked for these, in this order:
    labels and prints the check names you need for branch protection.
 5. **Set branch protection** using the names from that run summary.
 
-Before any of it, confirm `v1` points at the tip of the factory's `main`. The
-callers this command writes all resolve `@v1`, and the tag falls behind on
-every merge there - `docs/checkpoint.md` step 0 is the three taps that move it.
-A stale tag surfaces here as an invalid workflow reference naming nothing about
-a tag in another repository.
+Before any of it, confirm a release tag exists for the version in the
+factory's `plugins/agent-factory/.claude-plugin/plugin.json`. `/new-project`
+pins the callers to that version, and a pin with no tag behind it surfaces here
+as an invalid workflow reference naming nothing about a tag in another
+repository. `docs/checkpoint.md` step 0 cuts one.
 
 Then confirm by hand:
 
 - The Actions settings above are actually ticked. Look, do not remember.
 - The repo has all nine labels.
+- No file under `.github/workflows/` still contains `__FACTORY_VERSION__`. The
+  placeholder is substituted at provision time; one that survived means the
+  callers address a ref that does not exist.
+- `.claude/agents/` has four role files. The agent job refuses to start
+  without them, which is the correct behaviour and a confusing first failure
+  if you were not expecting it.
 
 Branch protection stays a human step on purpose, here and forever: setting it
 needs an administration token, and an identity that can set a gate can remove

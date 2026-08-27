@@ -5,10 +5,12 @@ name: bootstrap
 # to put in the branch protection rule.
 #
 # workflow_dispatch only. Nothing about this should happen automatically.
+#
+# Pinned to a release, like the other callers. See ci.yml for why.
 
 on:
   workflow_dispatch:
 
 jobs:
   bootstrap:
-    uses: chamaya00/agent-factory/.github/workflows/bootstrap.yml@v1
+    uses: chamaya00/agent-factory/.github/workflows/bootstrap.yml@__FACTORY_VERSION__

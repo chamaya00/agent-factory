@@ -93,18 +93,43 @@ One branch, one pull request. Create the branch with `mcp__github__create_branch
 push every file in a single commit with `mcp__github__push_files`, then open the
 pull request with `mcp__github__create_pull_request`.
 
+Read the version out of `${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json`
+first. That is the release this repository gets pinned to, and it goes in
+several places below, so read it once and use the same value everywhere.
+
 Read each file out of `${CLAUDE_PLUGIN_ROOT}/templates/project/` and send its
-contents through. What goes in:
+contents through. Every `__FACTORY_VERSION__` in a template is replaced with
+`v` plus that version - for example `v1.2.0`. A placeholder that survives into
+the repository fails as an invalid workflow reference on the first run.
+
+What goes in:
 
 - `.github/workflows/ci.yml`, `agent-run.yml`, `guard.yml`, `bootstrap.yml` -
-  thin callers, each pointing at `@v1`
+  thin callers, each pinned to that release
 - `.github/CODEOWNERS` - set the owner to the repository owner
 - `CLAUDE.md` - fill in the product sentence, the stack, and the commands from
   what is actually in the repository. Do not leave a bracketed placeholder
   behind; if you cannot tell what belongs in one, ask rather than guess.
 - `.claude/memory/orchestrator.md`, `researcher.md`, `designer.md`,
   `engineer.md` - empty, with their headers
+- `.claude/agent-factory.json` - the record of which release this repository
+  took, with the version filled in
 - `docs/research/`, `docs/design/`, `docs/decisions/` with the ADR template
+
+Then the roles themselves, copied rather than referenced:
+
+- `.claude/agents/*.md` - every file in `${CLAUDE_PLUGIN_ROOT}/agents/`
+- `.claude/skills/*/SKILL.md` - every skill in `${CLAUDE_PLUGIN_ROOT}/skills/`
+
+Copy them verbatim. These are the same definitions an agent run reads, and the
+agent job refuses to start without them.
+
+Copying rather than fetching is the whole design. It means this repository's
+agents keep behaving the way they behaved on the day it was provisioned, no
+matter what happens in the factory afterwards, and it means the roles are
+visible in the diff here rather than resolved from somewhere else at run time.
+`/update-agents` is how a later release gets in, one reviewed pull request at
+a time.
 
 Say in the pull request body that `bootstrap` has to be run by hand once this
 merges, and why the two remaining steps are manual.

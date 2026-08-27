@@ -1,0 +1,6 @@
+{
+  "$comment": "What this repository took from the factory, and when. /update-agents reads the version here, compares it against the factory release you have installed, and proposes the difference as a pull request. Nothing reads this at run time - the roles in .claude/agents/ are the real thing. This is the record of where they came from.",
+  "version": "__FACTORY_VERSION__",
+  "roles": ["orchestrator", "researcher", "designer", "engineer"],
+  "skills": ["house-rules", "memory-protocol", "acceptance-criteria"]
+}

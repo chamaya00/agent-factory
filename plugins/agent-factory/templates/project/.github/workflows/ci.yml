@@ -1,7 +1,11 @@
 name: ci
 
-# Thin caller. All the logic lives in the factory so every project moves at
-# once when the gate changes.
+# Thin caller: the logic lives in the factory, at the release pinned below.
+#
+# The pin is the point. This repository keeps running that exact release until
+# somebody bumps the line and merges it - a new release in the factory changes
+# nothing here on its own. `/update-agents` proposes the bump as a pull
+# request, so the diff gets read here before it runs here.
 
 on:
   push:
@@ -10,7 +14,7 @@ on:
 
 jobs:
   ci:
-    uses: chamaya00/agent-factory/.github/workflows/ci.yml@v1
+    uses: chamaya00/agent-factory/.github/workflows/ci.yml@__FACTORY_VERSION__
     with:
       node-version: '20'
       checks: 'typecheck,lint,test,build'

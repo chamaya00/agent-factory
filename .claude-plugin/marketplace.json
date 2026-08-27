@@ -9,7 +9,6 @@
       "name": "agent-factory",
       "source": "./plugins/agent-factory",
       "description": "Agent roles, house rules, and repo provisioning commands for turning objectives into shipped code.",
-      "version": "1.0.0",
       "author": {
         "name": "chamaya00",
         "url": "https://github.com/chamaya00"
