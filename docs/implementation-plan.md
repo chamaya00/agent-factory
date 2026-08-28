@@ -174,7 +174,7 @@ Stop here. Give me this as a numbered list with exact clicks, and wait.
 3. **Create a GitHub App** for the agent identity. Explain why in one sentence: PRs opened with the default token land in an approval-required state and I would have to tap "Approve workflows to run" on every single one from my phone. An App token skips that.
 4. **Enable the plugin on my Claude account** - `/plugin marketplace add chamaya00/agent-factory`, then install. Confirm it loads in cloud sessions.
 
-   > Superseded. `/plugin` does not exist in a web session, and a user-level install would not reach one anyway. The repository declares the marketplace and enables the plugin in `.claude/settings.json`, and the session installs it at startup. See `docs/checkpoint.md` step 4.
+   > Superseded twice. `/plugin` does not exist in a web session, and a user-level install would not reach one anyway. Declaring the marketplace in `.claude/settings.json` does not work either - Claude Code drops a repository-declared marketplace until the folder is trusted for project plugins, and a web session never trusts one. The commands, roles, and skills are copied into `.claude/` and read from the clone. See `docs/checkpoint.md` step 4.
 5. **Connect Vercel** for preview deploys.
 
 ---

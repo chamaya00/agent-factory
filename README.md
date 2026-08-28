@@ -6,7 +6,7 @@ Three separable layers, and the separation is the point:
 
 | Layer | Lives in | How it travels |
 |---|---|---|
-| Agent roles and process | the `agent-factory` plugin | enabled once on the Claude account, loads in every session |
+| Agent roles and process | the `agent-factory` plugin | copied into each repo's `.claude/`, loads from the clone |
 | Automation | this repo's reusable workflows | each project calls them in one line |
 | Project-specific learning | each project's own repo, under `.claude/memory/` | never leaves that repo |
 
@@ -22,6 +22,8 @@ plugins/agent-factory/
   skills/                            the process instructions
   commands/                          slash commands
   templates/project/                 what /new-project drops into a fresh repo
+.claude/                             a copy of the three directories above, which
+                                     is what a session on this repo actually loads
 .github/workflows/                   reusable workflows plus the factory's own guard
 scripts/                             the guard's checks
 ```
@@ -164,11 +166,13 @@ Four things in provisioning are therefore always handed back, and
   setting it needs an administration token, and an identity that can set a gate
   can remove one.
 
-## Install
+## How the commands get loaded
 
-Nothing to type. `.claude/settings.json` here declares this repository's own marketplace, pinned to a release, and enables the plugin, so a session opened on this repository installs it at startup. `/new-project` writes the same file into each project repository, pinned to the release that provisioned it, and `/update-agents` moves that pin with the workflow pins.
+Nothing to type, and nothing to install. This repository carries its own copy of the commands, roles, and skills under `.claude/`, and a session loads them straight out of the clone. `/new-project` copies the same files into each project repository, and `/update-agents` refreshes them from a named release alongside the workflow pins.
 
-That indirection is not decoration. `/plugin install` writes to the machine that ran it, and the machine that runs these sessions is a container that did not exist an hour ago and will not exist tomorrow. Declaring the plugin in the repository is what survives that, and it is the only path open to someone working from a phone.
+Copying is not decoration, and it is not the first thing that was tried. `/plugin install` writes to the machine that ran it, and the machine that runs these sessions is a container that did not exist an hour ago and will not exist tomorrow. Declaring the marketplace in `.claude/settings.json` was the next attempt and it fails more quietly: Claude Code ignores a marketplace declared by a repository until the folder is trusted for project plugins, and a web session has nobody to answer the trust prompt, so it never is. Files in the clone are the only form of this that a phone can actually use.
+
+The cost of copying is drift, so `scripts/validate_plugin.py` fails the build if `.claude/` and `plugins/agent-factory/` disagree by a byte.
 
 ## Standing up a project
 

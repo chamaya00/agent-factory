@@ -10,7 +10,7 @@ That is the whole design, and everything below is the mechanics of it.
 
 | What | Lives in a project as | Moves when |
 |---|---|---|
-| Role and skill definitions | copies under `.claude/agents/` and `.claude/skills/` | `/update-agents` opens a pull request there and it merges |
+| Role, skill, and command definitions | copies under `.claude/agents/`, `.claude/skills/`, and `.claude/commands/` | `/update-agents` opens a pull request there and it merges |
 | Workflows (the gates) | four thin callers pinned to a release tag | the same pull request bumps the pins |
 | Repo-specific lessons | `.claude/memory/<role>.md` | never - these are written in that repository and stay there |
 
@@ -18,6 +18,13 @@ The third row never leaves a repository, and the first row is the reason it
 does not have to. The roles are copied in rather than fetched at run time, so a
 project's agents behave the way they behaved the day it was provisioned, and
 its lessons stay next to the roles that learned them.
+
+The commands are copied for a second reason as well: a session only loads
+commands that are in the repository it cloned. A marketplace named in
+`.claude/settings.json` is ignored until the folder is trusted for project
+plugins, and a cloud session has nobody to answer that prompt, so a project
+that relied on one would open with no `/retro`, `/decompose`, or
+`/update-agents` at all.
 
 ## Cutting a release
 
@@ -27,10 +34,10 @@ its lessons stay next to the roles that learned them.
 3. Actions tab, `release.yml`, **Run workflow**, leave the input empty.
 
 The tag name comes from that manifest, not from the input. This is not
-ceremony: an installed plugin decides whether to update by comparing versions,
-so a tag whose name got ahead of the manifest would ship new files and then be
-declined as "already up to date". Tying the two together makes that
-unrepresentable rather than documented.
+ceremony: `/update-agents` compares the tag it is moving to against the version
+recorded in `.claude/agent-factory.json`, so a tag whose name got ahead of the
+manifest would ship new files under a version that claims to already be there.
+Tying the two together makes that unrepresentable rather than documented.
 
 Release tags never move. `release.yml` refuses a tag that already exists, and
 there is no force path. If a release was wrong, the fix is the next release -
@@ -42,14 +49,17 @@ the correct behaviour, not a problem to route around.
 In that repository:
 
 ```
-/plugin update agent-factory@agent-factory
-/update-agents
+/update-agents v1.3.0
 ```
 
-The first line updates your local copy of the factory. The second reads it,
-compares it against what that repository has, and opens one pull request:
-changed roles and skills, the four workflow pins moved together, and
-`.claude/agent-factory.json` recording the new version.
+It reads the factory at that tag, compares it against what that repository has,
+and opens one pull request: changed roles, skills, and commands, the four
+workflow pins moved together, and `.claude/agent-factory.json` recording the
+new version. Omit the version and it uses the latest release.
+
+There is nothing to update locally first. The command reads the factory
+repository at the tag you name rather than an installed copy, so what it
+proposes depends on the tag and not on the container it happened to run in.
 
 Read the diff, merge it or do not. Repositories you do not run this in stay
 exactly where they are, indefinitely. That is allowed and it is not drift -

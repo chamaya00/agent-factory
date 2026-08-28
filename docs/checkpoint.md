@@ -133,21 +133,31 @@ If you skip this section entirely the system still works: the caller workflow
 passes empty App secrets and falls back to the default token. You just get the
 approval tap on every pull request.
 
-## 4. The plugin: nothing to do, and why
+## 4. The commands: nothing to do, and why
 
-This step used to say to run `/plugin marketplace add` and `/plugin install`.
-Do not. `/plugin` is a command of the terminal and desktop apps, and a web
+This step has said two wrong things already, so here is what is actually true.
+
+It first said to run `/plugin marketplace add` and `/plugin install`. That does
+not work: `/plugin` is a command of the terminal and desktop apps, and a web
 session answers it with "isn't available in this environment" - which is the
-only device you have. It would not have helped anyway: a plugin enabled in
-your user settings lives on the machine that enabled it, and a cloud session
-starts from the repository, not from a machine of yours.
+only device you have.
 
-What a cloud session does read is `.claude/settings.json` in the repository it
-cloned. This repository has one. It names the factory marketplace, pins it to
-a release, and enables the plugin, so a session opened here installs the
-plugin at startup with nothing typed. `/new-project` provisions the same file
-into every project repository, which is how `/retro`, `/decompose`, and
-`/update-agents` turn up there.
+It then said the repository declares the marketplace in `.claude/settings.json`
+and a session installs the plugin at startup. That is also wrong, and it is the
+worse of the two because it looks like it works. Claude Code drops a marketplace
+declared in a repository's settings unless the folder has been trusted for
+project plugins. Trust is a prompt, a web session has nobody to answer it, and
+so the flag is never set: the marketplace is never registered, the
+`enabledPlugins` entry beside it is an orphan, and nothing installs. No tag and
+no branch changes that.
+
+What a cloud session does load is `.claude/commands/`, `.claude/agents/`, and
+`.claude/skills/` from the repository it cloned. Those are ordinary files in the
+clone, not a third-party source being fetched, so they are not behind the trust
+gate. This repository now carries its own copy of all three, checked against
+`plugins/agent-factory/` by `scripts/validate_plugin.py` so the two cannot
+drift. `/new-project` copies the same files into every project repository, which
+is how `/retro`, `/decompose`, and `/update-agents` turn up there.
 
 So the check is to look, not to install:
 
@@ -155,10 +165,10 @@ So the check is to look, not to install:
   offered. If it is, this step is done.
 - Ask for the `engineer` agent by name. It should be found.
 
-If the commands are missing, the cause is upstream of you: the pinned `ref` in
-`.claude/settings.json` naming a tag that does not exist, or a session started
-before that file was on the default branch. Neither is fixed by typing
-anything - check the tag, then start a fresh session.
+If the commands are missing, the cause is that `.claude/commands/` is not on the
+branch the session cloned - check that first, then start a fresh session.
+Commands are read once at startup, so a session that started before the files
+landed will not pick them up no matter what you type in it.
 
 ## 5. Connect the preview deploy provider
 
