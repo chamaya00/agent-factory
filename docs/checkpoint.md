@@ -1,8 +1,8 @@
 # Checkpoint: the things only you can do
 
 Everything in phases 1 to 5 is built and merged. These steps need a human with
-account access. Nothing agent-side works until steps 1 and 2 are done; step 0
-is optional now and step 3 is the fiddly one.
+account access. Step 0 comes before provisioning any repository, nothing
+agent-side works until steps 1 and 2 are done, and step 3 is the fiddly one.
 
 All of it is doable from an iPhone. The note about the private key in step 3 is
 the part that catches people out.
@@ -11,13 +11,21 @@ the part that catches people out.
 
 ## 0. Cut a release tag
 
-Nothing here is urgent any more, and nothing downstream breaks if you skip it -
-that is the change. Releases no longer reach any project on their own, so this
-step is not a deploy. It just makes a version available to pin.
+This is not a deploy. Nothing here reaches a project on its own, and no
+existing repository changes when you do it. What it is, since the callers
+started pinning, is a prerequisite: `/new-project` writes `v` plus the version
+in `plugins/agent-factory/.claude-plugin/plugin.json` into four workflow files,
+so a manifest version with no tag behind it produces a repository whose every
+check fails as an invalid workflow reference - an error raised in the project,
+naming a ref in this repository, describing neither. Cut the tag before
+provisioning anything.
 
-The tag name comes from `plugins/agent-factory/.claude-plugin/plugin.json`, so
-a release starts with a merged pull request bumping that version. Once that is
-on `main`:
+Check first, it is two taps: `github.com/chamaya00/agent-factory/tags` should
+list a tag matching the manifest version. If it does, this step is done and
+stays done until the next version bump.
+
+The tag name comes from that manifest, so a release starts with a merged pull
+request bumping the version. Once that is on `main`:
 
 1. Open `github.com/chamaya00/agent-factory/actions/workflows/release.yml`.
 2. Tap **Run workflow**, leave the input empty, then **Run workflow** again.
@@ -27,6 +35,11 @@ on `main`:
 
 A project takes the release when you run `/update-agents` there and merge what
 it opens. Until then it keeps running the release it was pinned to.
+
+One piece of history worth clearing while you are on that page: `v1`, from
+before the pins, still exists and points at a commit older than the vendored
+roles. Nothing should resolve it, and anything that still does is wrong in a
+way that reads as working. Delete it.
 
 `docs/versioning.md` has the full model if you want the reasoning.
 
