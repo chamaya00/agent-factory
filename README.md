@@ -166,12 +166,9 @@ Four things in provisioning are therefore always handed back, and
 
 ## Install
 
-```
-/plugin marketplace add chamaya00/agent-factory
-/plugin install agent-factory@agent-factory
-```
+Nothing to type. `.claude/settings.json` here declares this repository's own marketplace, pinned to a release, and enables the plugin, so a session opened on this repository installs it at startup. `/new-project` writes the same file into each project repository, pinned to the release that provisioned it, and `/update-agents` moves that pin with the workflow pins.
 
-Both lines are needed. Adding the marketplace without installing the plugin is the usual reason the commands do not appear.
+That indirection is not decoration. `/plugin install` writes to the machine that ran it, and the machine that runs these sessions is a container that did not exist an hour ago and will not exist tomorrow. Declaring the plugin in the repository is what survives that, and it is the only path open to someone working from a phone.
 
 ## Standing up a project
 
