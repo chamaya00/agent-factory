@@ -33,6 +33,8 @@ on:
           .claude/agents/**
           .claude/skills/*
           .claude/skills/**
+          .claude/commands/*
+          .claude/commands/**
           .claude/agent-factory.json
       maintainers:
         description: >-

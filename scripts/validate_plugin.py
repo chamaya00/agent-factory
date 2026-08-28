@@ -47,6 +47,11 @@ MAX_AGENT_BODY_LINES = 45
 PIN_PLACEHOLDER = "__FACTORY_VERSION__"
 ROLES = ["orchestrator", "researcher", "designer", "engineer"]
 
+# The commands a provisioned project receives. `new-project` is deliberately not
+# among them: provisioning is the factory's job, and a project that can
+# provision another project is a second factory nobody is maintaining.
+PROJECT_COMMANDS = ["retro", "decompose", "update-agents"]
+
 errors: list[str] = []
 
 
@@ -282,6 +287,76 @@ def check_vendored_roles() -> None:
     on_disk = {p.parent.name for p in (PLUGIN_DIR / "skills").glob("*/SKILL.md")}
     if set(data.get("skills") or []) != on_disk:
         fail(manifest, f"skills {sorted(data.get('skills') or [])} do not match {sorted(on_disk)} on disk")
+    if set(data.get("commands") or []) != set(PROJECT_COMMANDS):
+        fail(
+            manifest,
+            f"commands {sorted(data.get('commands') or [])} do not match the "
+            f"set a project is provisioned with, {sorted(PROJECT_COMMANDS)}",
+        )
+    for name in PROJECT_COMMANDS:
+        if not (PLUGIN_DIR / "commands" / f"{name}.md").is_file():
+            errors.append(f"plugins/agent-factory/commands/{name}.md: missing, but projects are provisioned with it")
+
+
+def check_self_vendored() -> None:
+    """This repository has to carry its own copy of what it ships.
+
+    A marketplace declared in a repository's `.claude/settings.json` is dropped
+    unless the folder has been trusted for project plugins, and a cloud session
+    has nobody to answer the trust prompt. So a session opened here loads
+    commands, agents, and skills from `.claude/` or it loads none of them, and
+    `/new-project` is not offered - which is how the factory stops being able
+    to provision anything.
+
+    The copies are real files rather than links because that is what a session
+    reads, so the only thing keeping them honest is this check.
+    """
+    for kind in ("commands", "agents", "skills"):
+        source = PLUGIN_DIR / kind
+        vendored = ROOT / ".claude" / kind
+        if not vendored.is_dir():
+            errors.append(
+                f".claude/{kind}: missing; copy plugins/agent-factory/{kind}/ here, "
+                "or a session on this repository gets none of them"
+            )
+            continue
+        expected = {p.relative_to(source): p for p in sorted(source.rglob("*")) if p.is_file()}
+        actual = {p.relative_to(vendored): p for p in sorted(vendored.rglob("*")) if p.is_file()}
+        for rel in sorted(set(expected) - set(actual)):
+            errors.append(f".claude/{kind}/{rel}: missing; it exists in the plugin and has to be copied here")
+        for rel in sorted(set(actual) - set(expected)):
+            errors.append(f".claude/{kind}/{rel}: not in the plugin; delete it or add it to plugins/agent-factory/{kind}/")
+        for rel in sorted(set(expected) & set(actual)):
+            if expected[rel].read_bytes() != actual[rel].read_bytes():
+                errors.append(
+                    f".claude/{kind}/{rel}: differs from plugins/agent-factory/{kind}/{rel}; "
+                    "the plugin is the source, copy it over rather than editing the copy"
+                )
+
+
+def check_no_stale_marketplace_pin() -> None:
+    """Nothing should declare a marketplace to get these commands loaded.
+
+    It reads like it works: the key is valid, the tag resolves, and a trusted
+    terminal session does install the plugin. It just does nothing in the one
+    place this repository is used from, and it fails silently there, which is
+    why it survived two releases.
+    """
+    for path in [ROOT / ".claude" / "settings.json", PLUGIN_DIR / "templates" / "project" / ".claude" / "settings.json"]:
+        if not path.is_file():
+            continue
+        try:
+            data = json.loads(path.read_text())
+        except json.JSONDecodeError:
+            continue
+        for key in ("extraKnownMarketplaces", "enabledPlugins"):
+            if key in data:
+                fail(
+                    path,
+                    f"declares {key!r} to load the factory's own commands; that is "
+                    "dropped in an untrusted folder and a cloud session never "
+                    "trusts one. Vendor the files into .claude/ instead",
+                )
 
 
 def main() -> int:
@@ -292,6 +367,8 @@ def main() -> int:
     check_commands()
     check_template_pins()
     check_vendored_roles()
+    check_self_vendored()
+    check_no_stale_marketplace_pin()
     check_portability()
     check_no_emoji()
     if errors:
