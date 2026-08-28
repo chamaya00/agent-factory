@@ -114,6 +114,11 @@ What goes in:
   `engineer.md` - empty, with their headers
 - `.claude/agent-factory.json` - the record of which release this repository
   took, with the version filled in
+- `.claude/settings.json` - declares the factory marketplace at that release
+  and enables the plugin. This is what puts `/retro`, `/decompose`, and
+  `/update-agents` in a session opened on this repository: a cloud session
+  installs plugins declared here at startup, and carries nothing over from a
+  user-level install
 - `docs/research/`, `docs/design/`, `docs/decisions/` with the ADR template
 
 Then the roles themselves, copied rather than referenced:

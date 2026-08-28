@@ -133,24 +133,32 @@ If you skip this section entirely the system still works: the caller workflow
 passes empty App secrets and falls back to the default token. You just get the
 approval tap on every pull request.
 
-## 4. Enable the plugin on your Claude account
+## 4. The plugin: nothing to do, and why
 
-In any Claude Code session:
+This step used to say to run `/plugin marketplace add` and `/plugin install`.
+Do not. `/plugin` is a command of the terminal and desktop apps, and a web
+session answers it with "isn't available in this environment" - which is the
+only device you have. It would not have helped anyway: a plugin enabled in
+your user settings lives on the machine that enabled it, and a cloud session
+starts from the repository, not from a machine of yours.
 
-```
-/plugin marketplace add chamaya00/agent-factory
-/plugin install agent-factory@agent-factory
-```
+What a cloud session does read is `.claude/settings.json` in the repository it
+cloned. This repository has one. It names the factory marketplace, pins it to
+a release, and enables the plugin, so a session opened here installs the
+plugin at startup with nothing typed. `/new-project` provisions the same file
+into every project repository, which is how `/retro`, `/decompose`, and
+`/update-agents` turn up there.
 
-Then confirm it loaded, in a cloud session rather than locally, since cloud
-sessions are where you will actually use it:
+So the check is to look, not to install:
 
-- `/plugin` should list `agent-factory` as enabled.
-- Typing `/new-project` should offer the command.
-- Asking for the `engineer` agent by name should find it.
+- Type `/new` in a session on this repository. `/new-project` should be
+  offered. If it is, this step is done.
+- Ask for the `engineer` agent by name. It should be found.
 
-If the commands do not appear, the usual cause is the marketplace being added
-but the plugin not installed. Both lines are needed.
+If the commands are missing, the cause is upstream of you: the pinned `ref` in
+`.claude/settings.json` naming a tag that does not exist, or a session started
+before that file was on the default branch. Neither is fixed by typing
+anything - check the tag, then start a fresh session.
 
 ## 5. Connect the preview deploy provider
 

@@ -173,6 +173,8 @@ Stop here. Give me this as a numbered list with exact clicks, and wait.
 2. **Store it** as a repository secret named exactly `CLAUDE_CODE_OAUTH_TOKEN`. This is what makes runs bill against my Pro subscription instead of API credits.
 3. **Create a GitHub App** for the agent identity. Explain why in one sentence: PRs opened with the default token land in an approval-required state and I would have to tap "Approve workflows to run" on every single one from my phone. An App token skips that.
 4. **Enable the plugin on my Claude account** - `/plugin marketplace add chamaya00/agent-factory`, then install. Confirm it loads in cloud sessions.
+
+   > Superseded. `/plugin` does not exist in a web session, and a user-level install would not reach one anyway. The repository declares the marketplace and enables the plugin in `.claude/settings.json`, and the session installs it at startup. See `docs/checkpoint.md` step 4.
 5. **Connect Vercel** for preview deploys.
 
 ---

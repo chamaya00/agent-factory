@@ -1,0 +1,14 @@
+{
+  "extraKnownMarketplaces": {
+    "agent-factory": {
+      "source": {
+        "source": "github",
+        "repo": "chamaya00/agent-factory",
+        "ref": "__FACTORY_VERSION__"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "agent-factory@agent-factory": true
+  }
+}

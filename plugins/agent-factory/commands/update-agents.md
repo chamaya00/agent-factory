@@ -30,8 +30,10 @@ not open an empty pull request.
 **It is behind.** Continue, and remember both versions for the body.
 
 If your local plugin is older than `$1`, say so and stop: you cannot copy
-files you do not have. The fix is `/plugin update agent-factory@agent-factory`
-first, then run this again.
+files you do not have. What you have is whatever `.claude/settings.json` in
+this repository pins the marketplace to, so the fix is to move that `ref` to
+`$1`, merge it, and start a fresh session - a session installs the plugin at
+startup and does not change it mid-flight. Then run this again.
 
 ## 2. Collect what changes
 
@@ -47,8 +49,13 @@ own line in the body, because a stale role that nothing maintains is worse
 than no role.
 
 Then read `.github/workflows/*.yml` and find every line matching
-`uses: chamaya00/agent-factory/...@`. Those are the pins. Collect the ones not
-already at the target version.
+`uses: chamaya00/agent-factory/...@`. Those are the workflow pins. Collect the
+ones not already at the target version.
+
+There is a fifth pin, and it is easy to miss because it is not a workflow: the
+marketplace `ref` in `.claude/settings.json`. It decides which release of the
+commands and roles a session on this repository loads, so leaving it behind
+means the next person to run this command runs an older copy of it.
 
 If nothing at all differs, say so and stop.
 
@@ -65,9 +72,10 @@ What goes in the commit:
 - The changed role and skill files, verbatim from the plugin. Do not edit them
   on the way through. A local edit makes this repository quietly disagree with
   every other one, and the next run of this command overwrites it anyway.
-- Every workflow pin moved to the target version, the four callers together.
-  The roles and the workflows around them are one release; taking half of it
-  is how the two drift apart.
+- Every pin moved to the target version together: the four workflow callers
+  and the marketplace `ref` in `.claude/settings.json`. The roles, the
+  workflows around them, and the commands that maintain them are one release;
+  taking half of it is how they drift apart.
 - `.claude/agent-factory.json` with the new version, and the role and skill
   lists refreshed to what was actually written.
 
