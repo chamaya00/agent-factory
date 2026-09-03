@@ -23,37 +23,41 @@ The first agent run the factory ever made - `orchestrator` on issue #3
 
 It posted a correct decomposition and then could not create the child issues,
 because `agent-run.yml` passed no tool allowlist and the action's default set is
-read-only. The branch `claude/agent-run-tool-allowlist` fixes that. These are
-what the fix could not settle.
+read-only. `v1.4.0` fixes that, and [run
+33792437707](https://github.com/chamaya00/new-project-agents/actions/runs/33792437707)
+- `researcher` on #4 - is the first run to work under it. These are what is
+still open after that.
 
-Reading that run log is the fastest way to get context on all of this. The
-`SDK options:` block near the top prints the exact `allowedTools` array the
-agent started with, which is how the problem was found in the first place.
+Reading either run log is the fastest way to get context. The `SDK options:`
+block near the top prints the exact `allowedTools` array the agent started
+with, which is how the original problem was found and how two of the questions
+that used to be on this page were settled.
 
 ---
 
-## 1. Does `--allowedTools` merge with the action's defaults, or replace them?
+## 1. What were the four permission denials?
 
-**Why it matters.** The action needs its own tools to work: the sticky progress
-comment, and the git commands it uses to land a commit. If our allowlist
-replaces its defaults rather than adding to them, we have taken those away, and
-the symptom is not an error - it is a run that does the work and then cannot
-report or commit it.
+Run 33792437707 succeeded and reported `permission_denials_count: 4`. Nothing
+in it failed, and the log does not say which tools were refused, because the
+action hides the agent's turns unless `show_full_output` is on.
 
-**What was done.** The common set in `agent-run.yml` re-lists
-`mcp__github_comment__update_claude_comment` and the git commands, so the
-allowlist is safe either way. Redundant if it merges.
+**The likeliest explanation** is the researcher reaching for `gh pr create`,
+which only the engineer is granted. Its own checklist ticked off "commit, push,
+open PR" when what it actually produced was the action's Create-PR link, so it
+may have tried the command first. That is a harmless denial if so.
 
-**How to answer it.** Trigger any agent run and read the `SDK options:` block in
-the job log. If `allowedTools` contains our entries *and* entries we never
-passed (`Glob`, `LS`, `mcp__github_ci__*`, the `git-push.sh` path), it merges.
-If it contains only ours, it replaces.
+**Why it is still worth knowing.** Four silent refusals per run is either a role
+asking for something it should have, or a role asking for something it should
+not - and the two look identical from here. A count with no names is not a
+signal anyone can act on.
 
-**What changes.** If it merges, delete the re-listed common entries and the
-comment above them - they are noise. If it replaces, the comment stays, and
-check whether the action's `git-push.sh` wrapper is now unreachable; the plain
-`Bash(git push:*)` grant is the fallback, but the wrapper may do something the
-plain command does not.
+**How to answer it.** Re-run any role with `show_full_output: true` and read
+which calls were refused.
+
+**What changes.** If a role is being refused something its own definition
+declares, the allowlist is wrong. If it is reaching past its role, the prompt
+is. If it is `gh pr create` from a docs role, nothing changes except this entry
+being deleted.
 
 ---
 
@@ -82,29 +86,7 @@ the role definitions stop being aspirational and the `gh` grants come out.
 
 ---
 
-## 3. Can the researcher reach the web at all?
-
-**What is known.** The failed run's post-step environment showed
-`DISALLOWED_TOOLS: WebSearch,WebFetch` - the action disallows both by default in
-tag mode. `researcher` declares both, and `designer` declares `WebFetch`.
-
-**What was done.** Both are in the allowlist for those roles. If the action's
-disallow wins, they are absent - no worse than before, but the researcher is
-then a role that can only read the repository it is already in.
-
-**How to answer it.** Run the researcher on a real issue and see whether it
-fetches anything, or read `DISALLOWED_TOOLS` in the post-step env of that run.
-
-**What changes.** If disallow wins, the routes are the action's `settings`
-input, which takes a Claude Code settings JSON with `permissions.allow` /
-`permissions.deny`, or passing `--disallowedTools` explicitly in `claude_args`.
-Prefer `settings`: overriding the disallow list wholesale would also drop
-whatever else the action puts there for a reason. If neither works, say so in
-`researcher.md` rather than leaving a role that declares tools it never gets.
-
----
-
-## 4. A tooling failure should not burn an attempt
+## 3. A tooling failure should not burn an attempt
 
 **What happened.** The run failed for a configuration reason, and the
 `Hand back to a human` step labelled the issue `agent:blocked` on `job.status`
@@ -125,20 +107,25 @@ is not a rule.
 
 ---
 
-## 5. None of this is proven
+## 4. Three of the four roles have still never run
 
-The allowlist fix is unverified end to end. It was checked by running the shell
-step for all four roles and by the guard in `scripts/validate_workflows.py`, but
-no agent has actually run with it.
+The `researcher` is proven: run 33792437707 on `new-project-agents` #4 wrote two
+ADRs and a research doc, reached the web, verified its own acceptance criteria
+with `git diff`, and handed back at `agent:review`. It took 35 turns, which is
+also why the cap is 40 and not 15.
 
-The proof is re-running the smoke test: label a child of #3 in
-`new-project-agents` `agent:queued` and watch whether the engineer writes files,
-runs the tests, and opens a pull request. Until that happens, treat step 3 of
+`orchestrator`, `designer` and `engineer` have not run under this allowlist. The
+engineer is the one to watch, because it is the only role that needs `Bash(npm
+run:*)` to work and the only one whose output has to pass the gate rather than
+just exist. A role that writes files nobody runs is a much easier thing to get
+right than one that has to make `npm run test` green.
+
+Until an engineer run lands a pull request that passes CI, treat step 3 of
 `docs/smoke-test.md` as untested rather than passing.
 
 ---
 
-## 6. Three children, or two to five?
+## 5. Three children, or two to five?
 
 `docs/smoke-test.md` step 1 says the orchestrator "creates 3 child issues".
 `orchestrator.md` allows two to five, and the real run produced five, with a
