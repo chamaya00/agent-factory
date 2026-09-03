@@ -329,15 +329,17 @@ jobs:
 
           # Every role reads the repository and answers on its own issue.
           #
-          # The comment and git entries are the action's own: it needs them for
-          # the sticky progress comment and for landing a commit. They are
-          # listed again because it is not documented whether --allowedTools
-          # merges with the action's defaults or replaces them. Redundant if it
-          # merges; the difference between a working run and a silent one if it
-          # replaces.
-          common='mcp__github_comment__update_claude_comment'
-          common="$common,Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh issue comment:*)"
-          common="$common,Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git status:*),Bash(git diff:*)"
+          # --allowedTools MERGES with the action's own set rather than
+          # replacing it, confirmed in run 33792437707: the array it passed the
+          # SDK was its defaults - Glob, Grep, LS, Read, its comment tool, the
+          # CI tools, and Bash(git add|commit|git-push.sh|rm) - followed by
+          # these. So nothing the action needs has to be repeated here.
+          #
+          # git status and git diff do have to be listed: they are not in that
+          # default set, and a role verifies its own acceptance criteria with
+          # them ("the diff touches only docs/" is checked, not asserted).
+          common='Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh issue comment:*)'
+          common="$common,Bash(git push:*),Bash(git status:*),Bash(git diff:*)"
 
           case "$ROLE" in
             orchestrator)
@@ -345,6 +347,13 @@ jobs:
               tools="$common,Bash(gh issue create:*),Bash(gh issue edit:*),Bash(gh label list:*),Bash(gh search issues:*)"
               ;;
             researcher)
+              # The action lists WebSearch and WebFetch in its own
+              # DISALLOWED_TOOLS. Naming them here wins: run 33792437707
+              # reached the web and cited what it read. Without this the
+              # researcher can only read the repository it is already in,
+              # which is not research - and the failure is silent, because a
+              # role with no web access still writes a confident Sources
+              # section.
               tools="$common,Write,Edit,WebFetch,WebSearch"
               ;;
             designer)
