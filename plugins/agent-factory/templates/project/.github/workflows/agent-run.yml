@@ -26,8 +26,8 @@ jobs:
     uses: chamaya00/agent-factory/.github/workflows/agent-run.yml@__FACTORY_VERSION__
     with:
       issue-number: ${{ inputs.issue-number || '' }}
-      max-turns: 15
-      timeout-minutes: 20
+      max-turns: 40
+      timeout-minutes: 30
     secrets:
       claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       app-id: ${{ secrets.AGENT_APP_ID }}

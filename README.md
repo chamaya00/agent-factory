@@ -181,3 +181,5 @@ In order, and the order is the point:
 1. `docs/checkpoint.md` - the things only a human can do: the subscription token, the secrets, the agent identity App, the plugin install, the preview provider. Written for an iPhone, since that is the only device involved.
 2. `docs/proving-the-gate.md` - prove a red check blocks a merge, by hand, on a throwaway repo, before any agent is pointed at it. An agent aimed at a gate you do not trust produces work you have to read line by line, which is the thing the system exists to avoid.
 3. `docs/smoke-test.md` - one objective through the whole loop, with what to watch for at each of the six steps and the five failure modes worth recognising on sight.
+
+`docs/open-questions.md` is the register of assumptions this system runs on that have not been tested yet, each with how to settle it and what changes once you do. Read it before trusting a part of the loop nothing has exercised, and delete an entry once its answer lives in the code.
