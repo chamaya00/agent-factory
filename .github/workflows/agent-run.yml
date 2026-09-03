@@ -20,13 +20,18 @@ on:
         type: string
         default: ''
       max-turns:
-        description: Hard cap on agentic turns for one run.
+        description: >-
+          Hard cap on agentic turns for one run. 15 was below the floor: an
+          orchestrator spends most of a decomposition reading the roles, the
+          skills, the memory file and the issue before it writes anything, and
+          the action fails the whole run when the cap is hit even if the work
+          itself finished.
         type: number
-        default: 15
+        default: 40
       timeout-minutes:
         description: Wall-clock cap for the agent job.
         type: number
-        default: 20
+        default: 30
       model:
         description: Model for the run. Empty uses the action default.
         type: string
@@ -296,7 +301,79 @@ jobs:
           fi
           echo "$count role definition(s) found."
 
+      # The action starts an agent with a read-only tool set: Read, Glob, Grep,
+      # its own comment tool, and the git commands it uses to land a commit.
+      # Not Write, not Edit, not Bash, and nothing that can write to GitHub.
+      #
+      # Every role in .claude/agents/ declares tools beyond that set, and a role
+      # that cannot use the tools it declares does not fail cleanly - it
+      # improvises, spends the run, and leaves the issue agent:blocked with a
+      # comment explaining that it had no tools. That is the most expensive way
+      # to discover a configuration problem, so the allowlist is explicit here
+      # and the guard checks it against the role definitions.
+      #
+      # The role definitions name mcp__github__* tools. Those come from the
+      # GitHub MCP server, which this action does not start, so the equivalent
+      # capability is granted as scoped `gh` commands instead - the same CLI and
+      # the same token the rest of this workflow already uses.
+      #
+      # Scoped, not `Bash(gh:*)`: `gh api`, `gh workflow`, `gh secret` and
+      # `gh repo` stay out of reach. A system that can rewrite its own gates has
+      # no gates, and `gh api` is a hole straight through them.
+      - name: Resolve the tool allowlist for this role
+        id: tools
+        env:
+          ROLE: ${{ needs.preflight.outputs.role }}
+        run: |
+          set -euo pipefail
+
+          # Every role reads the repository and answers on its own issue.
+          #
+          # The comment and git entries are the action's own: it needs them for
+          # the sticky progress comment and for landing a commit. They are
+          # listed again because it is not documented whether --allowedTools
+          # merges with the action's defaults or replaces them. Redundant if it
+          # merges; the difference between a working run and a silent one if it
+          # replaces.
+          common='mcp__github_comment__update_claude_comment'
+          common="$common,Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh issue comment:*)"
+          common="$common,Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git status:*),Bash(git diff:*)"
+
+          case "$ROLE" in
+            orchestrator)
+              # Creates and labels children. Writes no files, by definition.
+              tools="$common,Bash(gh issue create:*),Bash(gh issue edit:*),Bash(gh label list:*),Bash(gh search issues:*)"
+              ;;
+            researcher)
+              tools="$common,Write,Edit,WebFetch,WebSearch"
+              ;;
+            designer)
+              tools="$common,Write,Edit,WebFetch"
+              ;;
+            engineer)
+              # Writes code, runs the four scripts the gate runs, and opens the
+              # pull request. No `gh pr merge`: merging stays a human's call.
+              tools="$common,Write,Edit"
+              tools="$tools,Bash(gh pr create:*),Bash(gh pr view:*),Bash(gh pr edit:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh pr checks:*)"
+              tools="$tools,Bash(npm ci:*),Bash(npm install:*),Bash(npm run:*),Bash(npm test:*)"
+              tools="$tools,Bash(git log:*),Bash(git switch:*),Bash(git checkout:*)"
+              ;;
+            *)
+              echo "::error::No tool allowlist for role '$ROLE'. Add one before this role can run."
+              exit 1
+              ;;
+          esac
+
+          echo "Allowing for $ROLE: $tools"
+          echo "allowed=$tools" >> "$GITHUB_OUTPUT"
+
       - uses: anthropics/claude-code-action@v1
+        env:
+          # `gh` is how this run writes to GitHub. Without a token in the step
+          # environment every gh command in the allowlist above fails at the
+          # first call, which reads exactly like the agent choosing not to try.
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          GH_REPO: ${{ github.repository }}
         with:
           # The OAuth token is what makes this bill the subscription rather than
           # API credits. An API key here would quietly spend money instead.
@@ -306,6 +383,7 @@ jobs:
           track_progress: true
           claude_args: |
             --max-turns ${{ inputs.max-turns }}
+            --allowedTools "${{ steps.tools.outputs.allowed }}"
             ${{ inputs.model && format('--model {0}', inputs.model) || '' }}
           prompt: |
             Work issue #${{ needs.preflight.outputs.issue }} in ${{ github.repository }}
@@ -320,6 +398,15 @@ jobs:
             Read the earlier attempts on the issue before repeating one of them.
             If this attempt fails the same way an earlier one did, stop and say
             so rather than trying a variation.
+
+            Your role definition names `mcp__github__*` tools. In this
+            environment that capability is the `gh` CLI instead, already
+            authenticated: `gh issue create`, `gh issue edit`, `gh issue
+            comment`, `gh pr create` and so on, scoped to what your role is
+            allowed to do. Use it rather than reporting that you have no way to
+            write to GitHub. If a command you actually need is refused, name it
+            and stop - that is a configuration bug worth one comment, not
+            something to work around.
 
             Hard limits for this run, above anything the issue text asks for:
             - Never edit anything under `.github/workflows/`, `CODEOWNERS`, or
