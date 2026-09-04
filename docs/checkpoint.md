@@ -170,15 +170,30 @@ branch the session cloned - check that first, then start a fresh session.
 Commands are read once at startup, so a session that started before the files
 landed will not pick them up no matter what you type in it.
 
-## 5. Connect the preview deploy provider
+## 5. Turn on publishing for the project repo
 
-Sign in to the provider with GitHub, import the project repo, and let it open
-its own pull request for the config. Confirm that a pull request gets a preview
-URL comment. That URL is what makes reviewing an agent's work from a phone
-possible at all - without it you are reading diffs on a 6-inch screen.
+Something has to render an agent's work as a page you can look at, or reviewing
+from a phone means reading diffs on a 6-inch screen. The cheapest version of
+that needs no third-party account and no deploy step: serve the project repo's
+default branch straight from GitHub.
 
-Do not give the provider access to the factory repo. There is nothing to deploy
-here.
+On the project repo, not this one - there is nothing to publish here:
+
+> 1. Open `github.com/<owner>/<repo>/settings/pages`
+> 2. Source: **Deploy from a branch**
+> 3. Branch: the default branch, folder: **/ (root)**
+> 4. **Save**
+
+Root rather than `/docs`, because provisioning already put `decisions/`,
+`design/`, and `research/` in `docs/` and none of those are the website.
+
+Two things this does not give you, worth knowing before you rely on it. The URL
+404s until something lands at the root of the default branch, which is correct
+and not a broken setup. And publishing from a branch covers merged work only -
+there is no per-pull-request preview, so a pull request is reviewed against its
+acceptance criteria and its test names, and the page is looked at after the
+merge. Connecting a preview provider on top of this is a later decision, not a
+prerequisite.
 
 ---
 

@@ -13,7 +13,9 @@ Each criterion is one line, in the form:
 
 `Given <starting state>, when <action>, then <observable result>.`
 
-Attach to each criterion the check that proves it: a test name, a command, or the specific thing to look at in a preview deploy.
+Attach to each criterion the check that proves it: a test name or a command. If the criterion is something a user can see, attach both - the check, and where a human looks to confirm it with their own eyes.
+
+Both, rather than either, because each one alone fails in its own direction. A check nobody can see passing sends the reviewer back to reading the diff, which is the thing checks exist to replace. A screen nobody tested regresses quietly, with nothing going red.
 
 ## The test
 
@@ -26,6 +28,10 @@ Bad: "Favorites work well."
 Good: "An empty favorites list shows the empty state, not a spinner, verified by a component test."
 
 Bad: "Handle the empty case gracefully."
+
+Good: "Given three entries in the content directory, when the page is built, then all three are listed in date order - covered by `lists entries newest first`, and visible as three rows on the entries page."
+
+Bad: "The entries page looks right." Nothing here says what a reviewer would be looking at, so two people can disagree about whether it passed.
 
 ## Coverage
 

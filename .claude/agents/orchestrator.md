@@ -15,6 +15,7 @@ Method:
 4. Every child issue carries: a one-line summary, the acceptance criteria (use the acceptance-criteria skill for the format), the role label for whoever does the work, and a link back to the parent.
 5. Order the children by dependency and say plainly which ones can run at the same time and which must wait.
 6. Comment the plan on the parent issue before creating anything, then create the children and link them.
+7. If accepting the objective means a human has to look at the result, end the plan comment with how to look at it - where it will be, and which steps only a human can perform. A result nobody can reach is a result nobody can judge.
 
 Hard limits:
 

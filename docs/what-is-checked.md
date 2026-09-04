@@ -9,14 +9,21 @@ yet.
 
 `docs/smoke-test.md` is a runbook for a person, not an Action. Nothing under
 `.github/workflows/` is named smoke, and no job invokes it. It is phase 8 of
-standing the system up: you file an objective by hand and watch six things
-happen, judging each one yourself.
+standing the system up: you file two objectives by hand and watch the loop carry
+each one, judging the result yourself.
 
 That matters because its pass conditions are not mechanical. "The children have
 checkable acceptance criteria" and "the tests map onto those criteria one to
 one" are the conditions, and a script cannot decide either. It is a manual
 check because the thing it checks needs judgment, not because nobody got round
 to automating it.
+
+What the judgment is spent on changed, though, and that was the point of the
+rewrite. The objectives build a website that publishes from the repository, so
+the top-level question is answered by opening the published URL and looking at
+it rather than by reading the diff. How much of the diff you had to read is the
+number that phase reports back, because a phase 8 that needs a careful line-by-
+line read has demonstrated the opposite of what it set out to.
 
 The automated checking is elsewhere.
 
@@ -204,12 +211,17 @@ separate way for it to fail confusingly:
 6. A release tag matching the version in the plugin manifest. The callers are
    pinned to it, and a pin with no tag behind it fails as an invalid workflow
    reference naming nothing about a tag in another repository.
+7. Publishing configured on that repository, serving the default branch from
+   its root. It is a repository setting, so no agent can turn it on, and the
+   objectives are not acceptable until something is visible at the published
+   URL. Set it before filing anything, so its 404 is expected rather than
+   discovered halfway through.
 
-Then one objective goes through six steps: the orchestrator splits it, you
-queue one child, the engineer opens a pull request, you ask for a revision with
-the trigger phrase, you merge, and `/retro` proposes a memory entry. What to
-watch for at each step, and the five failure modes worth recognising on sight,
-are in that file.
+Then two objectives go through eight steps each: the orchestrator splits one,
+you queue the children in dependency order, the engineer opens a pull request,
+you merge and open the site, you ask for a revision with the trigger phrase, and
+`/retro` proposes a memory entry. What to watch for at each step, and the eight
+failure modes worth recognising on sight, are in that file.
 
 ## What is not checked
 

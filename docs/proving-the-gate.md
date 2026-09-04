@@ -5,7 +5,7 @@
 An agent pointed at a gate you do not trust produces work you have to read line
 by line, which is the whole thing you were trying to avoid. Until a red check
 reliably blocks a merge, every agent pull request is a manual review. Once it
-does, most of them are a glance at a preview URL.
+does, most of them are a glance at the checks and then at the published page.
 
 So the gate gets proven by hand, on a repo you can throw away, before
 `agent-run.yml` is enabled anywhere.
@@ -84,8 +84,13 @@ Confirm four things, in this order:
 
 1. **Checks run.** `ci / typecheck, lint, test, build` and `guard / memory cap
    and protected paths` both appear on the pull request and both go green.
-2. **A preview URL appears.** As a comment or a check. Open it. It should show
-   the changed string.
+2. **Publishing is on and its URL resolves.** Set from `docs/checkpoint.md`
+   step 5, serving the default branch from its root. Until something lands at
+   that root the URL 404s, which is the expected answer here and not a broken
+   setup - what you are confirming is that the setting is saved and the address
+   exists. There is no per-pull-request preview on this arrangement, so a pull
+   request is judged on its checks and its acceptance criteria and the page is
+   looked at after the merge.
 3. **The check names match branch protection.** Repo Settings, Branches, the
    `main` rule: the required checks listed there are exactly the names from
    step 1. They follow the job names, so a renamed job silently stops being
