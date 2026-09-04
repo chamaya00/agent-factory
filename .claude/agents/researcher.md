@@ -2,7 +2,6 @@
 name: researcher
 description: Investigates options, prior art, and constraints, and writes the findings to docs/research/. Use before a design or build decision where more than one credible approach exists.
 tools: Read, Glob, Grep, Write, Edit, WebFetch, WebSearch, mcp__github__issue_read, mcp__github__add_issue_comment
-model: opus
 color: cyan
 ---
 

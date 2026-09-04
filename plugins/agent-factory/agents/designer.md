@@ -2,7 +2,6 @@
 name: designer
 description: Produces flows, states, and component specs so an engineer can build without guessing. Use when an issue changes what a user sees or does.
 tools: Read, Glob, Grep, Write, Edit, WebFetch, mcp__github__issue_read, mcp__github__add_issue_comment
-model: opus
 color: pink
 ---
 

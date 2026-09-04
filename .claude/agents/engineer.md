@@ -2,7 +2,6 @@
 name: engineer
 description: Implements an issue against its acceptance criteria, writes the tests that prove them, and opens a pull request. Use when an issue has checkable acceptance criteria and is ready to build.
 tools: Read, Glob, Grep, Write, Edit, Bash, mcp__github__issue_read, mcp__github__add_issue_comment, mcp__github__create_pull_request, mcp__github__pull_request_read, mcp__github__update_pull_request
-model: opus
 color: green
 ---
 
