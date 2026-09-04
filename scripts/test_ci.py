@@ -128,6 +128,93 @@ CASES: list[tuple[str, str, int, list[str], list[str]]] = [
 ]
 
 
+TEMPLATE = ROOT / "plugins" / "agent-factory" / "templates" / "project" / ".github" / "workflows" / "ci.yml"
+
+# What provisioning puts in a repository, and nothing else. The placeholder
+# gate's tripwire treats anything outside this as product code arriving.
+SCAFFOLDING = [
+    "README.md",
+    "CLAUDE.md",
+    ".claude/agent-factory.json",
+    ".claude/agents/engineer.md",
+    ".claude/skills/house-rules/SKILL.md",
+    ".claude/commands/retro.md",
+    ".claude/memory/engineer.md",
+    ".github/CODEOWNERS",
+    ".github/workflows/ci.yml",
+    "docs/research/.gitkeep",
+    "docs/design/.gitkeep",
+    "docs/decisions/.gitkeep",
+]
+
+
+def template_commands() -> str:
+    """The placeholder gate exactly as it ships, so this cannot drift from it."""
+    data = yaml.safe_load(TEMPLATE.read_text())
+    commands = data["jobs"]["ci"]["with"].get("commands")
+    if not commands:
+        raise SystemExit(
+            "the project ci.yml template has no 'commands' - it is on the Node "
+            "path, and the placeholder gate's tripwire is no longer shipping"
+        )
+    return commands
+
+
+def build_repo(cwd: Path, extra: list[str]) -> None:
+    for name in SCAFFOLDING + extra:
+        path = cwd / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("placeholder\n")
+    quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    subprocess.run(["git", "init", "-q"], cwd=cwd, check=True, **quiet)
+    subprocess.run(["git", "add", "-A"], cwd=cwd, check=True, **quiet)
+
+
+# name, files added on top of the scaffolding, expected exit, text wanted in output
+TRIPWIRE_CASES: list[tuple[str, list[str], int, str]] = [
+    ("a freshly provisioned repository passes", [], 0, ""),
+    ("research writing an ADR does not trip it", ["docs/decisions/0001-a-choice.md"], 0, ""),
+    ("design writing a document does not trip it", ["docs/design/navigation.md"], 0, ""),
+    ("product code at the root trips it", ["index.html"], 1, "index.html"),
+    ("product code in a subdirectory trips it", ["src/main.py"], 1, "src/main.py"),
+    ("a manifest the gate would need trips it", ["package.json"], 1, "package.json"),
+]
+
+
+def check_tripwire(script: str) -> int:
+    """The placeholder gate must fail the moment it stops being adequate.
+
+    A placeholder nobody replaced is the failure this exists to stop: every
+    check green, and none of them testing the product.
+    """
+    failures = 0
+    commands = template_commands()
+
+    for name, extra, want_code, want_text in TRIPWIRE_CASES:
+        with tempfile.TemporaryDirectory() as workdir:
+            cwd = Path(workdir)
+            build_repo(cwd, extra)
+            code, output = run_case(script, commands, cwd)
+
+        problems = []
+        if code != want_code:
+            problems.append(f"exit {code}, wanted {want_code}")
+        if want_text and want_text not in output:
+            problems.append(f"output never names {want_text!r}, so nobody knows what tripped it")
+
+        if problems:
+            failures += 1
+            print(f"  FAIL  {name}")
+            for problem in problems:
+                print(f"          {problem}")
+            for line in output.strip().splitlines():
+                print(f"        | {line}")
+        else:
+            print(f"  ok    {name}")
+
+    return failures
+
+
 def main() -> int:
     script = commands_script()
     failures = 0
@@ -157,10 +244,14 @@ def main() -> int:
         else:
             print(f"  ok    {name}")
 
+    print()
+    failures += check_tripwire(script)
+
+    total = len(CASES) + len(TRIPWIRE_CASES)
     if failures:
-        print(f"\nguard: {failures} of {len(CASES)} case(s) failed")
+        print(f"\nguard: {failures} of {total} case(s) failed")
         return 1
-    print(f"\nguard: {len(CASES)} case(s) pass")
+    print(f"\nguard: {total} case(s) pass")
     return 0
 
 

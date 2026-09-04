@@ -102,7 +102,7 @@ been worse off, unable to write a line of code.
 
 ### test_ci.py
 
-Ten cases, run under the same `bash -e -o pipefail` GitHub uses for a `run:`
+Sixteen cases, run under the same `bash -e -o pipefail` GitHub uses for a `run:`
 block. The gate's commands path is hand-written shell, and a bug in it does not
 fail loudly - it passes a run that should have failed, which is the one failure
 mode a gate cannot have.
@@ -113,6 +113,24 @@ commands; leading and trailing whitespace is trimmed; nothing runnable is a
 failure rather than a pass; `false && x` still fails the line; a failure
 mid-pipeline is not hidden by the last command; an unset variable is an error
 rather than an empty string.
+
+Then six cases on the placeholder gate the project template ships, run against
+real temporary git repositories. They pull the `commands` block straight out of
+`templates/project/.github/workflows/ci.yml`, so they cannot drift from what a
+provisioned repository actually receives. A freshly provisioned repository
+passes; research writing an ADR and design writing a document still pass,
+because those two roles produce prose and there is nothing yet to test; product
+code at the root, product code in a subdirectory, and a package manifest each
+fail, and the error has to name the file that tripped it.
+
+That last group exists for a failure nothing else catches. A project gets its
+gate before it gets its stack, so the gate it is provisioned with cannot test a
+product that does not exist yet. The danger is not that the placeholder is
+inadequate on day one - it is that nobody remembers to replace it, and every
+pull request goes green on work no check ever read. The tripwire turns that from
+silence into a red check with the instruction attached. Switching the template
+to the Node path makes `test_ci.py` stop with an explanation rather than
+quietly skipping this group.
 
 ### test_preflight.py
 

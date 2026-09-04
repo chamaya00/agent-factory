@@ -16,9 +16,17 @@
 - Dev: [command]
 - Typecheck / lint / test / build: `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build`
 
-The four scripts above are what CI runs. If one is renamed here, rename it in
-`.github/workflows/ci.yml` in the same commit, or the gate silently stops
-checking that thing.
+The four scripts above are what CI runs once the gate is real. Until then it is
+not: `.github/workflows/ci.yml` ships a placeholder that checks the scaffolding
+is intact and fails the moment product code lands, because a project gets its
+gate before it gets its stack and a gate that goes green on untested code is
+worse than no gate. Replacing it is a step in building this project, not a
+chore to do later - the comment at the top of that file says how.
+
+Whatever the gate runs, the rule is the same. If a check is renamed here,
+rename it in `.github/workflows/ci.yml` in the same commit, and re-point the
+branch protection rule in the same sitting, or the gate silently stops checking
+that thing.
 
 ## How work moves
 
