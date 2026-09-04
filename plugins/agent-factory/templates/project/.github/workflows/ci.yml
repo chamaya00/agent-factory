@@ -6,6 +6,37 @@ name: ci
 # somebody bumps the line and merges it - a new release in the factory changes
 # nothing here on its own. `/update-agents` proposes the bump as a pull
 # request, so the diff gets read here before it runs here.
+#
+# ---------------------------------------------------------------------------
+# This ships as a placeholder gate, and it is meant to be replaced.
+#
+# A project gets its gate before it gets its stack. The reusable workflow's
+# Node path fails a named script that is not there rather than skipping it,
+# which is correct and which would make every pull request here red from the
+# provisioning one onward, before a line of product code exists. So the
+# commands path below checks the only thing that is true on day one: that the
+# scaffolding a session and an agent run both read is intact.
+#
+# The last line is a tripwire, and it is the part that matters. The moment a
+# file appears that provisioning did not put here, product code has landed and
+# this gate does not test it - so the gate fails and says so, rather than going
+# green on work nothing checked. A gate that silently skips is not a gate, and
+# the failure mode this exists to stop is a placeholder nobody remembered to
+# replace, passing every pull request on its way to a release.
+#
+# Replace it as soon as the stack is chosen. Delete `check-name` and
+# `commands`, restore the two lines below, and re-point the branch protection
+# rule in the same sitting - the job name is the string protection matches on,
+# so a renamed check that no longer reports blocks every merge instead of
+# gating them.
+#
+#     with:
+#       node-version: '20'
+#       checks: 'typecheck,lint,test,build'
+#
+# Provisioning onto a repository that already has those four scripts skips all
+# of this and starts on the Node path.
+# ---------------------------------------------------------------------------
 
 on:
   push:
@@ -16,5 +47,10 @@ jobs:
   ci:
     uses: chamaya00/agent-factory/.github/workflows/ci.yml@__FACTORY_VERSION__
     with:
-      node-version: '20'
-      checks: 'typecheck,lint,test,build'
+      check-name: 'scaffolding'
+      commands: |
+        test -f CLAUDE.md
+        test -f .claude/agent-factory.json
+        test -d .claude/agents && test -d .claude/skills && test -d .claude/commands
+        test -d docs/research && test -d docs/design && test -d docs/decisions
+        unexpected="$(git ls-files | grep -Ev '^(README\.md|CLAUDE\.md|\.github/|\.claude/|docs/)' || true)"; if [ -n "$unexpected" ]; then echo "::error::Product code has landed and this placeholder gate does not test it: $unexpected. Restore the real checks and re-point branch protection in the same sitting - see the comment at the top of this file."; exit 1; fi

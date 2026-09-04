@@ -112,7 +112,14 @@ the repository fails as an invalid workflow reference on the first run.
 What goes in:
 
 - `.github/workflows/ci.yml`, `agent-run.yml`, `guard.yml`, `bootstrap.yml` -
-  thin callers, each pinned to that release
+  thin callers, each pinned to that release. `ci.yml` ships a placeholder gate
+  rather than the four scripts, because a repository being provisioned usually
+  has no stack yet, and the Node path fails a named script that is not there
+  rather than skipping it - which would make this very pull request red. If the
+  repository already has `typecheck`, `lint`, `test`, and `build`, switch to the
+  Node path now; the comment at the top of the template says how. Otherwise
+  leave it alone and say in the pull request body that the gate is a placeholder,
+  what it does check, and that it fails the moment product code lands.
 - `.github/CODEOWNERS` - set the owner to the repository owner
 - `CLAUDE.md` - fill in the product sentence, the stack, and the commands from
   what is actually in the repository. Do not leave a bracketed placeholder
@@ -185,6 +192,12 @@ request that would fix it.
 
 Give them the names from the step 4 summary, verbatim, then:
 
+Notice which names those are. On the placeholder gate the ci job reports as
+`scaffolding` rather than as the four scripts, and it changes the day somebody
+restores the Node path. That is why the template says to re-point this rule in
+the same sitting: a required check that no longer reports blocks every merge
+instead of gating them.
+
 > 1. Open `github.com/$1/settings/branches`
 > 2. **Add branch protection rule** (or **Add classic branch protection rule**)
 > 3. Branch name pattern: the default branch name
@@ -207,3 +220,7 @@ two things that no part of this command can do for them:
   Secrets are per repository, and nothing agent-side runs without it.
 - Install the agent identity App on this repository, if they made one. Without
   it, every agent pull request needs an approval tap before its checks will run.
+
+If the gate went in as a placeholder, say so here too, and say what replaces it.
+It is the one outstanding item that looks like nothing is wrong: every check is
+green, and none of them is testing the product.

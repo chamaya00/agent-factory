@@ -1,7 +1,7 @@
 {
   "name": "agent-factory",
   "displayName": "Agent Factory",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Agent roles, house rules, and repo provisioning commands for turning objectives into shipped code.",
   "author": {
     "name": "chamaya00",
