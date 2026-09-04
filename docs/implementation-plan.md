@@ -192,6 +192,11 @@ Do not skip this ordering. Agents pointed at a gate I do not trust produce work 
 
 ## Phase 8 - Smoke test the full loop
 
+Superseded. Phase 8 was rewritten around two objectives that build a site the
+repository publishes, so the loop is judged by opening a URL rather than by
+reading the diff - `docs/smoke-test.md` is the runbook, and this section is
+kept for the reasoning that led to it. What follows is the original.
+
 On the throwaway repo, file this objective and let it run:
 
 > Users should be able to save items to a favorites list and see them on a separate page. Should survive a page refresh. No accounts - local storage is fine.

@@ -157,8 +157,14 @@ one whose output has to pass the gate rather than just exist. A role that
 writes files nobody runs is a much easier thing to get right than one that has
 to make `npm run test` green.
 
-Until an engineer run lands a pull request that passes CI, treat step 3 of
-`docs/smoke-test.md` as untested rather than passing.
+Until an engineer run lands a pull request that passes CI, treat the engineer
+step of `docs/smoke-test.md` as untested rather than passing.
+
+**How to answer it.** Both roles run in phase 8 as it now stands: the objectives
+there produce a design document and a published site, so a full pass exercises
+three of the four roles rather than one. That is deliberate - a runbook that
+only ever ran the orchestrator was not testing the loop, it was testing the
+first step of it.
 
 ---
 
@@ -175,8 +181,11 @@ then labels the issue `agent:blocked` and spends one of its three attempts on
 something that was not a scoping problem at all. That is question 3 arriving by
 a second route.
 
-**How to answer it.** Run the engineer on #6 or #13 and read `num_turns` in the
-result block.
+**How to answer it.** Run the engineer on the smallest child of phase 8's first
+objective and read `num_turns` in the result block. `docs/smoke-test.md` asks
+for that number in its report, and asks for the smallest child to be queued
+first for exactly this reason: the answer is wanted before a larger child spends
+an attempt discovering it.
 
 **What changes.** If it lands near 40, raise the cap in the template and in
 `agent-run.yml`'s default. Do not raise it pre-emptively: the cap exists
