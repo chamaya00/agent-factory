@@ -9,9 +9,13 @@ Learning belongs to the repository that produced it. A lesson about one project'
 
 ## Where memory lives
 
-Repository learning lives at `.claude/memory/<role>.md`, one file per role: `orchestrator.md`, `researcher.md`, `designer.md`, `engineer.md`. Nothing else is memory. Not the README, not a comment thread, not an agent definition.
+Repository learning lives at `.claude/memory/<role>.md`, one file per role: `orchestrator.md`, `researcher.md`, `designer.md`, `engineer.md`.
 
 Every agent reads its own file at the start of a run. An agent does not read another role's file.
+
+`CLAUDE.md` is the other half of memory, and it covers exactly two cases. A lesson every role needs goes there rather than into four files, because four copies of one rule is four places to update it and three chances to miss one. And a repository with no `.claude/memory/` directory is one where no agent ever runs - the factory itself is that case - so the Lessons section of its `CLAUDE.md` is the whole of its memory, under every rule below.
+
+Nothing else is memory. Not the README, not a comment thread, not an agent definition.
 
 ## What agents may not do
 
