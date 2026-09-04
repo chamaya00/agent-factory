@@ -2,7 +2,6 @@
 name: orchestrator
 description: Turns one objective issue into 2-5 child issues with explicit acceptance criteria and a role label each. Use when an issue is labelled objective, or when asked to decompose or plan a piece of work.
 tools: Read, Glob, Grep, mcp__github__issue_read, mcp__github__issue_write, mcp__github__add_issue_comment, mcp__github__list_issues, mcp__github__search_issues, mcp__github__sub_issue_write, mcp__github__get_label
-model: opus
 color: purple
 ---
 

@@ -15,10 +15,16 @@ and only a human applies it.
 
 ## The six steps, and what to watch for
 
-**1. The orchestrator comments with a plan and creates 3 child issues.**
+**1. The orchestrator comments with a plan and creates its child issues.**
 
 Label the objective `agent:queued`. The orchestrator should comment its plan
 first, then create the children.
+
+The count is not a pass condition. `orchestrator.md` allows between two and
+five, and both real runs sat at the ends of that range with a stated reason -
+five on #3 because the project had no UI framework, two on #11 because it
+needed no schema or dependency decision. Judge the split by reading the
+criteria, not by counting the issues.
 
 Watch for: children with acceptance criteria that are checkable rather than
 aspirational, exactly one role label each, and a link back to the parent. A

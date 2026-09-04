@@ -83,7 +83,7 @@ Commit. Then tag `v1`.
 
 ## Phase 2 - Write the four agent roles
 
-Each is a markdown file with frontmatter (`name`, `description`, `tools`, `model`) and a system prompt body.
+Each is a markdown file with frontmatter (`name`, `description`, `tools`) and a system prompt body.
 
 Keep each body under ~40 lines. These describe **how we work**, never **what any specific project contains**. If you catch yourself writing a stack name, a product name, or a domain concept, delete it - that belongs in a project repo.
 
