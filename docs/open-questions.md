@@ -9,6 +9,20 @@ annotated: the answer belongs in the code or in a comment next to the thing it
 explains, and a register of settled questions is just another place to go
 stale.
 
+Deleting it is only half the move, and the half that goes wrong on its own. An
+answer that lands nowhere is lost the moment the entry goes, and the next
+session re-derives it from the same run logs a month later. So an entry is not
+settled until its answer exists in one of three places, and the commit that
+deletes the entry says which one it was:
+
+- A check in `scripts/`, when the answer is mechanical. Always the best of the
+  three, because it is the only one that stays true without anyone reading it.
+- A comment next to the thing it explains, when the answer is a reason someone
+  editing that file needs at the moment they edit it.
+- A line in the Lessons section of `CLAUDE.md`, when it is neither. The weakest
+  of the three, and the one to revisit later for whether it can graduate into
+  the first.
+
 Nothing here is a task list. These are the places where the system is running
 on an assumption that has not been tested.
 
