@@ -22,8 +22,8 @@ In order, and the order is the point.
    pointed at it. An agent aimed at a gate you do not trust produces work you
    have to read line by line, which is the thing this system exists to avoid.
 3. **[The smoke test](smoke-test.md)** - one objective through the whole loop,
-   with what to watch for at each of the six steps and the five failure modes
-   worth recognising on sight.
+   ending in a working website you can open on a phone. What to watch for at
+   each of the six steps, and the failure modes worth recognising on sight.
 
 ## Reference
 

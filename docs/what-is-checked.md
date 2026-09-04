@@ -12,11 +12,24 @@ yet.
 standing the system up: you file an objective by hand and watch six things
 happen, judging each one yourself.
 
-That matters because its pass conditions are not mechanical. "The children have
-checkable acceptance criteria" and "the tests map onto those criteria one to
-one" are the conditions, and a script cannot decide either. It is a manual
-check because the thing it checks needs judgment, not because nobody got round
-to automating it.
+It is manual because what is left over needs judgment, not because nobody got
+round to automating it - and the "what is left over" is now a much shorter
+list than it was.
+
+The phase produces a working website, published from the project's Pages URL.
+Everything mechanical about that site is checked by the project's own gate:
+the content parses, the pages generate, the internal links resolve, the
+committed output matches a fresh build, the empty case renders. None of that
+is a thing you look at.
+
+Two conditions remain judgment, and they are the two a script was never going
+to settle: whether the children have criteria that name a check rather than an
+aspiration, and whether the tests map onto those criteria one to one. Plus one
+deliberate hand check at the end - adding a post yourself, to confirm it really
+is one file and one command, which is what the objective was about.
+
+If anything else gets checked by hand during a run, that is a missing test in
+the project, and it is worth more than the smoke test result.
 
 The automated checking is elsewhere.
 
@@ -205,11 +218,22 @@ separate way for it to fail confusingly:
    pinned to it, and a pin with no tag behind it fails as an invalid workflow
    reference naming nothing about a tag in another repository.
 
-Then one objective goes through six steps: the orchestrator splits it, you
-queue one child, the engineer opens a pull request, you ask for a revision with
-the trigger phrase, you merge, and `/retro` proposes a memory entry. What to
-watch for at each step, and the five failure modes worth recognising on sight,
-are in that file.
+Phase 8 also needs Pages switched on for the project repo, deploy-from-branch,
+`main` and `/docs`, confirmed before the first agent run. Confirming it early
+is what makes a blank site afterwards mean "the agents did not finish" rather
+than "Pages was never on".
+
+Then one objective - a portfolio site with projects and posts - goes through
+six steps: the orchestrator splits it, you queue one child, the engineer opens
+a pull request, you ask for a revision with the trigger phrase, you merge and
+open the site, and `/retro` proposes a memory entry. What to watch for at each
+step, and the failure modes worth recognising on sight, are in that file.
+
+There is no preview URL at step 3, by design. Pages publishes from `main`, so
+the live site appears after the merge; before it, the checks are the signal.
+That is the trade for having no deploy workflow and no third-party preview
+account, and it points the right way - a system built so its checks can be
+trusted should not need a screenshot to approve a merge.
 
 ## What is not checked
 

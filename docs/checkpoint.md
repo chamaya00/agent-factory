@@ -170,15 +170,27 @@ branch the session cloned - check that first, then start a fresh session.
 Commands are read once at startup, so a session that started before the files
 landed will not pick them up no matter what you type in it.
 
-## 5. Connect the preview deploy provider
+## 5. Switch on Pages for the project repo
 
-Sign in to the provider with GitHub, import the project repo, and let it open
-its own pull request for the config. Confirm that a pull request gets a preview
-URL comment. That URL is what makes reviewing an agent's work from a phone
-possible at all - without it you are reading diffs on a 6-inch screen.
+The project repo publishes its site from a branch, so this is a setting rather
+than an account somewhere else. On the project repo, not this one:
 
-Do not give the provider access to the factory repo. There is nothing to deploy
-here.
+> 1. Open `github.com/<owner>/<repo>/settings/pages`
+> 2. **Source**: Deploy from a branch
+> 3. **Branch**: `main`, folder `/docs`
+> 4. **Save**
+
+Then open the URL it prints and confirm the placeholder page loads. Doing that
+now, before any agent has run, is what makes a blank site later mean "the
+agents did not finish" rather than "Pages was never on". Those two look
+identical if you skip it.
+
+No third-party preview provider, and no deploy workflow. A preview account
+would put the deployment behind a vendor, and a deploy workflow would put it
+somewhere the agents may never touch, which is exactly the wrong place for the
+thing they are building. The trade is that there is no per-pull-request preview
+URL: the checks are what you trust before a merge, and the site is what you
+look at after one.
 
 ---
 

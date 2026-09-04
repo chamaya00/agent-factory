@@ -146,9 +146,46 @@ to make `npm run test` green.
 Until an engineer run lands a pull request that passes CI, treat step 3 of
 `docs/smoke-test.md` as untested rather than passing.
 
+The redesigned smoke test raises the bar for both of them on purpose. The
+engineer's output now has to be a site that builds, and the designer finally
+has something to be judged on - how the thing looks is one of only two
+conditions the runbook still leaves to a human. If the designer role produces
+nothing usable there, that is the strongest signal yet that four roles is one
+too many.
+
 ---
 
-## 5. Is 40 turns enough for the engineer?
+## 5. Does a published product actually replace reading the diff?
+
+**What is known.** Nothing. This is the assumption the redesigned smoke test
+runs on, and it has never been tested.
+
+The claim is that a working website plus a green gate tells you as much about
+an agent's work as reading its diff does, and tells it to you in seconds rather
+than in an evening. Every earlier run in this system was judged by reading:
+the two ADRs, the research doc, the decomposition comment. All of them were
+good, and all of them were read line by line, which is the cost this is
+supposed to remove.
+
+**Why it might not hold.** A site can look right and be built badly, and the
+gate only catches what somebody wrote a test for. The specific worry is a
+generated site whose regeneration test asserts against its own output rather
+than against a fresh build, which would be green, wrong, and invisible.
+
+**How to settle it.** Run phase 8 and record, honestly, how much of the diff
+you read. The runbook asks for that number for exactly this reason. Then read
+the diff afterwards anyway, once, and see whether anything in it would have
+changed your verdict.
+
+**What changes once you know.** If the site is enough, the same shape applies
+to every project the factory provisions: name the published artifact in the
+objective, and let the gate carry the rest. If it is not, the missing piece is
+almost certainly a check nobody wrote, and it belongs in the project's tests
+rather than in another runbook step.
+
+---
+
+## 6. Is 40 turns enough for the engineer?
 
 **What is known.** The cap was raised from 15 to 40 in `v1.4.0` because 15 was
 below the floor. Both roles that have run since finished close to the new cap:
@@ -171,7 +208,7 @@ evidence of anything.
 
 ---
 
-## 6. Should a run pin the model?
+## 7. Should a run pin the model?
 
 **What changed.** Every role file used to carry `model: opus` in its
 frontmatter. In an Actions run that line does nothing: the agent is started by

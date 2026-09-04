@@ -5,7 +5,7 @@
 An agent pointed at a gate you do not trust produces work you have to read line
 by line, which is the whole thing you were trying to avoid. Until a red check
 reliably blocks a merge, every agent pull request is a manual review. Once it
-does, most of them are a glance at a preview URL.
+does, most of them are a glance at a check or at the published site.
 
 So the gate gets proven by hand, on a repo you can throw away, before
 `agent-run.yml` is enabled anywhere.
@@ -84,8 +84,10 @@ Confirm four things, in this order:
 
 1. **Checks run.** `ci / typecheck, lint, test, build` and `guard / memory cap
    and protected paths` both appear on the pull request and both go green.
-2. **A preview URL appears.** As a comment or a check. Open it. It should show
-   the changed string.
+2. **The site still publishes.** There is no per-pull-request preview - Pages
+   builds from `main` - so this is confirmed after the merge below, by opening
+   the Pages URL and seeing the change. Before the merge, the checks are the
+   only signal, which is the point of proving them here.
 3. **The check names match branch protection.** Repo Settings, Branches, the
    `main` rule: the required checks listed there are exactly the names from
    step 1. They follow the job names, so a renamed job silently stops being

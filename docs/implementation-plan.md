@@ -175,7 +175,9 @@ Stop here. Give me this as a numbered list with exact clicks, and wait.
 4. **Enable the plugin on my Claude account** - `/plugin marketplace add chamaya00/agent-factory`, then install. Confirm it loads in cloud sessions.
 
    > Superseded twice. `/plugin` does not exist in a web session, and a user-level install would not reach one anyway. Declaring the marketplace in `.claude/settings.json` does not work either - Claude Code drops a repository-declared marketplace until the folder is trusted for project plugins, and a web session never trusts one. The commands, roles, and skills are copied into `.claude/` and read from the clone. See `docs/checkpoint.md` step 4.
-5. **Connect Vercel** for preview deploys.
+5. **Connect Vercel** for preview deploys. *(Superseded: the project publishes
+   from GitHub Pages, deploy-from-branch, and there is no preview provider. See
+   `docs/checkpoint.md` step 5.)*
 
 ---
 
@@ -207,11 +209,22 @@ Label it `objective`. I expect:
 
 Report back on which of those six steps worked and which needed hand-holding. That list is the real backlog.
 
+*(Amended. The objective is now a portfolio site published to the project's
+Pages URL rather than a favorites list, and step 3's preview link is gone. The
+reason is that a favorites list compiled to a headless package could only be
+judged by reading the diff, which is the one thing this system exists to avoid.
+The live site replaces that, and everything underneath it is checked by
+`npm test` and the gate. `docs/smoke-test.md` is the current runbook; this
+section is kept for the reasoning.)*
+
 ---
 
 ## What I do not want
 
 - Do not build a dashboard, a CLI, or a web UI. GitHub is the interface.
+  *(This is about the factory's control surface, not about what projects build.
+  A project whose product is a website is fine - the smoke test's is. The line
+  is crossed the moment a page starts reporting on agent runs.)*
 - Do not add Jira, Notion, or any external tracker. GitHub Issues is the tracker; the repo is the storage.
 - Do not add an AI code-review step. My tests are the gate, and review costs Pro quota I need for building.
 - Do not let any agent modify workflow files. A system that can rewrite its own gates has no gates.
