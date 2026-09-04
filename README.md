@@ -26,6 +26,7 @@ plugins/agent-factory/
                                      is what a session on this repo actually loads
 .github/workflows/                   reusable workflows plus the factory's own guard
 scripts/                             the guard's checks
+docs/                                the operating documentation, also a Pages site
 ```
 
 Everything except the two manifests sits at the plugin root, not inside `.claude-plugin/`.
@@ -182,4 +183,12 @@ In order, and the order is the point:
 2. `docs/proving-the-gate.md` - prove a red check blocks a merge, by hand, on a throwaway repo, before any agent is pointed at it. An agent aimed at a gate you do not trust produces work you have to read line by line, which is the thing the system exists to avoid.
 3. `docs/smoke-test.md` - one objective through the whole loop, with what to watch for at each of the six steps and the five failure modes worth recognising on sight.
 
+`docs/what-is-checked.md` is the answer to "how do we know any of this works": the five scripts `guard.yml` runs and what each one asserts, the gates a project receives, the preconditions a run refuses on, and the parts nothing verifies yet. It is the page to read before trusting a layer, and the one to update when a check is added.
+
 `docs/open-questions.md` is the register of assumptions this system runs on that have not been tested yet, each with how to settle it and what changes once you do. Read it before trusting a part of the loop nothing has exercised, and delete an entry once its answer lives in the code.
+
+## The documentation site
+
+`docs/` is a GitHub Pages site as well as a folder, served from `main` at the `/docs` source with `docs/_config.yml` and `docs/index.md` as its entry point. Nothing built it: the source is a repository setting under Settings, Pages, and there is no deploy workflow on purpose. Building from a branch needs nothing added to `.github/workflows/`, and a system whose agents must never touch those files should not grow a workflow it does not need.
+
+Every page renders as plain Markdown with no front matter, and links between `.md` files work in both places, so a document is edited once and reads correctly on github.com and on the site.
