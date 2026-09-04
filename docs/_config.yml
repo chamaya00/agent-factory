@@ -1,0 +1,24 @@
+# GitHub Pages configuration for the site served out of this folder.
+#
+# The source is a repository setting rather than a file: Settings, Pages,
+# "Deploy from a branch", `main`, `/docs`. Nothing here takes effect until
+# somebody sets that, and setting it needs admin access - so it stays a human
+# step, like branch protection and for the same reason.
+#
+# No deploy workflow on purpose. Building the site from a branch needs nothing
+# added to `.github/workflows/`, and a system whose agents must not touch the
+# workflow files should not grow one it does not need.
+#
+# Three GitHub Pages defaults are load-bearing here, so nothing under docs/
+# needed editing to become a page:
+#   - jekyll-optional-front-matter renders plain Markdown that has no front
+#     matter, which is every file in this folder.
+#   - jekyll-titles-from-headings takes each page title from its first heading.
+#   - jekyll-relative-links rewrites links between .md files, so the same link
+#     works on github.com and on the built site.
+
+title: agent-factory
+description: >-
+  A reusable toolbox that turns high-level objectives into working code across
+  projects.
+theme: jekyll-theme-primer
