@@ -40,7 +40,7 @@ Everything except the two manifests sits at the plugin root, not inside `.claude
 
 ## Commands
 
-- `/new-project <owner/repo>` - provisions a fresh repo: caller workflows, `CLAUDE.md`, memory files, and the labels. Three of its steps are handed to a human rather than scripted - see below.
+- `/new-project <owner/repo>` - provisions a fresh repo: caller workflows, `CLAUDE.md`, memory files, a `docs/` folder that publishes as a site, and the labels. Several of its steps are handed to a human rather than scripted - see below.
 - `/decompose <issue>` - runs the orchestrator on one issue by hand.
 - `/retro` - proposes memory updates for the current repo as a pull request.
 - `/update-agents [version]` - brings one repo's copy of the roles, skills, and workflow pins up to a release, as one reviewable pull request. Nothing else moves.
@@ -152,7 +152,7 @@ nothing over their settings. Both refusals read `403 Resource not accessible by
 integration`, which names no permission and suggests no fix, so the list below
 is worth more than the error message.
 
-Four things in provisioning are therefore always handed back, and
+Five things in provisioning are therefore always handed back, and
 `/new-project` asks for each in place rather than pretending:
 
 - **Creating the repository.** An account-level permission no installation
@@ -166,6 +166,10 @@ Four things in provisioning are therefore always handed back, and
 - **Branch protection.** Not automated on purpose, not only for lack of a tool:
   setting it needs an administration token, and an identity that can set a gate
   can remove one.
+- **Switching Pages on.** A repository setting, and an identity that can
+  publish a site can publish anything. Confirming the placeholder page loads at
+  that point is what makes a blank site later mean "nothing has been built yet"
+  rather than "Pages was never on".
 
 ## How the commands get loaded
 

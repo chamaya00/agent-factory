@@ -1,0 +1,28 @@
+# GitHub Pages configuration for the site served out of this folder.
+#
+# The source is a repository setting rather than a file: Settings, Pages,
+# "Deploy from a branch", the default branch, `/docs`. Nothing here takes
+# effect until somebody sets that, and setting it needs admin access - so it
+# stays a human step, like branch protection and for the same reason.
+#
+# No deploy workflow on purpose. Building the site from a branch needs nothing
+# added to `.github/workflows/`, and a system whose agents must not touch the
+# workflow files should not grow one it does not need.
+#
+# Three GitHub Pages defaults are load-bearing here, so nothing under docs/
+# needs editing to become a page:
+#   - jekyll-optional-front-matter renders plain Markdown that has no front
+#     matter, which is every file this template ships.
+#   - jekyll-titles-from-headings takes each page title from its first heading.
+#   - jekyll-relative-links rewrites links between .md files, so the same link
+#     works on github.com and on the built site.
+#
+# A project that starts generating its own HTML into docs/ should delete this
+# file and add `.nojekyll` instead, in the same change and with an ADR. A
+# generated site wants its bytes served exactly as committed; this arrangement
+# is for the records a project writes but does not build.
+
+title: "[project name]"
+description: >-
+  [one line: what this product does and for whom]
+theme: jekyll-theme-primer

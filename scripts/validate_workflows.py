@@ -172,7 +172,16 @@ def check_roles_can_work() -> None:
 def main() -> int:
     paths = sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml"))
     if TEMPLATES.is_dir():
-        paths += sorted(TEMPLATES.rglob("*.yml")) + sorted(TEMPLATES.rglob("*.yaml"))
+        # Only what sits in .github/workflows/ is a workflow. A template may
+        # carry other YAML - a Pages config, for one - and demanding an `on:`
+        # block of those fails the guard for a reason that has nothing to do
+        # with workflows.
+        paths += sorted(
+            path
+            for pattern in ("*.yml", "*.yaml")
+            for path in TEMPLATES.rglob(pattern)
+            if path.parent.name == "workflows" and path.parent.parent.name == ".github"
+        )
     if not paths:
         print("guard: no workflows found")
         return 1

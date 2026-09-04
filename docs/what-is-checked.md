@@ -217,11 +217,11 @@ separate way for it to fail confusingly:
 6. A release tag matching the version in the plugin manifest. The callers are
    pinned to it, and a pin with no tag behind it fails as an invalid workflow
    reference naming nothing about a tag in another repository.
-
-Phase 8 also needs Pages switched on for the project repo, deploy-from-branch,
-`main` and `/docs`, confirmed before the first agent run. Confirming it early
-is what makes a blank site afterwards mean "the agents did not finish" rather
-than "Pages was never on".
+7. Pages switched on, deploy-from-branch, the default branch and `/docs`, with
+   the placeholder page confirmed to load. `/new-project` hands this over as
+   its step 6. Confirming it before the first agent run is what makes a blank
+   site afterwards mean "the agents did not finish" rather than "Pages was
+   never on" - and those two look identical.
 
 Then one objective - a portfolio site with projects and posts - goes through
 six steps: the orchestrator splits it, you queue one child, the engineer opens

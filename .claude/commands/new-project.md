@@ -17,10 +17,10 @@ command -v gh
 ```
 
 **No `gh`** - the normal case, because this runs in a cloud session. Do the file
-work with the `mcp__github__*` tools named in each step. Four things cannot be
+work with the `mcp__github__*` tools named in each step. Five things cannot be
 done from there at all: creating the repository, the Actions permission, the
-labels, and branch protection. Those are steps 2, 1, 4, and 5, and each is
-handed over in place.
+labels, branch protection, and switching Pages on. Those are steps 2, 1, 4, 5,
+and 6, and each is handed over in place.
 
 The first two of those fail for the same reason, and it is worth knowing which
 kind of failure to expect. A session token is a GitHub App installation on a
@@ -30,9 +30,9 @@ changing a repository setting both come back `403 Resource not accessible by
 integration`. That message names no permission and no fix. Read it as "this
 needs a human", not as a bug to route around.
 
-**`gh` present and authenticated** - you may use it for steps 4 and 5 directly
-instead of handing them over, and should. Step 1 still cannot be scripted from
-a session token; leave it as a human step either way.
+**`gh` present and authenticated** - you may use it for steps 4, 5, and 6
+directly instead of handing them over, and should. Step 1 still cannot be
+scripted from a session token; leave it as a human step either way.
 
 Do not fake progress on a step you cannot perform. A step reported as done that
 was not done is worse than a step reported as blocked, because the failure it
@@ -122,6 +122,11 @@ What goes in:
 - `.claude/agent-factory.json` - the record of which release this repository
   took, with the version filled in
 - `docs/research/`, `docs/design/`, `docs/decisions/` with the ADR template
+- `docs/_config.yml` and `docs/index.html` - what makes `docs/` a published
+  site. Fill in the title and description in the config from the same two
+  sentences you used in `CLAUDE.md`. The placeholder page stays as it is: it is
+  what makes a blank site later mean "nothing has been built yet" rather than
+  "Pages was never switched on", and those look identical without it.
 
 Then the roles and the commands themselves, copied rather than referenced:
 
@@ -195,13 +200,35 @@ Give them the names from the step 4 summary, verbatim, then:
 >    commit directly when you need to
 > 8. **Create**
 
-## 6. Report
+## 6. Switch on Pages
+
+Also a human step, and for the same reason as the two above: publishing a site
+is a repository setting, and an identity that can publish can publish anything.
+
+Only after the pull request from step 3 has merged. Pages serves a folder on a
+branch, and the folder has to be there.
+
+> 1. Open `github.com/$1/settings/pages`
+> 2. **Source**: Deploy from a branch
+> 3. **Branch**: the default branch, folder `/docs`
+> 4. **Save**
+> 5. Wait for the first deployment, then open the URL it prints
+
+They should see the placeholder page. Ask them to confirm that they did, rather
+than assuming - it is the only evidence that the setting took, and every later
+question about whether the site works starts from here.
+
+There is no preview deployment for pull requests, and adding one is not a gap
+to fill. It would need a deploy workflow, which is exactly the place agents may
+never touch, and the checks are what a merge should turn on anyway.
+
+## 7. Report
 
 List what was created, what already existed, and anything that failed, with the
 exact call that failed.
 
-Then state plainly which of steps 1, 4, and 5 are waiting on the human, and the
-two things that no part of this command can do for them:
+Then state plainly which of steps 1, 4, 5, and 6 are waiting on the human, and
+the two things that no part of this command can do for them:
 
 - Add `CLAUDE_CODE_OAUTH_TOKEN` as a repository secret on this repository.
   Secrets are per repository, and nothing agent-side runs without it.
