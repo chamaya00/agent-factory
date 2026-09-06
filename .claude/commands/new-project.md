@@ -89,9 +89,36 @@ everywhere below rather than assuming it is `main`.
 
 ## 3. Caller workflows and project files
 
-One branch, one pull request. Create the branch with `mcp__github__create_branch`,
-push every file in a single commit with `mcp__github__push_files`, then open the
-pull request with `mcp__github__create_pull_request`.
+Where the files land depends on what is already in the repository. Decide that
+before you write anything.
+
+**A fresh repository** - nothing in it but the README from step 2, or nothing
+at all. Push every file in a single commit straight to the default branch with
+`mcp__github__push_files`. No branch, no pull request.
+
+There is nothing to review against on an empty repository. The diff is the
+whole tree, the alternative to merging it is a repository that does nothing,
+and a pull request nobody can meaningfully reject costs a merge tap and a wait.
+It also removes an ordering trap: `workflow_dispatch` only sees workflows that
+are already on the default branch, so with a pull request in the way step 4
+cannot start until a human comes back and merges. Pushed directly,
+`bootstrap.yml` is runnable the moment this step finishes. Branch protection is
+not set until step 5, so this is not routing around a gate - it is arriving
+before there is one.
+
+**A repository with anything else in it** - existing code, existing workflows,
+a second provisioning attempt. One branch, one pull request:
+`mcp__github__create_branch`, then `mcp__github__push_files` onto that branch,
+then `mcp__github__create_pull_request`. Here the diff is a real question.
+These files land next to work somebody already did, and `ci.yml` in particular
+may be about to replace a gate that is doing its job.
+
+Check rather than assume: read the tree with `mcp__github__get_file_contents`.
+Anything beyond a README, a LICENSE, or a `.gitignore` puts you on the pull
+request path. If you cannot tell, take the pull request path - it is the one
+that is wrong in the recoverable direction.
+
+Either way it is one commit, and the rest of this step is what goes in it.
 
 Everything you copy below comes out of the factory itself.
 `${CLAUDE_PLUGIN_ROOT}` is set only when the factory is installed as a plugin,
@@ -157,8 +184,11 @@ visible in the diff here rather than resolved from somewhere else at run time.
 `/update-agents` is how a later release gets in, one reviewed pull request at
 a time.
 
-Say in the pull request body that `bootstrap` has to be run by hand once this
-merges, and why the two remaining steps are manual.
+On the pull request path, say in the body that `bootstrap` has to be run by
+hand once this merges, and why the remaining steps are manual. On the direct
+push path there is no body to say it in, which is the one thing the pull
+request was doing that this gives up. It moves to the report in step 6, and
+that report is then the only place it is said - so do not let it fall out.
 
 ## 4. Labels
 
@@ -167,7 +197,8 @@ its names are matched exactly by the agent-run preflight, so they are worth
 getting from one place rather than retyping.
 
 `workflow_dispatch` only sees workflows that are already on the default branch.
-So the human merges the pull request from step 3 first, then:
+On the direct push path they are already there and this can be run at once. On
+the pull request path the human merges step 3 first. Then:
 
 > 1. Open `github.com/$1/actions/workflows/bootstrap.yml`
 > 2. Tap **Run workflow**, then **Run workflow** again to confirm
@@ -210,16 +241,35 @@ instead of gating them.
 
 ## 6. Report
 
-List what was created, what already existed, and anything that failed, with the
-exact call that failed.
+Two parts, and the second one is the deliverable.
 
-Then state plainly which of steps 1, 4, and 5 are waiting on the human, and the
-two things that no part of this command can do for them:
+First, plainly: what was created, whether it went to the default branch or to a
+pull request, what already existed, and anything that failed - with the exact
+call that failed.
 
-- Add `CLAUDE_CODE_OAUTH_TOKEN` as a repository secret on this repository.
-  Secrets are per repository, and nothing agent-side runs without it.
-- Install the agent identity App on this repository, if they made one. Without
-  it, every agent pull request needs an approval tap before its checks will run.
+Then everything still waiting on the human, in the order it has to happen, each
+one as the URL that does it. Substitute `$1` and the default branch name. A
+reader assembling a settings URL by hand is a reader who ends up on the wrong
+page, and this is the whole reason the list is here rather than in prose:
+
+> 1. **Run bootstrap** - `github.com/$1/actions/workflows/bootstrap.yml`
+>    Run workflow, then read the run summary for the check names. On the pull
+>    request path, merge that pull request first or this page will not offer
+>    the workflow.
+> 2. **Add the secrets** - `github.com/$1/settings/secrets/actions/new`
+>    `CLAUDE_CODE_OAUTH_TOKEN`, and `AGENT_APP_ID` with
+>    `AGENT_APP_PRIVATE_KEY` if the agent identity App exists.
+> 3. **Install the App here** - `github.com/settings/installations`
+>    Nothing to do if there is no App. Without it every agent pull request
+>    lands needing an approval tap before its checks will run.
+> 4. **Branch protection** - `github.com/$1/settings/branches`
+>    Using the check names from the step 1 summary, not guessed ones.
+
+Say why the ones that are blocked are blocked, rather than leaving them looking
+like things you forgot: the secrets because secrets are per repository and
+nothing agent-side runs without them, the protection rule because setting it
+needs an administration token and an identity that can set a gate can remove
+one.
 
 If the gate went in as a placeholder, say so here too, and say what replaces it.
 It is the one outstanding item that looks like nothing is wrong: every check is
