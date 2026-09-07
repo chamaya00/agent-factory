@@ -360,11 +360,28 @@ jobs:
               tools="$common,Write,Edit,WebFetch"
               ;;
             engineer)
-              # Writes code, runs the four scripts the gate runs, and opens the
+              # Writes code, runs the checks the gate runs, and opens the
               # pull request. No `gh pr merge`: merging stays a human's call.
               tools="$common,Write,Edit"
               tools="$tools,Bash(gh pr create:*),Bash(gh pr view:*),Bash(gh pr edit:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh pr checks:*)"
               tools="$tools,Bash(npm ci:*),Bash(npm install:*),Bash(npm run:*),Bash(npm test:*)"
+              # npm was once the only runner here, and the gate it is meant to
+              # mirror is not a Node gate: ci.yml has a commands path precisely
+              # so it can be called from a Python, Go, or Rust repository. On a
+              # project without a package.json the engineer therefore could not
+              # execute its own tests - and that does not fail cleanly. It
+              # verifies the acceptance criteria with inline greps instead,
+              # reports them as checked, and a test script that cannot pass on
+              # any tree ships looking green. That is the failure this list
+              # exists to prevent, so the runners are granted per stack.
+              #
+              # Scoped per runner rather than Bash(bash:*), for the same reason
+              # `gh` is scoped above: a role that can run any shell command can
+              # rewrite the gates it is being checked by.
+              tools="$tools,Bash(make:*),Bash(pytest:*),Bash(python -m pytest:*),Bash(python3 -m pytest:*)"
+              tools="$tools,Bash(go test:*),Bash(cargo test:*)"
+              tools="$tools,Bash(bash tests/:*),Bash(bash scripts/:*),Bash(sh tests/:*),Bash(sh scripts/:*)"
+              tools="$tools,Bash(./tests/:*),Bash(./scripts/:*)"
               tools="$tools,Bash(git log:*),Bash(git switch:*),Bash(git checkout:*)"
               ;;
             *)

@@ -169,6 +169,51 @@ def check_roles_can_work() -> None:
                 )
 
 
+# Runners that do not assume a package.json. The engineer has to be able to run
+# the checks the gate runs, and ci.yml's commands path means the gate is not
+# necessarily a Node gate.
+NON_NPM_RUNNERS = ("Bash(make", "Bash(pytest", "Bash(python", "Bash(go test",
+                   "Bash(cargo", "Bash(bash ", "Bash(sh ", "Bash(./")
+
+
+def check_engineer_can_run_tests() -> None:
+    """The engineer must have a way to run tests that does not assume npm.
+
+    `check_roles_can_work` treats Bash as a family, so an allowlist granting
+    nothing but `Bash(npm ...)` satisfies it - which is how a Node-only engineer
+    shipped and stayed shipped. On a repository with no package.json that role
+    cannot execute its own test script, and it does not fail cleanly: it falls
+    back to inline greps, calls the criteria verified, and a test that cannot
+    pass on any tree ships looking green.
+    """
+    workflow = WORKFLOWS / "agent-run.yml"
+    if not workflow.exists():
+        return
+
+    data = yaml.safe_load(workflow.read_text())
+    script = ""
+    for job in (data.get("jobs") or {}).values():
+        for step in (job or {}).get("steps") or []:
+            if isinstance(step, dict) and step.get("name") == ALLOWLIST_STEP:
+                script = step.get("run") or ""
+    if not script:
+        return
+
+    start = script.find("engineer)")
+    if start == -1:
+        return
+    end = script.find(";;", start)
+    branch = script[start : end if end != -1 else len(script)]
+    granted = granted_tools(branch, "")
+
+    if not any(name.startswith(NON_NPM_RUNNERS) for name in granted):
+        errors.append(
+            "role 'engineer' is granted no test runner that works without a "
+            "package.json, so it cannot run the checks the gate runs on a "
+            "non-Node project; ci.yml's commands path exists for exactly those"
+        )
+
+
 def main() -> int:
     paths = sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml"))
     if TEMPLATES.is_dir():
@@ -179,6 +224,7 @@ def main() -> int:
     for path in paths:
         check(path)
     check_roles_can_work()
+    check_engineer_can_run_tests()
     if errors:
         print(f"guard: {len(errors)} problem(s)\n")
         for error in errors:
