@@ -222,3 +222,41 @@ fixed cost per run.
 **What changes.** Either the caller starts passing `model:` and the roles are
 pinned in one place where a reader can see it, or this entry is deleted and the
 default is documented as deliberate in `agent-run.yml`.
+
+---
+
+## 7. The orchestrator wake has never fired
+
+**The situation.** `agent-run.yml` now queues a child's parent objective when
+that child reaches `agent:review` or `agent:blocked`, which is what turns the
+orchestrator from a one-shot splitter into something that drives an objective.
+Nothing has run it. The preflight half is covered by `scripts/test_preflight.py`;
+the wake itself is a step that only executes on a real runner against a real
+issue tree.
+
+**The two assumptions under it.** Finding the parent is one: the step asks
+`gh issue view --json parent` and falls back to the REST call behind it, and
+neither is certain on an arbitrary runner. Run 33843275814 is the reason this
+is viable at all - the children it created carry a real `parent_issue_url`
+rather than a body reference - but an issue linked by hand may have no parent
+for either call to find. The step treats an empty answer as normal and leaves
+the child labelled, which degrades to exactly the old behaviour.
+
+The second matters more, because it fails silently and completely. The label
+write has to raise an event that starts another run, and events raised by
+`GITHUB_TOKEN` deliberately do not start workflows. Every write in the agent job
+goes through the App token where an App is configured, which does. Where one is
+not, `github.token` is the fallback, and then no cascade happens at all: the
+orchestrator is never woken, and the flow quietly reverts to a human labelling
+each child. That is the documented-as-optional App turning out to be load
+bearing for a feature that reads as unconditional.
+
+**How to answer it.** Run one objective end to end in a project that has the App
+configured, and watch whether the parent picks up `agent:queued` when the first
+child lands. Then do it in one that does not.
+
+**What changes.** If parent discovery is the weak half, the fallback becomes the
+parent link in the child's body. If the App-less case is the weak half, the
+choice is to say so during provisioning or to have the workflow warn when it
+hands back with no App identity - and either way the App stops being described
+as merely preferred.
