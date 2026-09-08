@@ -38,8 +38,13 @@ on:
         default: ''
       max-attempts:
         description: >-
-          Attempts allowed on one issue before the run is refused. Three failed
+          Attempts allowed on one issue before the run is refused. Three
           attempts means the issue was scoped wrong, not that it needs a fourth.
+          Counted as runs, not failures: one marker comment goes up when a run
+          starts, so a run that then refuses - an unmerged dependency, a command
+          it needs denied - has spent an attempt too. Deliberate. The cost is a
+          slice of the subscription either way, and the alternative is deciding
+          after the fact which runs "really" counted.
         type: number
         default: 3
       run-label:
@@ -218,7 +223,7 @@ jobs:
             edit --add-label 'agent:blocked' --remove-label "$RUN_LABEL" || true
             comment --body "$(printf '%s\n\n%s' \
               "$MARKER Refusing to run: this has already had $attempts agent runs." \
-              "Three failed attempts on one issue means the issue was scoped wrong, not that it needs a fourth. Labelled \`agent:blocked\`. Decompose it or rewrite the acceptance criteria, then clear the label.")" || true
+              "Three attempts on one issue means the issue was scoped wrong, not that it needs a fourth. The count is of runs, not failures. Labelled \`agent:blocked\`. Decompose it or rewrite the acceptance criteria, then clear the label.")" || true
             echo "should-run=false" >> "$GITHUB_OUTPUT"
             echo "::error::#$NUMBER has already had $attempts agent runs."
             exit 1

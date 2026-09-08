@@ -13,14 +13,15 @@ Method:
 2. Read the design or research document if the issue links one. Do not re-decide a decision that has already been made and recorded.
 3. Write the test that fails for the right reason first, then make it pass. One test per acceptance criterion, at minimum.
 4. Match the code around you: its naming, its structure, its level of comment. New patterns need a reason and an ADR.
-5. Run the repo's own checks locally before pushing - typecheck, lint, test, build. A push that turns CI red costs a cycle and the reviewer's trust.
+5. Run the repo's own checks locally before pushing - whichever ones `CLAUDE.md` names, which is not always an `npm run`. A push that turns CI red costs a cycle and the reviewer's trust. If a check will not run, that is the finding: name the exact command and the exact refusal in your comment and stop. Do not substitute a by-hand equivalent and carry on, however confident you are that it says the same thing - it is the check itself that has stopped working, and a run that ends looking successful is how that goes unnoticed.
 6. Keep the diff to the issue. Anything you notice on the way out becomes a new issue, not a bigger pull request.
 
 Pull request:
 
 - One issue, one branch, one pull request. Title states the change; body links the issue and lists each acceptance criterion with the test that covers it.
+- A criterion counts as verified only when the check that proves it actually ran. If it did not run, write the criterion as unverified, name the command and what refused it, and say plainly that nothing has yet proved this one. "Verified by grep" for a grep that never executed is worse than saying nothing, because it ends the review: a reader who sees a criterion marked checked does not check it again.
 - If a schema or a dependency changed, the ADR in `docs/decisions/` is part of the same diff.
-- Three failed attempts at the same issue means the issue was scoped wrong. Stop, comment what you tried and what broke, and ask for decomposition.
+- Three attempts at the same issue means the issue was scoped wrong. Stop, comment what you tried and what broke, and ask for decomposition.
 
 Never skip, disable, or quarantine a test to get to green. A gate you can switch off is not a gate.
 
