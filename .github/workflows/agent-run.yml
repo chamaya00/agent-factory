@@ -385,8 +385,23 @@ jobs:
               # rewrite the gates it is being checked by.
               tools="$tools,Bash(make:*),Bash(pytest:*),Bash(python -m pytest:*),Bash(python3 -m pytest:*)"
               tools="$tools,Bash(go test:*),Bash(cargo test:*)"
-              tools="$tools,Bash(bash tests/:*),Bash(bash scripts/:*),Bash(sh tests/:*),Bash(sh scripts/:*)"
-              tools="$tools,Bash(./tests/:*),Bash(./scripts/:*)"
+              #
+              # `foo:*` is shorthand for `foo *`, and the space is part of the
+              # rule. An entry whose prefix ends mid-argument therefore matches
+              # nothing at all: `Bash(bash tests/:*)` asks for `bash tests/`
+              # followed by a space, which no real command is, and the six
+              # script-runner entries below were all written that way. Run
+              # 34200686220 is what that cost - the engineer on
+              # new-project-agents-v3#18 wrote the whole diff, was refused
+              # `bash tests/check.sh` and `./tests/check.sh` by an allowlist
+              # that names both, and stopped without pushing, which is what its
+              # role tells it to do when a check will not run.
+              #
+              # A bare trailing `*` has no space before it, so it may end
+              # mid-argument: `Bash(bash tests/*)` matches `bash tests/check.sh`
+              # and grants nothing the broken form was not already meant to.
+              tools="$tools,Bash(bash tests/*),Bash(bash scripts/*),Bash(sh tests/*),Bash(sh scripts/*)"
+              tools="$tools,Bash(./tests/*),Bash(./scripts/*)"
               tools="$tools,Bash(git log:*),Bash(git switch:*),Bash(git checkout:*)"
               ;;
             *)

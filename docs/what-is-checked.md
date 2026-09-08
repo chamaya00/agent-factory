@@ -100,6 +100,15 @@ because no allowlist was passed and the action's default set is read only. The
 orchestrator surfaced it first because it runs first; the engineer would have
 been worse off, unable to write a line of code.
 
+Then the check that exists because that one was not enough: no `Bash(...:*)`
+entry may end its prefix mid-argument. `Bash(x:*)` is shorthand for `Bash(x *)`
+and the space is part of the rule, so `Bash(bash tests/:*)` asks for a command
+ending at `bash tests/` and matches nothing at all. Six entries were written
+that way and every one of them granted exactly nothing. Both checks above
+passed the whole time they were there: one confirms a role is granted Bash, the
+other that a runner needing no package.json is listed, and neither asks whether
+what is listed can match a command. Run 34200686220 is what the gap cost.
+
 ### test_ci.py
 
 Sixteen cases, run under the same `bash -e -o pipefail` GitHub uses for a `run:`
@@ -250,9 +259,12 @@ That leaves real gaps, and they are worth naming.
 - **Three of the four roles have never completed a run.** Only the researcher
   has run successfully under the current allowlist. The engineer is the one to
   watch: it is the only role that needs `Bash(npm run:*)` and the only one
-  whose output has to pass the gate rather than merely exist. Until an engineer
-  run lands a pull request that passes CI, treat step 3 of the smoke test as
-  untested rather than passing.
+  whose output has to pass the gate rather than merely exist. It has now been
+  tried once, on new-project-agents-v3#18, and it failed in exactly the place
+  this bullet points at - refused by its own test-runner grants, which is the
+  failure the check above now catches. Until an engineer run lands a pull
+  request that passes CI, treat step 3 of the smoke test as untested rather
+  than passing.
 - **Nothing confirms branch protection still matches the job names.**
   `bootstrap` reports the names; keeping the rule pointed at them is manual,
   and the drift reads as green.

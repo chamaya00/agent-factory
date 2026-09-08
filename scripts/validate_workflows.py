@@ -214,6 +214,59 @@ def check_engineer_can_run_tests() -> None:
         )
 
 
+def check_allowlist_entries_can_match() -> None:
+    """No `Bash(...:*)` entry may end its prefix mid-argument.
+
+    `Bash(x:*)` is shorthand for `Bash(x *)`, and the space is part of the rule,
+    so a prefix ending in `/` names a command that cannot exist:
+    `Bash(bash tests/:*)` asks for `bash tests/` followed by a space. Six
+    entries were written that way and every one of them granted nothing.
+
+    This is the check for the failure that produced it, and it exists next to
+    `check_engineer_can_run_tests` because that check passed throughout: it
+    confirms a runner entry is present, which says nothing about whether the
+    entry can ever match. Run 34200686220 is what the gap cost - an engineer
+    that wrote its whole diff, was refused `bash tests/check.sh` by an allowlist
+    naming `bash tests/`, and stopped without pushing. Write `Bash(bash
+    tests/*)` instead: a bare trailing `*` has no space in front of it.
+    """
+    workflow = WORKFLOWS / "agent-run.yml"
+    if not workflow.exists():
+        return
+
+    data = yaml.safe_load(workflow.read_text())
+    script = ""
+    for job in (data.get("jobs") or {}).values():
+        for step in (job or {}).get("steps") or []:
+            if isinstance(step, dict) and step.get("name") == ALLOWLIST_STEP:
+                script = step.get("run") or ""
+    if not script:
+        return
+
+    # Assignments only. The comments around them quote the broken form on
+    # purpose, and a guard that reads those reports the explanation as the bug.
+    entries: set[str] = set()
+    for line in script.splitlines():
+        line = line.strip()
+        if line.startswith("#"):
+            continue
+        match = re.match(r"""(?:tools|common)=['"](.*)['"]\s*$""", line)
+        if not match:
+            continue
+        value = match.group(1).replace("$common", "").replace("$tools", "")
+        entries.update(name.strip() for name in value.split(",") if name.strip())
+
+    for name in sorted(entries):
+        match = re.fullmatch(r"Bash\((.*):\*\)", name)
+        if match and match.group(1).endswith("/"):
+            errors.append(
+                f".github/workflows/agent-run.yml: allowlist entry {name} can "
+                f"never match. `:*` means the prefix then a space, so this asks "
+                f"for a command ending at {match.group(1)!r}; write "
+                f"Bash({match.group(1)}*) instead"
+            )
+
+
 def main() -> int:
     paths = sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml"))
     if TEMPLATES.is_dir():
@@ -225,6 +278,7 @@ def main() -> int:
         check(path)
     check_roles_can_work()
     check_engineer_can_run_tests()
+    check_allowlist_entries_can_match()
     if errors:
         print(f"guard: {len(errors)} problem(s)\n")
         for error in errors:
