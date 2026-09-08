@@ -28,6 +28,19 @@ Everything phase 7 asked for, still: the provisioned repository, the OAuth
 secret, both Actions settings, the nine labels, branch protection on the check
 names that actually reported, and a release tag matching the plugin manifest.
 
+One thing that reads as a prerequisite and is not. Phase 7 leaves you with a
+real gate; a repository provisioned fresh has the placeholder instead, and that
+is fine - do not try to replace it before filing an objective. There is nothing
+to replace it with. The stack is what the research child chooses, and until it
+has, any real gate fails on a default branch that does not have the stack yet.
+
+So expect the swap to happen mid-run rather than before it, and expect the first
+engineer pull request to be red when it does: the tripwire firing is the signal,
+not a failure. The research and design children write only to `docs/` and stay
+green. Stop before queueing the first engineer child, or at the latest when its
+pull request goes red, and make the swap on that pull request's branch - the
+comment at the top of `ci.yml` says why that branch and not the default one.
+
 Then one more, and it is new. Publishing has to be set up before an objective is
 filed, because an agent cannot do it:
 

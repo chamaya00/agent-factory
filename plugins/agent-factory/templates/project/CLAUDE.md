@@ -14,9 +14,13 @@
 
 - Install: [command]
 - Dev: [command]
-- Typecheck / lint / test / build: `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build`
+- Checks CI runs: [one line per check, naming the command. On a Node project
+  that is `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build`.
+  On a project with no package manager it might be a single `bash
+  tests/check.sh`, and one check is a complete answer - name what this project
+  has rather than the four a Node project would have.]
 
-The four scripts above are what CI runs once the gate is real. Until then it is
+The checks above are what CI runs once the gate is real. Until then it is
 not: `.github/workflows/ci.yml` ships a placeholder that checks the scaffolding
 is intact and fails the moment product code lands, because a project gets its
 gate before it gets its stack and a gate that goes green on untested code is
@@ -33,6 +37,13 @@ that thing.
 Objectives become issues labelled `objective`. The orchestrator splits one into
 2-5 child issues, each with acceptance criteria and one role label. A human
 labels a child `agent:queued` when it is ready to run. Nothing runs itself.
+
+Ready means the issues it depends on are merged to the default branch, not
+merely finished and labelled `agent:review`. The researcher and the designer
+cannot open pull requests - they push a branch and leave a link for a human -
+so their work can be complete and still invisible to the next agent, which
+reads the default branch. A run started too early refuses, correctly, and still
+spends one of that issue's three attempts.
 
 Labels: `objective`, `agent:queued`, `agent:running`, `agent:review`,
 `agent:blocked`, `needs-decomposition`, `role:researcher`, `role:designer`,

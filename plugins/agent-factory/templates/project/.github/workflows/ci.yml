@@ -36,6 +36,25 @@ name: ci
 #
 # Provisioning onto a repository that already has those four scripts skips all
 # of this and starts on the Node path.
+#
+# Where that swap is made matters, and the obvious place is wrong. What trips
+# the tripwire is the first engineer pull request, and an agent may not edit
+# this file, so a human makes the change. Making it on the default branch fails
+# twice over: the Node path's first step is to find a lockfile, and the lockfile
+# is in that pull request rather than on the default branch yet - and while
+# `ci / scaffolding` is still a required check, that pull request cannot merge
+# to bring it. The gate is then deadlocked against the change that would fix it.
+#
+# Push the replacement onto the engineer's pull request branch instead. The new
+# check reports there, which is what makes its name selectable in the branch
+# protection settings, so the rule can be re-pointed while the pull request is
+# still open - the same sitting the note above asks for. The default branch is
+# green from the first commit and no merge lands unguarded.
+#
+# If the project has no package manager - a static site, a shell tool, anything
+# the commands path exists for - then this path is the destination rather than a
+# waypoint. Keep `commands`, replace the scaffolding checks in it with the
+# project's real ones, and give `check-name` a name that describes them.
 # ---------------------------------------------------------------------------
 
 on:
