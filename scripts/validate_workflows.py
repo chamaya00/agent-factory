@@ -267,6 +267,105 @@ def check_allowlist_entries_can_match() -> None:
             )
 
 
+HANDBACK_STEP = "Hand back to a human"
+ATTEMPT_MARKER = "<!-- agent-factory:attempt -->"
+
+
+def agent_run_steps() -> list[dict]:
+    """Every step of agent-run.yml, or an empty list if it is unreadable."""
+    workflow = WORKFLOWS / "agent-run.yml"
+    if not workflow.exists():
+        return []
+    data = yaml.safe_load(workflow.read_text())
+    steps: list[dict] = []
+    for job in (data.get("jobs") or {}).values():
+        for step in (job or {}).get("steps") or []:
+            if isinstance(step, dict):
+                steps.append(step)
+    return steps
+
+
+def check_prompt_states_the_turn_budget() -> None:
+    """The prompt must tell the agent how many turns it has.
+
+    `--max-turns` is passed to the SDK but never mentioned to the agent, so the
+    one limit that can kill a run mid-sentence is the one thing the agent cannot
+    see. It reads exhaustively, plans to commit at the end, and the cap arrives
+    first - the run fails, nothing uncommitted survives, and the attempt is
+    spent with no branch to resume from.
+
+    This is the check for the failure that produced it. new-project-agents-v3#19
+    ended `error_max_turns` at 41 turns with its checklist stopped at "read the
+    design spec": eight minutes and a slice of the subscription, no branch
+    pushed, and the issue left agent:blocked as though it had been scoped wrong.
+    """
+    for step in agent_run_steps():
+        if not str(step.get("uses") or "").startswith("anthropics/claude-code-action"):
+            continue
+        prompt = ((step.get("with") or {}).get("prompt")) or ""
+        if "inputs.max-turns" not in prompt:
+            errors.append(
+                ".github/workflows/agent-run.yml: the agent prompt never states "
+                "the turn budget. A cap the agent cannot see is a cap it cannot "
+                "spend deliberately; name inputs.max-turns in the prompt."
+            )
+        return
+
+
+def check_failure_is_diagnosed() -> None:
+    """A failed run must say why on the issue, not just label it.
+
+    `agent:blocked` alone cannot distinguish an agent that got the work wrong
+    from a harness that stopped it, and those want opposite responses: rewrite
+    the issue, or raise the cap and re-queue. Told nothing, a human reads the
+    label as the former and decomposes an issue that was scoped correctly.
+    """
+    for step in agent_run_steps():
+        if step.get("name") != HANDBACK_STEP:
+            continue
+        script = step.get("run") or ""
+        if "claude-execution-output.json" not in script:
+            errors.append(
+                f".github/workflows/agent-run.yml: the {HANDBACK_STEP!r} step "
+                "does not read the action's execution output, so a failed run "
+                "leaves a label and no reason. Diagnosing it means reading the "
+                "raw job log, which is the wrong place for the person holding "
+                "the issue."
+            )
+        if "comment" not in script:
+            errors.append(
+                f".github/workflows/agent-run.yml: the {HANDBACK_STEP!r} step "
+                "posts no comment on failure; the label is not the diagnosis."
+            )
+        return
+    errors.append(
+        f".github/workflows/agent-run.yml: no {HANDBACK_STEP!r} step, so a run "
+        "that fails leaves the issue labelled agent:running forever"
+    )
+
+
+def check_only_the_attempt_marker_counts_attempts() -> None:
+    """Only the run-start comment may carry the attempt marker.
+
+    Preflight counts attempts by counting comments containing
+    `<!-- agent-factory:attempt -->`, so any second comment carrying that string
+    doubles the count of every run and refuses the issue after two. The failure
+    comment sits in the same workflow and is the obvious place to paste the
+    marker from, which is exactly why this is checked rather than remembered.
+    """
+    for step in agent_run_steps():
+        if step.get("name") != HANDBACK_STEP:
+            continue
+        if ATTEMPT_MARKER in (step.get("run") or ""):
+            errors.append(
+                f".github/workflows/agent-run.yml: the {HANDBACK_STEP!r} step "
+                f"carries {ATTEMPT_MARKER}, which preflight counts. Every run "
+                "would spend two attempts and the third would be refused after "
+                "one real try. Use a different marker."
+            )
+        return
+
+
 def main() -> int:
     paths = sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml"))
     if TEMPLATES.is_dir():
@@ -279,6 +378,9 @@ def main() -> int:
     check_roles_can_work()
     check_engineer_can_run_tests()
     check_allowlist_entries_can_match()
+    check_prompt_states_the_turn_budget()
+    check_failure_is_diagnosed()
+    check_only_the_attempt_marker_counts_attempts()
     if errors:
         print(f"guard: {len(errors)} problem(s)\n")
         for error in errors:
