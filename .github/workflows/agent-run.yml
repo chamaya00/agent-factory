@@ -25,7 +25,11 @@ on:
           orchestrator spends most of a decomposition reading the roles, the
           skills, the memory file and the issue before it writes anything, and
           the action fails the whole run when the cap is hit even if the work
-          itself finished.
+          itself finished. Because that failure is terminal, the number is
+          stated to the agent in the prompt - a budget it cannot see is one it
+          cannot spend deliberately - and the hand-back step names it on the
+          issue when a run dies on it, so the next reader can tell a cap from a
+          scoping problem without opening the job log.
         type: number
         default: 40
       timeout-minutes:
@@ -445,6 +449,21 @@ jobs:
             If this attempt fails the same way an earlier one did, stop and say
             so rather than trying a variation.
 
+            You have ${{ inputs.max-turns }} turns. Reaching that cap kills the
+            run where it stands: the whole job fails, nothing uncommitted
+            survives, and the attempt is spent whether or not you had finished.
+            So spend the budget in that order - commit and push as soon as you
+            have something coherent, and keep committing as you go, rather than
+            reading everything first and writing at the end. A pushed branch
+            that is half the issue is worth more than a full plan that died
+            with the container.
+
+            A refused command is a configuration bug in this workflow, not a
+            lock to pick. Name the exact command and what refused it, then
+            stop. Do not retry it with different flags, a different quoting, or
+            a different path - every one of those is a turn off the budget
+            above, and the answer does not change.
+
             Your role definition names `mcp__github__*` tools. In this
             environment that capability is the `gh` CLI instead, already
             authenticated: `gh issue create`, `gh issue edit`, `gh issue
@@ -473,10 +492,88 @@ jobs:
           ISSUE: ${{ needs.preflight.outputs.issue }}
           KIND: ${{ needs.preflight.outputs.kind }}
           JOB_STATUS: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           gh "$KIND" edit "$ISSUE" --remove-label 'agent:running' || true
           if [ "$JOB_STATUS" = "success" ]; then
             gh "$KIND" edit "$ISSUE" --add-label 'agent:review' || true
-          else
-            gh "$KIND" edit "$ISSUE" --add-label 'agent:blocked' || true
+            exit 0
+          fi
+
+          gh "$KIND" edit "$ISSUE" --add-label 'agent:blocked' || true
+
+          # Why it failed, in one comment, rather than a bare label. The label
+          # says a human is needed; it does not say whether the agent got the
+          # work wrong or the harness stopped it, and those want opposite
+          # responses - rewrite the issue, or raise the cap and re-queue.
+          #
+          # Best effort on purpose. The action's output file is its own format
+          # and not a contract, so anything unreadable here falls through to
+          # the label alone rather than failing the step or posting nonsense.
+          summary="$(python3 - <<'PY' || true
+          import json, os, pathlib
+
+          path = pathlib.Path(os.environ.get("RUNNER_TEMP", "")) / "claude-execution-output.json"
+          try:
+              raw = path.read_text()
+          except OSError:
+              raise SystemExit(0)
+
+          records = []
+          try:
+              parsed = json.loads(raw)
+              records = parsed if isinstance(parsed, list) else [parsed]
+          except json.JSONDecodeError:
+              # Also accept newline-delimited records.
+              for line in raw.splitlines():
+                  line = line.strip()
+                  if not line:
+                      continue
+                  try:
+                      records.append(json.loads(line))
+                  except json.JSONDecodeError:
+                      pass
+
+          result = None
+          for record in records:
+              if isinstance(record, dict) and record.get("type") == "result":
+                  result = record
+          if result is None:
+              raise SystemExit(0)
+
+          subtype = str(result.get("subtype") or "unknown")
+          turns = result.get("num_turns")
+          denials = result.get("permission_denials_count")
+
+          parts = [f"ended `{subtype}`"]
+          if isinstance(turns, int):
+              parts.append(f"{turns} turns")
+          if isinstance(denials, int) and denials:
+              parts.append(f"{denials} permission denial(s)")
+          print("The run " + ", ".join(parts) + ".")
+
+          if subtype == "error_max_turns":
+              print()
+              print(
+                  "That is the turn cap, not a verdict on this issue. The work "
+                  "was cut off mid-run and anything uncommitted is gone. Before "
+                  "treating this as a scoping problem, check whether the run was "
+                  "simply too big for the budget: raise `max-turns` on the caller "
+                  "and re-queue, or split the issue."
+              )
+          if isinstance(denials, int) and denials:
+              print()
+              print(
+                  "Permission denials mean commands the role needed are missing "
+                  "from the allowlist in `agent-run.yml`. Each one also costs a "
+                  "turn. Worth reading the run log before the next attempt."
+              )
+          PY
+          )"
+
+          if [ -n "$summary" ]; then
+            gh "$KIND" comment "$ISSUE" --body "$(printf '%s\n\n%s\n\n%s' \
+              "<!-- agent-factory:diagnosis --> **Run failed.**" \
+              "$summary" \
+              "[Run log]($RUN_URL)")" || true
           fi
