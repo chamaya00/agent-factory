@@ -57,11 +57,42 @@ Then read `.github/workflows/*.yml` and find every line matching
 `uses: chamaya00/agent-factory/...@`. Those are the workflow pins. Collect the
 ones not already at the target version.
 
-The pins are the four workflow callers and nothing else. There is no
-marketplace `ref` to move: this repository loads its commands and roles from
-its own `.claude/` directory, so the copies you are writing in this same commit
-are the only thing that decides which release it runs. That includes this
-command - after this merges, `/update-agents` here is the copy from `$1`.
+There is no marketplace `ref` to move: this repository loads its commands and
+roles from its own `.claude/` directory, so the copies you are writing in this
+same commit are the only thing that decides which release it runs. That
+includes this command - after this merges, `/update-agents` here is the copy
+from `$1`.
+
+## The callers, which are not only their pins
+
+A caller's `on:` block is the factory's. Its `with:` inputs are the project's.
+That split is the whole of this section, and getting it wrong either breaks a
+project or silently withholds a release from it.
+
+Moving only the pin used to be the whole job, and that was wrong: `v1.14.0`
+adds a `pull_request: [closed]` trigger, without which an objective never
+learns that a child's work merged and stops mid-chain. A release can change
+what a caller has to listen for, and a pin move does not carry that.
+
+So compare each caller against its template in the release at
+`plugins/agent-factory/templates/project/.github/workflows/`, and treat the
+two halves differently:
+
+- **The `on:` block and the `uses:` line are the factory's.** Bring them to the
+  template's shape, substituting `$1` for `__FACTORY_VERSION__`. A trigger the
+  template has and the caller does not is a trigger the release needs.
+- **Everything else in the caller is the project's.** `with:` inputs, job
+  names, and the comments a project wrote about its own gate stay exactly as
+  they are. `ci.yml` in particular carries the project's `check-name` and its
+  `commands`, which the template cannot know and must never overwrite.
+
+Never rewrite a caller wholesale from the template. It reads as tidying and it
+deletes the one thing in that file nobody else can reconstruct.
+
+If a caller has diverged in a way you cannot reconcile - a trigger it
+deliberately removed, a job the template no longer has - do not guess. Leave
+that file alone, and say plainly in the body which file it was and what you did
+not do to it, so the reader knows the release is only partly applied.
 
 If nothing at all differs, say so and stop.
 

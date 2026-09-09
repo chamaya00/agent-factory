@@ -14,6 +14,13 @@ on:
     types: [labeled]
   issue_comment:
     types: [created]
+  # A merge is a wake. The researcher and the designer push a branch and a
+  # human merges it later, so an objective learns a child finished but never
+  # that its work landed - and landing is what makes the next child ready.
+  # The factory workflow handles this event in its own job and refuses to
+  # spend a run on the pull request itself.
+  pull_request:
+    types: [closed]
   workflow_dispatch:
     inputs:
       issue-number:
