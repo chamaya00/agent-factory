@@ -439,6 +439,53 @@ def check_only_our_own_app_may_start_a_run() -> None:
     )
 
 
+def check_a_merge_can_wake_an_objective() -> None:
+    """A merge is the other half of the loop and needs its own trigger and job.
+
+    The hand-back tells an objective that a child's run ended. It cannot tell
+    it that the child's work landed - the researcher and designer push a branch
+    and a human merges it later - and landing is what makes the next child
+    ready. Without this an objective reports "waiting on the merge", the merge
+    happens, and nothing wakes it.
+    """
+    template = TEMPLATES / "project" / ".github" / "workflows" / "agent-run.yml"
+    if template.exists():
+        data = yaml.safe_load(template.read_text())
+        triggers = (data or {}).get("on", (data or {}).get(True)) or {}
+        pr = triggers.get("pull_request") or {}
+        if "closed" not in (pr.get("types") or []):
+            errors.append(
+                f"{template.relative_to(ROOT)}: no `pull_request: [closed]` "
+                "trigger, so a merge raises nothing and an objective stops "
+                "mid-chain waiting for one."
+            )
+
+    workflow = WORKFLOWS / "agent-run.yml"
+    if not workflow.exists():
+        return
+    data = yaml.safe_load(workflow.read_text())
+    jobs = (data or {}).get("jobs") or {}
+    wake = jobs.get("wake-on-merge")
+    if not wake:
+        errors.append(
+            ".github/workflows/agent-run.yml: no wake-on-merge job, so the "
+            "pull_request trigger the callers carry has nothing to handle it."
+        )
+    elif "merged == true" not in str(wake.get("if", "")):
+        errors.append(
+            ".github/workflows/agent-run.yml: wake-on-merge does not require "
+            "the pull request to be merged, so closing one unmerged would "
+            "queue the objective as though the work had landed."
+        )
+    preflight_if = str((jobs.get("preflight") or {}).get("if", ""))
+    if "pull_request" not in preflight_if:
+        errors.append(
+            ".github/workflows/agent-run.yml: preflight does not exclude "
+            "pull_request events, so a merge would also reach it as a pull "
+            "request to work and spend a run on it."
+        )
+
+
 def main() -> int:
     paths = sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml"))
     if TEMPLATES.is_dir():
@@ -456,6 +503,7 @@ def main() -> int:
     check_only_the_attempt_marker_counts_attempts()
     check_concurrency_gates_the_agent_not_the_preflight()
     check_only_our_own_app_may_start_a_run()
+    check_a_merge_can_wake_an_objective()
     if errors:
         print(f"guard: {len(errors)} problem(s)\n")
         for error in errors:

@@ -53,6 +53,12 @@ if args[:2] == ["issue", "view"]:
         print(issue.get("body", ""))
     sys.exit(0)
 
+# `gh pr view <n> --json closingIssuesReferences`
+if args[:2] == ["pr", "view"]:
+    number = args[2]
+    print("\\n".join(str(n) for n in state.get("closes", {}).get(number, [])))
+    sys.exit(0)
+
 # `gh api repos/<owner>/<repo>/issues/<n> --jq .parent.number`
 if args[:1] == ["api"]:
     number = args[1].rsplit("/", 1)[-1]
@@ -195,6 +201,84 @@ def _():
         "28": objective(labels=["objective"]),
     }}
     return not woke(run_case(state, role="orchestrator"), "28")
+
+
+MERGE_STEP = "Queue the parent objective"
+
+
+def merge_script() -> str:
+    data = yaml.safe_load(WORKFLOW.read_text())
+    for job in (data.get("jobs") or {}).values():
+        for step in (job or {}).get("steps") or []:
+            if step.get("name") == MERGE_STEP:
+                return step["run"]
+    raise SystemExit(f"no {MERGE_STEP!r} step in agent-run.yml")
+
+
+def run_merge(state: dict, pr: str = "43") -> list[str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        gh = tmp / "bin" / "gh"
+        gh.parent.mkdir()
+        gh.write_text(FAKE_GH)
+        gh.chmod(0o755)
+        calls = tmp / "calls"
+        calls.touch()
+        state_file = tmp / "state.json"
+        state_file.write_text(json.dumps(state))
+        env = dict(os.environ)
+        env["PATH"] = f"{gh.parent}:{env['PATH']}"
+        env["GH_STATE"] = str(state_file)
+        env["GH_CALLS"] = str(calls)
+        env["GH_TOKEN"] = "fake-token"
+        env["GH_REPO"] = "owner/repo"
+        env["PR"] = pr
+        env["RUN_LABEL"] = "agent:queued"
+        subprocess.run(["bash", "-c", merge_script()], env=env,
+                       capture_output=True, text=True)
+        return calls.read_text().splitlines()
+
+
+@case("a merged pull request wakes the objective its child belongs to")
+def _():
+    state = {
+        "closes": {"43": [40]},
+        "issues": {
+            "40": objective(labels=["role:researcher"], body="Parent: #39"),
+            "39": objective(labels=["objective"]),
+        },
+    }
+    return woke(run_merge(state), "39")
+
+
+@case("a merged pull request closing nothing wakes nothing")
+def _():
+    state = {"closes": {"43": []}, "issues": {}}
+    return not any("issue edit" in c for c in run_merge(state))
+
+
+@case("a merge does not re-queue an objective already running")
+def _():
+    state = {
+        "closes": {"43": [40]},
+        "issues": {
+            "40": objective(labels=["role:researcher"], body="Parent: #39"),
+            "39": objective(labels=["objective", "agent:running"]),
+        },
+    }
+    return not woke(run_merge(state), "39")
+
+
+@case("a merge does not wake an objective stopped for a human")
+def _():
+    state = {
+        "closes": {"43": [40]},
+        "issues": {
+            "40": objective(labels=["role:researcher"], body="Parent: #39"),
+            "39": objective(labels=["objective", "agent:blocked"]),
+        },
+    }
+    return not woke(run_merge(state), "39")
 
 
 def main() -> int:

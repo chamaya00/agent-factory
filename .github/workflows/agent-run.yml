@@ -110,8 +110,99 @@ permissions:
   # Never actions: write. A system that can rewrite its own gates has no gates.
 
 jobs:
+  # A merge is the other half of the loop, and it used to be missing.
+  #
+  # The hand-back wakes an objective when a child's run ends, so the
+  # orchestrator learns that a child finished. It cannot learn that the child's
+  # work actually landed: the researcher and the designer push a branch and a
+  # human merges it later, and a merge raises no issue event. So an objective
+  # would report "waiting on #40 to merge", the human would merge, and nothing
+  # would wake it - the orchestrator's own status comment promised it would
+  # pick that up, and it could not.
+  #
+  # Observed on new-project-agents-v3#39: research merged at 18:04 and no run
+  # started, because the last event this workflow could see was the child's own
+  # run ending seven minutes earlier.
+  #
+  # This job closes that. It writes a label and nothing else - the objective's
+  # own run is started by the label event that follows, through the ordinary
+  # preflight, so a merge cannot skip any of the gating an issue normally gets.
+  wake-on-merge:
+    name: wake the objective a merge unblocks
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    env:
+      APP_ID: ${{ secrets.app-id }}
+    steps:
+      - name: Mint the agent identity token
+        id: app-token
+        if: env.APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.app-id }}
+          private-key: ${{ secrets.app-private-key }}
+
+      - name: Queue the parent objective
+        env:
+          # The App token, deliberately: a label written with github.token
+          # raises no event, so the objective would be labelled and never run.
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          RUN_LABEL: ${{ inputs.run-label }}
+        run: |
+          # Best effort throughout. A merge that wakes nothing degrades to what
+          # happened before this job existed - a human queues the objective -
+          # so nothing here is allowed to fail the run.
+          children="$(gh pr view "$PR" --json closingIssuesReferences \
+            --jq '.closingIssuesReferences[].number' 2>/dev/null || true)"
+          if [ -z "$children" ]; then
+            echo "#$PR closes no issue. Nothing to wake."
+            exit 0
+          fi
+
+          for child in $children; do
+            # The same body line the hand-back reads. A run cannot create a
+            # native sub-issue link, so this is the link that exists.
+            parent="$(gh issue view "$child" --json parent --jq '.parent.number' 2>/dev/null || true)"
+            if [ -z "$parent" ] || [ "$parent" = "null" ]; then
+              parent="$(gh issue view "$child" --json body --jq '.body' 2>/dev/null \
+                | head -5 \
+                | grep -oiE '^parent:[[:space:]]*#[0-9]+' \
+                | grep -oE '[0-9]+' \
+                | head -1 || true)"
+            fi
+            if [ -z "$parent" ] || [ "$parent" = "null" ]; then
+              echo "#$child has no parent objective. Nothing to wake for it."
+              continue
+            fi
+
+            plabels="$(gh issue view "$parent" --json labels --jq '.labels[].name' 2>/dev/null || true)"
+            has() { echo "$plabels" | grep -qx "$1"; }
+            has 'objective' || { echo "#$parent is not an objective. Leaving it alone."; continue; }
+            if has 'agent:blocked' || has 'needs-decomposition'; then
+              echo "#$parent is stopped for a human. Not waking it."
+              continue
+            fi
+            if has "$RUN_LABEL" || has 'agent:running'; then
+              echo "#$parent is already queued or running."
+              continue
+            fi
+
+            echo "#$child merged. Waking the orchestrator on #$parent."
+            gh issue edit "$parent" --add-label "$RUN_LABEL" || true
+          done
+
   preflight:
     name: decide whether to run
+    # A merge is handled above. Without this, a pull_request event would reach
+    # the preflight as a pull request to work, and spend a run on it.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
