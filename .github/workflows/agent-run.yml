@@ -615,6 +615,16 @@ jobs:
           # Best effort, deliberately. Every failure here degrades to exactly
           # the old behaviour - the child keeps its label and a human queues the
           # parent by hand - so nothing below is allowed to fail the step.
+          #
+          # This has run end to end, once, and it is worth not re-deriving:
+          # new-project-agents-v3#39, run 34385990685. A researcher child
+          # finished, this step found the parent by its body line and labelled
+          # it, the orchestrator woke as supervision run 2 of 20, read all three
+          # children, and correctly declined to queue the next one because the
+          # first child's branch had no merged pull request behind it yet. Three
+          # separate faults had to be fixed before that worked: the concurrency
+          # group (below), the parent lookup (here), and allowed_bots on the
+          # action step.
           wake_parent() {
             # An orchestrator run is not a child, and only issues have parents.
             [ "$KIND" = "issue" ] || return 0
