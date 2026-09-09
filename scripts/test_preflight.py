@@ -129,6 +129,7 @@ DEFAULT_INPUTS = {
     "run-label": "agent:queued",
     "trigger-phrase": "@claude",
     "max-attempts": 3,
+    "max-supervisions": 20,
     "skip-path-patterns": "docs/**\n*.md\n**/*.md\npackage-lock.json\n**/package-lock.json\npnpm-lock.yaml\n**/pnpm-lock.yaml\nyarn.lock\n**/yarn.lock\nLICENSE\n",
 }
 
@@ -219,6 +220,21 @@ CASES = [
         ("false", "", 1),
     ),
     (
+        # The whole point of the second budget. Under one shared cap this was
+        # refused, which killed every objective with more than two children
+        # partway through work it was doing correctly.
+        "a fourth orchestrator run on an objective still runs",
+        event(),
+        state(["objective", "agent:queued"], attempts=3),
+        ("true", "orchestrator", 0),
+    ),
+    (
+        "an objective past the supervision budget fails the job",
+        event(),
+        state(["objective", "agent:queued"], attempts=20),
+        ("false", "", 1),
+    ),
+    (
         "a docs-only pull request is not worth a run",
         event(event_name="issue_comment", kind="pr", comment_body="@claude take a look"),
         state(["role:engineer"], changed=["README.md", "docs/design/1-flow.md", "package-lock.json"]),
@@ -242,6 +258,24 @@ CASES = [
 
 def main() -> int:
     failures = 0
+
+    # Every workflow input the preflight can read needs a default here, or the
+    # harness dies with a KeyError the moment someone adds one - which reads
+    # like a broken test suite rather than an incomplete fixture, and is how
+    # max-supervisions was added the first time.
+    # Only the inputs the preflight actually reads: max-turns and
+    # timeout-minutes are the agent job's business and never reach this step.
+    _, env_block, _ = preflight_script()
+    read = set()
+    for value in env_block.values():
+        read.update(re.findall(r"inputs\.([a-z0-9-]+)", str(value)))
+    missing = sorted(read - set(DEFAULT_INPUTS))
+    if missing:
+        failures += 1
+        print(f"  FAIL DEFAULT_INPUTS is missing workflow input(s): {', '.join(missing)}")
+    else:
+        print("  ok   every workflow input has a harness default")
+
     for name, evt, st, expected in CASES:
         (should_run, role, code, calls), result = run_case(name, evt, st)
         actual = (should_run, role, code)
@@ -263,11 +297,21 @@ def main() -> int:
     else:
         print("  ok   refusing a fourth attempt labels agent:blocked and says why")
 
+    # A supervision refusal that recites the three-strike rule sends the reader
+    # off to rewrite acceptance criteria that were never the problem.
+    (_, _, _, calls), _ = run_case("supervision cap", event(), state(["objective", "agent:queued"], attempts=20))
+    said = " ".join(calls)
+    if "supervision budget" not in said or "three attempts on one issue" in said.lower():
+        failures += 1
+        print("  FAIL refusing an objective must name the supervision budget, not the three-strike rule")
+    else:
+        print("  ok   refusing an objective names the supervision budget")
+
     print()
     if failures:
         print(f"preflight: {failures} failing case(s)")
         return 1
-    print(f"preflight: {len(CASES) + 1} cases passed")
+    print(f"preflight: {len(CASES) + 3} cases passed")
     return 0
 
 

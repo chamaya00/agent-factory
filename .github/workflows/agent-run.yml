@@ -51,6 +51,21 @@ on:
           after the fact which runs "really" counted.
         type: number
         default: 3
+      max-supervisions:
+        description: >-
+          Runs allowed on one objective before the orchestrator is refused.
+          Separate from max-attempts, and deliberately much larger, because the
+          two count different things. A run on a child is an attempt at that
+          work, and three means the scoping was wrong. A run on an objective is
+          the orchestrator supervising - it is woken every time a child reaches
+          agent:review or agent:blocked, so a healthy four-child objective
+          spends a dozen of these and none of that is evidence of anything.
+          Counted the same way, by marker comment. It is a stop on a loop, not
+          a judgement: hitting it means something is waking the orchestrator
+          more often than the work justifies, which is worth reading before
+          raising the number.
+        type: number
+        default: 20
       run-label:
         description: Label on an issue that means "run the agent now".
         type: string
@@ -118,6 +133,8 @@ jobs:
       issue: ${{ steps.decide.outputs.issue }}
       kind: ${{ steps.decide.outputs.kind }}
       attempt: ${{ steps.decide.outputs.attempt }}
+      budget: ${{ steps.decide.outputs.budget }}
+      marker: ${{ steps.decide.outputs.marker }}
     steps:
       - name: Resolve role, gate, and attempt count
         id: decide
@@ -131,10 +148,12 @@ jobs:
           RUN_LABEL: ${{ inputs.run-label }}
           TRIGGER_PHRASE: ${{ inputs.trigger-phrase }}
           MAX_ATTEMPTS: ${{ inputs.max-attempts }}
+          MAX_SUPERVISIONS: ${{ inputs.max-supervisions }}
           COMMENT_BODY: ${{ github.event.comment.body }}
           LABEL_NAME: ${{ github.event.label.name }}
           SKIP_PATTERNS: ${{ inputs.skip-path-patterns }}
           MARKER: '<!-- agent-factory:attempt -->'
+          SUPERVISION_MARKER: '<!-- agent-factory:supervision -->'
         run: |
           set -euo pipefail
 
@@ -220,14 +239,38 @@ jobs:
             fi
           fi
 
-          # Attempt cap. Each run leaves exactly one marker comment, so the
-          # markers are the count. Three means the scoping was wrong.
-          attempts="$(view --json comments --jq "[.comments[] | select(.body | contains(\"$MARKER\"))] | length" || echo 0)"
-          if [ "$attempts" -ge "$MAX_ATTEMPTS" ]; then
+          # Run budget. Each run leaves exactly one marker comment, so the
+          # markers are the count.
+          #
+          # Two budgets, counted with two markers, because they measure
+          # different things. A run on a child is an attempt at that work, and
+          # three of them means the issue was scoped wrong - the three-strike
+          # rule, unchanged. A run on an objective is the orchestrator
+          # supervising, and it is woken every time one of its children reaches
+          # agent:review or agent:blocked. A four-child objective therefore
+          # spends a dozen orchestrator runs before anything has gone wrong.
+          # Counted against three, every objective with more than two children
+          # would be refused halfway through the work it was still doing
+          # correctly.
+          if [ "$role" = "orchestrator" ]; then
+            marker="$SUPERVISION_MARKER"
+            budget="$MAX_SUPERVISIONS"
+          else
+            marker="$MARKER"
+            budget="$MAX_ATTEMPTS"
+          fi
+
+          attempts="$(view --json comments --jq "[.comments[] | select(.body | contains(\"$marker\"))] | length" || echo 0)"
+          if [ "$attempts" -ge "$budget" ]; then
+            if [ "$role" = "orchestrator" ]; then
+              reason="This objective has already had $attempts orchestrator runs, which is the supervision budget. That is a stop on a loop, not the three-strike rule: something is waking the orchestrator more often than the work justifies. Read this issue's history before raising \`max-supervisions\` - a child that keeps flipping between queued and blocked is the usual cause, and raising the number spends more of the subscription on it."
+            else
+              reason="Three attempts on one issue means the issue was scoped wrong, not that it needs a fourth. The count is of runs, not failures. Labelled \`agent:blocked\`. Decompose it or rewrite the acceptance criteria, then clear the label."
+            fi
             edit --add-label 'agent:blocked' --remove-label "$RUN_LABEL" || true
             comment --body "$(printf '%s\n\n%s' \
-              "$MARKER Refusing to run: this has already had $attempts agent runs." \
-              "Three attempts on one issue means the issue was scoped wrong, not that it needs a fourth. The count is of runs, not failures. Labelled \`agent:blocked\`. Decompose it or rewrite the acceptance criteria, then clear the label.")" || true
+              "$marker Refusing to run: this has already had $attempts agent runs." \
+              "$reason")" || true
             echo "should-run=false" >> "$GITHUB_OUTPUT"
             echo "::error::#$NUMBER has already had $attempts agent runs."
             exit 1
@@ -240,6 +283,8 @@ jobs:
             echo "issue=$NUMBER"
             echo "kind=$KIND"
             echo "attempt=$((attempts + 1))"
+            echo "budget=$budget"
+            echo "marker=$marker"
           } >> "$GITHUB_OUTPUT"
 
   agent:
@@ -279,11 +324,20 @@ jobs:
           KIND: ${{ needs.preflight.outputs.kind }}
           ATTEMPT: ${{ needs.preflight.outputs.attempt }}
           ROLE: ${{ needs.preflight.outputs.role }}
+          BUDGET: ${{ needs.preflight.outputs.budget }}
+          MARKER: ${{ needs.preflight.outputs.marker }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # The marker decides which budget this run is counted against, so it
+          # comes from preflight rather than being written twice.
+          if [ "$ROLE" = "orchestrator" ]; then
+            what="supervision run $ATTEMPT of $BUDGET"
+          else
+            what="attempt $ATTEMPT of $BUDGET"
+          fi
           gh "$KIND" edit "$ISSUE" --add-label 'agent:running' --remove-label "${{ inputs.run-label }}" || true
           gh "$KIND" comment "$ISSUE" --body "$(printf '%s\n\n%s' \
-            "<!-- agent-factory:attempt --> Starting **$ROLE**, attempt $ATTEMPT of ${{ inputs.max-attempts }}." \
+            "$MARKER Starting **$ROLE**, $what." \
             "[Run log]($RUN_URL)")" || true
 
       # The roles live in this repository, under .claude/, put there by
@@ -352,8 +406,18 @@ jobs:
 
           case "$ROLE" in
             orchestrator)
-              # Creates and labels children. Writes no files, by definition.
+              # Creates and labels children, and decides which of them runs.
+              # Writes no files, by definition.
+              #
+              # The pull request commands are read-only and all four are load
+              # bearing: before queueing a child the orchestrator has to prove
+              # the issues it depends on are merged to the default branch, not
+              # merely labelled agent:review. A child queued on a dependency
+              # that only looks done refuses, correctly, and spends one of its
+              # three attempts doing it. No `gh pr merge` and no `gh pr create`:
+              # this role decides what runs, not what lands.
               tools="$common,Bash(gh issue create:*),Bash(gh issue edit:*),Bash(gh label list:*),Bash(gh search issues:*)"
+              tools="$tools,Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh pr diff:*),Bash(gh pr checks:*)"
               ;;
             researcher)
               # The action lists WebSearch and WebFetch in its own
@@ -444,10 +508,12 @@ jobs:
             clause at the end about `.claude/memory/`. Follow the house-rules,
             memory-protocol, and acceptance-criteria skills in `.claude/skills/`.
 
-            This is attempt ${{ needs.preflight.outputs.attempt }} of ${{ inputs.max-attempts }}.
+            This is run ${{ needs.preflight.outputs.attempt }} of ${{ needs.preflight.outputs.budget }} on this issue.
             Read the earlier attempts on the issue before repeating one of them.
             If this attempt fails the same way an earlier one did, stop and say
             so rather than trying a variation.
+
+            ${{ needs.preflight.outputs.role == 'orchestrator' && 'You own this objective, not just its split. If it has no children yet, decompose it and queue the first wave. If it has children, you were woken because one of them reached agent:review or agent:blocked: read the state of all of them, deal with anything blocked, queue whatever has just become ready, and replace the status picture on this issue with a current one. That budget above is supervision runs on this objective, not attempts at a piece of work - being woken a dozen times over a four-child objective is normal, and getting near the end of it is worth saying out loud rather than spending quietly.' || '' }}
 
             You have ${{ inputs.max-turns }} turns. Reaching that cap kills the
             run where it stands: the whole job fails, nothing uncommitted
@@ -491,16 +557,73 @@ jobs:
           GH_REPO: ${{ github.repository }}
           ISSUE: ${{ needs.preflight.outputs.issue }}
           KIND: ${{ needs.preflight.outputs.kind }}
+          ROLE: ${{ needs.preflight.outputs.role }}
+          RUN_LABEL: ${{ inputs.run-label }}
           JOB_STATUS: ${{ job.status }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # Hand back to the orchestrator where there is one, and to a human
+          # where there is not.
+          #
+          # A child finishing is the event the orchestrator exists to react to:
+          # a merged dependency is what makes a sibling ready to run, and a
+          # blocked child is the case a human used to fix by hand. So a child
+          # reaching either terminal state queues its parent objective, and the
+          # orchestrator wakes, reads the whole tree, and decides what happens
+          # next. Without this the roles still run, but only when a human
+          # labels each one, which is the loop this is meant to close.
+          #
+          # Best effort, deliberately. Every failure here degrades to exactly
+          # the old behaviour - the child keeps its label and a human queues the
+          # parent by hand - so nothing below is allowed to fail the step.
+          wake_parent() {
+            # An orchestrator run is not a child, and only issues have parents.
+            [ "$KIND" = "issue" ] || return 0
+            [ "$ROLE" != "orchestrator" ] || return 0
+
+            # `--json parent` is the documented field and needs a recent gh; the
+            # REST call behind it is the fallback for a runner with an older
+            # one. Neither is guaranteed on an issue that was never linked as a
+            # sub-issue, which is why an empty answer is a normal outcome here
+            # rather than an error.
+            parent="$(gh issue view "$ISSUE" --json parent --jq '.parent.number' 2>/dev/null || true)"
+            if [ -z "$parent" ] || [ "$parent" = "null" ]; then
+              parent="$(gh api "repos/$GH_REPO/issues/$ISSUE" --jq '.parent.number' 2>/dev/null || true)"
+            fi
+            if [ -z "$parent" ] || [ "$parent" = "null" ]; then
+              echo "No parent objective found for #$ISSUE. A human queues the objective."
+              return 0
+            fi
+
+            plabels="$(gh issue view "$parent" --json labels --jq '.labels[].name' 2>/dev/null || true)"
+            has() { echo "$plabels" | grep -qx "$1"; }
+
+            # Only an objective has an orchestrator to wake, and a parent a
+            # human has already stopped stays stopped: agent:blocked and
+            # needs-decomposition both mean the next move is theirs.
+            has 'objective' || { echo "#$parent is not an objective. Leaving it alone."; return 0; }
+            if has 'agent:blocked' || has 'needs-decomposition'; then
+              echo "#$parent is stopped for a human. Not waking it."
+              return 0
+            fi
+            # Already queued: the run it is waiting for will read this child's
+            # state when it starts, so a second label writes nothing and adding
+            # a label an issue already carries raises no event anyway.
+            has "$RUN_LABEL" && { echo "#$parent is already queued."; return 0; }
+
+            echo "Waking the orchestrator on #$parent."
+            gh issue edit "$parent" --add-label "$RUN_LABEL" || true
+          }
+
           gh "$KIND" edit "$ISSUE" --remove-label 'agent:running' || true
           if [ "$JOB_STATUS" = "success" ]; then
             gh "$KIND" edit "$ISSUE" --add-label 'agent:review' || true
+            wake_parent
             exit 0
           fi
 
           gh "$KIND" edit "$ISSUE" --add-label 'agent:blocked' || true
+          wake_parent
 
           # Why it failed, in one comment, rather than a bare label. The label
           # says a human is needed; it does not say whether the agent got the

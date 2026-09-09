@@ -34,16 +34,29 @@ that thing.
 
 ## How work moves
 
-Objectives become issues labelled `objective`. The orchestrator splits one into
-2-5 child issues, each with acceptance criteria and one role label. A human
-labels a child `agent:queued` when it is ready to run. Nothing runs itself.
+Objectives become issues labelled `objective`. A human labels the objective
+`agent:queued`; nothing else needs labelling by hand. The orchestrator splits it
+into 2-5 child issues, each with acceptance criteria and one role label, and
+then queues them itself as each one becomes ready.
 
-Ready means the issues it depends on are merged to the default branch, not
+It stays with the objective after the split. A child reaching `agent:review` or
+`agent:blocked` wakes it: it reads the state of every child, queues whatever the
+merge has just unblocked, rewrites and re-queues a child that blocked on its own
+scoping, and replaces the status picture on the parent issue. The parent issue
+is the whole surface - a human reads that and nothing else, and hears from the
+orchestrator when a decision is genuinely theirs.
+
+Ready means the issues a child depends on are merged to the default branch, not
 merely finished and labelled `agent:review`. The researcher and the designer
 cannot open pull requests - they push a branch and leave a link for a human -
 so their work can be complete and still invisible to the next agent, which
 reads the default branch. A run started too early refuses, correctly, and still
-spends one of that issue's three attempts.
+spends one of that issue's three attempts. That check is now the orchestrator's
+to make before it queues anything.
+
+The human still decides what merges. The orchestrator queues work and reports on
+it; it does not merge a pull request, and it cannot break a child down further -
+that comes back as `needs-decomposition` and a comment on the parent.
 
 Labels: `objective`, `agent:queued`, `agent:running`, `agent:review`,
 `agent:blocked`, `needs-decomposition`, `role:researcher`, `role:designer`,
