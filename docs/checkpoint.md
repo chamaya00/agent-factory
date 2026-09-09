@@ -93,9 +93,19 @@ only ever generate the token once - reuse the same value.
 
 ## 3. Create the GitHub App for the agent identity
 
-Why bother: pull requests opened with the default Actions token land in an
+Why bother, and this is no longer optional. Two reasons, and the second one
+arrived with v1.12.0:
+
+Pull requests opened with the default Actions token land in an
 approval-required state, so you would have to tap "Approve workflows to run" on
 every single one, from your phone, forever. An App token skips that entirely.
+
+More importantly, an orchestrator that queues its own children cannot work
+without it. Events raised by `GITHUB_TOKEN` do not start workflow runs, so with
+no App the label the orchestrator puts on a child raises nothing and the child
+never runs - and neither does the wake when a child lands. You get the
+decomposition and then silence. `docs/open-questions.md` entry 7 has the
+detail.
 
 1. `github.com/settings/apps` then **New GitHub App**.
 2. Name: something unique, for example `chamaya00-agent-factory`. GitHub App
@@ -129,9 +139,13 @@ every single one, from your phone, forever. An App token skips that entirely.
     - `AGENT_APP_PRIVATE_KEY` - the full contents of the `.pem`
 12. Delete the `.pem` from Files.
 
-If you skip this section entirely the system still works: the caller workflow
-passes empty App secrets and falls back to the default token. You just get the
-approval tap on every pull request.
+Skipping this section used to cost only the approval tap on every pull request.
+Since v1.12.0 it costs the orchestration: the caller still passes empty App
+secrets and still falls back to the default token, so a single run started by a
+human label works exactly as before, but nothing that agent labels afterwards
+starts anything. An objective decomposes and stops. Roles queued by hand, one at
+a time, still work - that is the pre-v1.12.0 flow, and it is what a project
+without this section is left with.
 
 ## 4. The commands: nothing to do, and why
 

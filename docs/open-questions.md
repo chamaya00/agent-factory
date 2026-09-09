@@ -225,7 +225,7 @@ default is documented as deliberate in `agent-run.yml`.
 
 ---
 
-## 7. The orchestrator wake has never fired
+## 7. Without the App, does v1.12.0 work at all?
 
 **The situation.** `agent-run.yml` now queues a child's parent objective when
 that child reaches `agent:review` or `agent:blocked`, which is what turns the
@@ -242,21 +242,59 @@ rather than a body reference - but an issue linked by hand may have no parent
 for either call to find. The step treats an empty answer as normal and leaves
 the child labelled, which degrades to exactly the old behaviour.
 
-The second matters more, because it fails silently and completely. The label
-write has to raise an event that starts another run, and events raised by
-`GITHUB_TOKEN` deliberately do not start workflows. Every write in the agent job
-goes through the App token where an App is configured, which does. Where one is
-not, `github.token` is the fallback, and then no cascade happens at all: the
-orchestrator is never woken, and the flow quietly reverts to a human labelling
-each child. That is the documented-as-optional App turning out to be load
-bearing for a feature that reads as unconditional.
+The second is worse than this entry first said, and worth stating plainly: it
+is not a degradation of the wake, it disables the release. A label write has to
+raise an event that starts another run, and events raised by `GITHUB_TOKEN`
+deliberately do not start workflows - the recursion guard. Every write in the
+agent job goes through the App token where an App is configured, which does
+raise such events. Where one is not, `github.token` is the fallback.
+
+This entry originally described that as costing the parent wake. It costs more,
+because the orchestrator queueing its own children has exactly the same
+dependency, and that one bites first:
+
+| Step | Who writes the label | Starts a run |
+| --- | --- | --- |
+| A human labels the objective `agent:queued` | a person | yes |
+| The orchestrator labels a child `agent:queued` | `GITHUB_TOKEN` | **no** |
+| A finished child wakes its parent | `GITHUB_TOKEN` | **no** |
+
+So with no App the v1.12.0 flow gets exactly one run - the decomposition - and
+then stops. Children are created and correctly labelled, and nothing picks them
+up. The pre-v1.12.0 flow never met this because a person applied every run
+label by hand.
+
+The old flow's failure mode was an extra tap per pull request. This one is the
+feature not functioning, and it is silent: no error, no refusal, a correctly
+labelled issue that nobody runs.
+
+**What is actually established.** That `GITHUB_TOKEN` events do not start
+workflow runs is documented behaviour, not something observed here. What has
+been observed is which identity a project runs as:
+`new-project-agents-v3` posts its attempt markers as `github-actions[bot]`
+(for example on issue 19), so it has no App configured, and any run of the new
+flow there before one is added will show the stall above.
 
 **How to answer it.** Run one objective end to end in a project that has the App
-configured, and watch whether the parent picks up `agent:queued` when the first
-child lands. Then do it in one that does not.
+configured, and watch two things: that a child starts on a label the
+orchestrator applied, and that the parent picks up `agent:queued` when that
+child lands. The App-less half no longer needs a run to predict, but is worth
+one confirmation.
 
-**What changes.** If parent discovery is the weak half, the fallback becomes the
-parent link in the child's body. If the App-less case is the weak half, the
-choice is to say so during provisioning or to have the workflow warn when it
-hands back with no App identity - and either way the App stops being described
-as merely preferred.
+**What changes.** Three candidates, and this is the decision to make rather than
+a list to work through:
+
+- The workflow warns when it hands back with no App identity, so the stall
+  announces itself instead of looking like a queued issue nobody noticed. The
+  cheapest, and it fixes the silence rather than the cause.
+- Provisioning refuses, or loudly warns, without the App secrets. Honest, but it
+  turns a soft prerequisite into a hard one for repositories that may never use
+  an objective.
+- The hand-back step falls back to a `workflow_dispatch` when there is no App.
+  Removes the dependency, and is the only option that makes the feature work
+  without an App - at the cost of a second path through the one place in this
+  system where a bug spends the subscription.
+
+Whichever wins, the App stops being documented as merely preferred, and if
+parent discovery turns out to be the weak half as well, its fallback becomes the
+parent link in the child's body.
