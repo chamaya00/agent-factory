@@ -1,10 +1,11 @@
 name: guard
 
-# Runs on the factory itself. Five things: the manifests still parse, the
+# Runs on the factory itself. Six things: the manifests still parse, the
 # plugin still describes how we work rather than what any one project contains,
 # the gate still fails what it is supposed to fail, the agent-run preflight
-# still refuses the runs it is supposed to refuse, and release still refuses to
-# point a major tag at unmerged history.
+# still refuses the runs it is supposed to refuse, the hand-back still finds
+# the parent it has to wake, and release still refuses to point a major tag at
+# unmerged history.
 #
 # The second one is what keeps the toolbox portable a year from now. The last
 # three are the places a bug is expensive: one lets a bad pull request merge in
@@ -50,6 +51,9 @@ jobs:
 
       - name: Agent-run preflight makes the right decisions
         run: python scripts/test_preflight.py
+
+      - name: Agent-run hands a finished child back to its parent
+        run: python scripts/test_handback.py
 
       - name: Release resolves the right commit for a major tag
         run: python scripts/test_release.py

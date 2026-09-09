@@ -225,76 +225,43 @@ default is documented as deliberate in `agent-run.yml`.
 
 ---
 
-## 7. Without the App, does v1.12.0 work at all?
+## 7. The cascade has still never completed
 
-**The situation.** `agent-run.yml` now queues a child's parent objective when
-that child reaches `agent:review` or `agent:blocked`, which is what turns the
-orchestrator from a one-shot splitter into something that drives an objective.
-Nothing has run it. The preflight half is covered by `scripts/test_preflight.py`;
-the wake itself is a step that only executes on a real runner against a real
-issue tree.
+**What is settled, and where the answer now lives.** Two of the three things
+this entry used to ask have been answered by running one real objective in
+`new-project-agents-v3` (issue 28, orchestrator run 34377334862):
 
-**The two assumptions under it.** Finding the parent is one: the step asks
-`gh issue view --json parent` and falls back to the REST call behind it, and
-neither is certain on an arbitrary runner. Run 33843275814 is the reason this
-is viable at all - the children it created carry a real `parent_issue_url`
-rather than a body reference - but an issue linked by hand may have no parent
-for either call to find. The step treats an empty answer as normal and leaves
-the child labelled, which degrades to exactly the old behaviour.
+- An App token's writes *do* raise events that start runs. Observed: runs 29
+  through 36 were all actored by the App, off the agent's own labels and
+  comments.
+- Without an App there is no cascade at all, so the App is a prerequisite and
+  not a preference. That answer lives in `docs/checkpoint.md` section 3 and in
+  the project template's own description of how work moves.
 
-The second is worse than this entry first said, and worth stating plainly: it
-is not a degradation of the wake, it disables the release. A label write has to
-raise an event that starts another run, and events raised by `GITHUB_TOKEN`
-deliberately do not start workflows - the recursion guard. Every write in the
-agent job goes through the App token where an App is configured, which does
-raise such events. Where one is not, `github.token` is the fallback.
+**What that run also found, and where those answers live.** The cascade did not
+work, for two reasons that had nothing to do with tokens, and both are now
+fixed with a check behind them:
 
-This entry originally described that as costing the parent wake. It costs more,
-because the orchestrator queueing its own children has exactly the same
-dependency, and that one bites first:
+- Every event queued the *preflight*, and a concurrency group holds one pending
+  entry. The orchestrator's own housekeeping displaced the run for the child it
+  had just queued, which was cancelled before executing a step. The group now
+  sits on the agent job; `scripts/validate_workflows.py` fails if it moves back.
+- A run creates children with `gh issue create`, which cannot make a native
+  sub-issue link, so both parent lookups answered null. The hand-back now falls
+  back to the `Parent: #<number>` line the role writes;
+  `scripts/test_handback.py` covers it.
 
-| Step | Who writes the label | Starts a run |
-| --- | --- | --- |
-| A human labels the objective `agent:queued` | a person | yes |
-| The orchestrator labels a child `agent:queued` | `GITHUB_TOKEN` | **no** |
-| A finished child wakes its parent | `GITHUB_TOKEN` | **no** |
+**What is still open, and it is the whole point.** No child has yet finished and
+woken its parent. Everything above is a fault found and fixed on the way to
+that, plus a fake `gh` agreeing the shell does what it should. The mechanism
+end to end - child finishes, parent wakes, orchestrator reads the tree and
+queues the next wave - has never once run.
 
-So with no App the v1.12.0 flow gets exactly one run - the decomposition - and
-then stops. Children are created and correctly labelled, and nothing picks them
-up. The pre-v1.12.0 flow never met this because a person applied every run
-label by hand.
+**How to answer it.** Let issue 28's first child run to completion and watch
+whether 28 picks up `agent:queued` without anyone touching it. That single
+observation closes this entry.
 
-The old flow's failure mode was an extra tap per pull request. This one is the
-feature not functioning, and it is silent: no error, no refusal, a correctly
-labelled issue that nobody runs.
-
-**What is actually established.** That `GITHUB_TOKEN` events do not start
-workflow runs is documented behaviour, not something observed here. What has
-been observed is which identity a project runs as:
-`new-project-agents-v3` posts its attempt markers as `github-actions[bot]`
-(for example on issue 19), so it has no App configured, and any run of the new
-flow there before one is added will show the stall above.
-
-**How to answer it.** Run one objective end to end in a project that has the App
-configured, and watch two things: that a child starts on a label the
-orchestrator applied, and that the parent picks up `agent:queued` when that
-child lands. The App-less half no longer needs a run to predict, but is worth
-one confirmation.
-
-**What changes.** Three candidates, and this is the decision to make rather than
-a list to work through:
-
-- The workflow warns when it hands back with no App identity, so the stall
-  announces itself instead of looking like a queued issue nobody noticed. The
-  cheapest, and it fixes the silence rather than the cause.
-- Provisioning refuses, or loudly warns, without the App secrets. Honest, but it
-  turns a soft prerequisite into a hard one for repositories that may never use
-  an objective.
-- The hand-back step falls back to a `workflow_dispatch` when there is no App.
-  Removes the dependency, and is the only option that makes the feature work
-  without an App - at the cost of a second path through the one place in this
-  system where a bug spends the subscription.
-
-Whichever wins, the App stops being documented as merely preferred, and if
-parent discovery turns out to be the weak half as well, its fallback becomes the
-parent link in the child's body.
+**What changes.** If it works, this entry is deleted and the mechanism is
+described in `agent-run.yml`'s comments, where most of it already is. If the
+wake fires but the orchestrator makes a poor decision on waking, that is a role
+problem rather than a plumbing one and belongs in a new entry, not this one.

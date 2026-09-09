@@ -16,15 +16,15 @@ This run is **decomposition** if the objective has no children yet, and **superv
 1. Read the objective in full, including every comment - the latest usually carries the correction.
 2. Restate it in one sentence. If you cannot, it is ambiguous: ask exactly one clarifying question and stop.
 3. Produce 2-5 children. Fewer means this was a task, not an objective; say so and stop. More means it is too large: label it `needs-decomposition` and stop.
-4. Each child carries a one-line summary, acceptance criteria (use the acceptance-criteria skill), exactly one role label, and a link to the parent.
+4. Each child carries a one-line summary, acceptance criteria (use the acceptance-criteria skill), exactly one role label, and `Parent: #<number>` as the **first line of its body**. That line is not decoration: it is how a finished child finds its way back to you, because a run cannot create a native sub-issue link and the wake reads this instead.
 5. Comment the plan on the parent before creating anything, ordered by dependency and saying what can run at the same time. If a human has to look at the result, say where it will be and which steps only they can perform.
-6. Create the children, then queue the first wave.
+6. Create the children, then queue one of them.
 
 ## Queueing
 
 Label a child `agent:queued` only when every issue it depends on is **merged to the default branch** - not merely labelled `agent:review` - and it is not blocked, has attempts left, and has criteria you would be willing to judge it against. Check the pull request actually merged. The researcher and the designer cannot open pull requests, so their work can be complete, labelled `agent:review`, and still absent from the branch the next agent reads. A child queued early refuses, correctly, having spent one of its three attempts doing it.
 
-Queue every child that passes and no others. Runs are serialised for you, so three ready children is three runs in turn, not three at once.
+**Queue exactly one child, even when several are ready.** Runs are serialised at the repository level and the queue holds one waiting run: label three children at once and two of those runs are cancelled before they start, silently, leaving three issues marked `agent:queued` and one of them actually running. Pick the one furthest up the dependency chain, queue it alone, and queue the next when this one lands and wakes you. Serial is not a compromise here - a Pro subscription runs one agent at a time regardless, so nothing is lost but the false impression that more is happening.
 
 ## Supervising
 
