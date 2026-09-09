@@ -402,6 +402,43 @@ def check_concurrency_gates_the_agent_not_the_preflight() -> None:
         )
 
 
+def check_only_our_own_app_may_start_a_run() -> None:
+    """The action refuses bot-started runs, and every handover is bot-started.
+
+    The orchestrator queues a child by labelling it and a finished child wakes
+    its parent the same way, so without an allowed_bots value naming the App
+    the cascade dies at the first handover - three seconds in, with the issue
+    left agent:blocked as though the work had failed.
+
+    It must stay narrow. `*` would let any bot with write access start an agent
+    run, and this is the one place where an unexpected trigger spends the
+    subscription and pushes a commit.
+    """
+    for step in agent_run_steps():
+        uses = step.get("uses") or ""
+        if not uses.startswith("anthropics/claude-code-action"):
+            continue
+        allowed = str((step.get("with") or {}).get("allowed_bots", "")).strip()
+        if not allowed:
+            errors.append(
+                ".github/workflows/agent-run.yml: the agent step sets no "
+                "allowed_bots, so the action refuses every run the "
+                "orchestrator starts for itself and the cascade stops at the "
+                "first handover."
+            )
+        elif "*" in allowed:
+            errors.append(
+                ".github/workflows/agent-run.yml: allowed_bots is "
+                f"{allowed!r}. Any bot with write access could then start an "
+                "agent run. Name the App's own slug and nothing else."
+            )
+        return
+    errors.append(
+        ".github/workflows/agent-run.yml: no anthropics/claude-code-action "
+        "step, so nothing runs the agent at all."
+    )
+
+
 def main() -> int:
     paths = sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml"))
     if TEMPLATES.is_dir():
@@ -418,6 +455,7 @@ def main() -> int:
     check_failure_is_diagnosed()
     check_only_the_attempt_marker_counts_attempts()
     check_concurrency_gates_the_agent_not_the_preflight()
+    check_only_our_own_app_may_start_a_run()
     if errors:
         print(f"guard: {len(errors)} problem(s)\n")
         for error in errors:

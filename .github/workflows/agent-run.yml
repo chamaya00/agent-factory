@@ -513,6 +513,25 @@ jobs:
           # API credits. An API key here would quietly spend money instead.
           claude_code_oauth_token: ${{ secrets.claude-code-oauth-token }}
           github_token: ${{ steps.app-token.outputs.token || github.token }}
+          # The action refuses a run started by a bot unless the bot is named
+          # here, and every run this system starts for itself is started by a
+          # bot: the orchestrator queues a child by labelling it, and a
+          # finished child wakes its parent the same way. Without this the
+          # cascade dies at the first handover with
+          # "Workflow initiated by non-human actor", three seconds in, and the
+          # issue is left agent:blocked as though the work had failed.
+          #
+          # The App's own slug and nothing else. `*` would allow any bot with
+          # write access to start an agent run - a lint bot's comment, a
+          # dependency bot's label - and this is the one place where an
+          # unexpected trigger spends the subscription and pushes a commit.
+          # The action lowercases both sides and strips a trailing `[bot]`
+          # before comparing, so the bare slug matches the `<slug>[bot]` actor.
+          #
+          # Empty when no App is configured, which allows no bots at all. That
+          # is the right default rather than a gap: without an App those
+          # writes raise no events, so there are no bot-started runs to allow.
+          allowed_bots: ${{ steps.app-token.outputs.app-slug }}
           use_sticky_comment: true
           track_progress: true
           claude_args: |
