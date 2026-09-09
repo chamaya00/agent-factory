@@ -102,13 +102,6 @@ on:
         description: Private key for that App.
         required: false
 
-# Repo-wide, and deliberately not per-issue: two agents running at once on a
-# Pro plan exhausts it. Queue, never cancel - a cancelled run has already spent
-# its tokens and leaves the issue half finished.
-concurrency:
-  group: agent-run-${{ github.repository }}
-  cancel-in-progress: false
-
 permissions:
   contents: write
   pull-requests: write
@@ -293,6 +286,33 @@ jobs:
     if: needs.preflight.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.timeout-minutes }}
+    # Repo-wide, and deliberately not per-issue: two agents running at once on
+    # a Pro plan exhausts it. Queue, never cancel - a cancelled run has already
+    # spent its tokens and leaves the issue half finished.
+    #
+    # On this job rather than the whole workflow, and that is the whole point.
+    # A concurrency group holds exactly one pending entry: when a third run
+    # arrives, the one already waiting is cancelled. With the group on the
+    # workflow, every event put the *preflight* in that queue - and preflight
+    # is what decides an event is not worth running. So the agent's own
+    # housekeeping (labelling an issue agent:running, posting its attempt
+    # marker) raised events that queued behind the run that made them and
+    # cancelled each other, and eventually cancelled something real.
+    #
+    # That is not hypothetical. In new-project-agents-v3, the orchestrator
+    # queued its first child and the run for it was cancelled before its
+    # preflight executed a single step, displaced by the hand-back step
+    # labelling the parent agent:review. The child sat agent:queued with
+    # nothing running it, silently, which is the worst shape this failure
+    # could take.
+    #
+    # Here, preflight always runs. It costs about five seconds and no
+    # subscription, refuses everything that is not a real run label or a real
+    # trigger phrase, and only what survives it reaches this job and takes the
+    # slot. The repo-wide one-at-a-time guarantee is unchanged.
+    concurrency:
+      group: agent-run-${{ github.repository }}
+      cancel-in-progress: false
     permissions:
       contents: write
       pull-requests: write
@@ -589,6 +609,22 @@ jobs:
             parent="$(gh issue view "$ISSUE" --json parent --jq '.parent.number' 2>/dev/null || true)"
             if [ -z "$parent" ] || [ "$parent" = "null" ]; then
               parent="$(gh api "repos/$GH_REPO/issues/$ISSUE" --jq '.parent.number' 2>/dev/null || true)"
+            fi
+
+            # Then the body reference, which is the one that actually fires.
+            # Both calls above read a native sub-issue link, and the
+            # orchestrator cannot make one: in a run its capability is the `gh`
+            # CLI, and `gh issue create` has no sub-issue flag. Every child it
+            # creates therefore reports has_parent false and answers null to
+            # both, which is what happened on the first real objective. The
+            # role writes `Parent: #<number>` as the first line of a child
+            # body, so that line is the link, and this reads it.
+            if [ -z "$parent" ] || [ "$parent" = "null" ]; then
+              parent="$(gh issue view "$ISSUE" --json body --jq '.body' 2>/dev/null \
+                | head -5 \
+                | grep -oiE '^parent:[[:space:]]*#[0-9]+' \
+                | grep -oE '[0-9]+' \
+                | head -1 || true)"
             fi
             if [ -z "$parent" ] || [ "$parent" = "null" ]; then
               echo "No parent objective found for #$ISSUE. A human queues the objective."

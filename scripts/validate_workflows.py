@@ -366,6 +366,42 @@ def check_only_the_attempt_marker_counts_attempts() -> None:
         return
 
 
+def check_concurrency_gates_the_agent_not_the_preflight() -> None:
+    """The concurrency group belongs on the agent job, never on the workflow.
+
+    A concurrency group holds exactly one pending entry: a third arrival
+    cancels the one already waiting. With the group at workflow level the
+    preflight sits in that queue too - and preflight is what decides an event
+    is not worth running. So the agent's own writes (labelling an issue
+    agent:running, posting its marker) raised events that queued behind the run
+    that made them, and cancelled each other and eventually something real.
+
+    Observed, not theorised: in new-project-agents-v3 the orchestrator queued
+    its first child and that run was cancelled before its preflight ran a
+    single step, displaced by the hand-back step labelling the parent
+    agent:review. The child kept agent:queued and nothing ran it.
+    """
+    workflow = WORKFLOWS / "agent-run.yml"
+    if not workflow.exists():
+        return
+    data = yaml.safe_load(workflow.read_text())
+    if not isinstance(data, dict):
+        return
+    if data.get("concurrency") is not None:
+        errors.append(
+            ".github/workflows/agent-run.yml: concurrency is set at workflow "
+            "level, which puts the preflight in the queue and lets a run be "
+            "cancelled before it can decide it was not worth running. Move it "
+            "onto the agent job."
+        )
+    agent = (data.get("jobs") or {}).get("agent") or {}
+    if not agent.get("concurrency"):
+        errors.append(
+            ".github/workflows/agent-run.yml: the agent job has no concurrency "
+            "group, so two agent runs can hold the subscription at once."
+        )
+
+
 def main() -> int:
     paths = sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml"))
     if TEMPLATES.is_dir():
@@ -381,6 +417,7 @@ def main() -> int:
     check_prompt_states_the_turn_budget()
     check_failure_is_diagnosed()
     check_only_the_attempt_marker_counts_attempts()
+    check_concurrency_gates_the_agent_not_the_preflight()
     if errors:
         print(f"guard: {len(errors)} problem(s)\n")
         for error in errors:
