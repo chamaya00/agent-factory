@@ -225,43 +225,33 @@ default is documented as deliberate in `agent-run.yml`.
 
 ---
 
-## 7. The cascade has still never completed
+## 7. One pending run, and a wave of two loses one
 
-**What is settled, and where the answer now lives.** Two of the three things
-this entry used to ask have been answered by running one real objective in
-`new-project-agents-v3` (issue 28, orchestrator run 34377334862):
+**What is known.** A concurrency group holds exactly one pending entry, and a
+third arrival cancels the one already waiting. `agent-run.yml` puts that group
+on the agent job, so preflight always runs and only real runs contend - but two
+*real* runs still contend, and the older pending one is cancelled while pending,
+having executed no step. The issue keeps `agent:queued` and nothing runs it,
+with nothing in any log to say so.
 
-- An App token's writes *do* raise events that start runs. Observed: runs 29
-  through 36 were all actored by the App, off the agent's own labels and
-  comments.
-- Without an App there is no cascade at all, so the App is a prerequisite and
-  not a preference. That answer lives in `docs/checkpoint.md` section 3 and in
-  the project template's own description of how work moves.
+**What was done about it.** The orchestrator queues exactly one child at a time,
+which removes the only automated source of a two-at-once wave. That is a
+convention in the role definition, not a mechanism: a human labelling two issues
+`agent:queued` in the same minute still loses one, and so would any future caller
+that queues a wave.
 
-**What that run also found, and where those answers live.** The cascade did not
-work, for two reasons that had nothing to do with tokens, and both are now
-fixed with a check behind them:
+**Why it was left.** Fixing it properly means either giving up the repo-wide
+one-at-a-time guarantee that protects a fixed subscription, or adding a retry for
+the queued-but-idle state - a second path through the one place in this system
+where a bug spends the subscription. Neither is obviously right, and the
+automated path that used to hit this no longer does.
 
-- Every event queued the *preflight*, and a concurrency group holds one pending
-  entry. The orchestrator's own housekeeping displaced the run for the child it
-  had just queued, which was cancelled before executing a step. The group now
-  sits on the agent job; `scripts/validate_workflows.py` fails if it moves back.
-- A run creates children with `gh issue create`, which cannot make a native
-  sub-issue link, so both parent lookups answered null. The hand-back now falls
-  back to the `Parent: #<number>` line the role writes;
-  `scripts/test_handback.py` covers it.
+**How to answer it.** Label two ready issues `agent:queued` within a few seconds
+and watch whether both run. That confirms the shape; the decision after it is a
+judgement, not an observation.
 
-**What is still open, and it is the whole point.** No child has yet finished and
-woken its parent. Everything above is a fault found and fixed on the way to
-that, plus a fake `gh` agreeing the shell does what it should. The mechanism
-end to end - child finishes, parent wakes, orchestrator reads the tree and
-queues the next wave - has never once run.
-
-**How to answer it.** Let issue 28's first child run to completion and watch
-whether 28 picks up `agent:queued` without anyone touching it. That single
-observation closes this entry.
-
-**What changes.** If it works, this entry is deleted and the mechanism is
-described in `agent-run.yml`'s comments, where most of it already is. If the
-wake fires but the orchestrator makes a poor decision on waking, that is a role
-problem rather than a plumbing one and belongs in a new entry, not this one.
+**What changes.** Either the group loosens - per-issue rather than per-repo, and
+the budget is protected some other way - or something notices an issue that has
+carried the run label with no run for some minutes and re-raises it. The second
+keeps the guarantee and is the smaller change, but it is a watchdog, and a
+watchdog that is wrong spends the subscription on its own.
