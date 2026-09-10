@@ -19,6 +19,10 @@ Tests before merge. Every acceptance criterion has a test that would fail if the
 
 **Watch each new check fail before you trust it passing.** Break the thing it guards, see it go red, put the thing back. A check that has only ever been green is not evidence; it is a check that has never been tested, and the two are indistinguishable from the outside. This applies to the test harness as much as to the code - a fixture that silently stops working turns its negative cases green for the wrong reason, and those are the cases nobody re-reads.
 
+**And read what the sabotage actually printed, not what your harness said about it.** The run that proves a check has teeth can itself be broken, and it breaks quietly: a patch string the shell expanded before the patcher saw it, a pattern matched against output that indents differently, a substitution that found nothing and reported nothing. Every one of those prints a clean verdict about a check it never exercised. Twice in one sitting a sabotage sweep here reported that nothing was caught, and both times the checks were working and the sweep was not.
+
+The tell is that a broken harness looks exactly like diligence - a tidy table of results, produced by a program that did nothing. So on any sweep, open one case's real output and confirm the failure says what you expect. One is enough; the failure modes are shared across the sweep, so the one you read vouches for the others.
+
 The checks are the gate, and the gate is deterministic. Never skip, disable, or quarantine a test to get to green, and never widen a pull request to get around a failing check.
 
 A pull request changes one issue's worth of code. Things noticed along the way become issues, not commits.
