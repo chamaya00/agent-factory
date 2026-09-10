@@ -134,11 +134,22 @@ write the body for that reader:
 - Which pins moved.
 - Anything removed upstream, called out separately.
 
-Then note that the checks on this pull request run at the *old* pin, because a
-caller change only takes effect once merged. So a green pull request here
-proves the diff is well-formed, not that the new release passes on this
-repository. The first run at the new pin is the next pull request after this
-one merges - worth watching.
+This pull request moves `uses:` lines, which is a privilege change - it changes
+which code runs against this repository's token. The project guard fails it
+unless the body carries a line starting `Privilege change:` saying what moved
+and why. Write that line: naming the pins and the two versions is enough. Do
+not treat it as a formality to satisfy, and do not let a red check here become
+routine - a check people expect to be red is one they stop reading.
+
+Say which pin the checks ran at rather than assuming, because both are
+possible and the difference matters. For a pull request from a branch in this
+same repository, Actions takes each workflow file from the head of the branch,
+so the callers in this diff are the ones that run and the release is being
+exercised here. From a fork, or where a caller is not part of this diff, the
+old pin runs and a green pull request proves only that the diff is well-formed.
+Look at which it was - the guard job's log names the version it ran - and say
+so. Where the old pin ran, the first real run at the new one is the next pull
+request after this merges, and it is worth watching.
 
 If the person who has to merge this is also the person who owns the factory,
 say plainly which changes came from a factory release they cut and which are
