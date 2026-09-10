@@ -60,6 +60,13 @@ if args[:2] == ["issue", "list"]:
     print("\\n".join(str(n) for n in state.get("queued", [])))
     sys.exit(0)
 
+# `gh pr list --head <branch> --json isDraft`
+if args[:2] == ["pr", "list"]:
+    head = args[args.index("--head") + 1] if "--head" in args else ""
+    pr = state.get("prs", {}).get(head)
+    print("" if pr is None else str(pr).lower())
+    sys.exit(0)
+
 # `gh pr view <n> --json closingIssuesReferences`
 if args[:2] == ["pr", "view"]:
     number = args[2]
@@ -338,6 +345,27 @@ def _():
     return not woke(run_merge(state), "39")
 
 
+@case("a failed run with a ready pull request lands in review")
+def _():
+    # The exact shape of new-project-agents-v3#50 and #51: complete work, a
+    # ready pull request, and a job that failed on the turn cap.
+    calls = run_diagnosis_labels(branches=["claude/issue-46-x"], drafts={"claude/issue-46-x": False})
+    return any("--add-label agent:review" in c for c in calls) and not any(
+        "--add-label agent:blocked" in c for c in calls)
+
+
+@case("a failed run with only a draft is still blocked")
+def _():
+    calls = run_diagnosis_labels(branches=["claude/issue-46-x"], drafts={"claude/issue-46-x": True})
+    return any("--add-label agent:blocked" in c for c in calls)
+
+
+@case("a failed run that pushed nothing is still blocked")
+def _():
+    calls = run_diagnosis_labels(branches=[], drafts={})
+    return any("--add-label agent:blocked" in c for c in calls)
+
+
 STALE_STEP = "Name the issues that are queued and idle"
 
 
@@ -438,6 +466,47 @@ def _():
     state = {"queued": [46], "issues": {"46": objective(labels=["agent:queued"])}}
     return not any("--add-label" in c or "--remove-label" in c
                    for c in run_stale(state))
+
+
+def run_diagnosis_labels(branches: list[str], drafts: dict) -> list[str]:
+    """The hand-back's label decision, with git and gh both faked."""
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        bin_dir = tmp / "bin"
+        bin_dir.mkdir()
+        gh = bin_dir / "gh"
+        gh.write_text(FAKE_GH)
+        gh.chmod(0o755)
+        # `git ls-remote --heads origin <pattern>` is how branches are found.
+        git = bin_dir / "git"
+        git.write_text(
+            "#!/usr/bin/env python3\n"
+            "import os, sys\n"
+            "if sys.argv[1:3] == ['ls-remote', '--heads']:\n"
+            "    for b in os.environ.get('FAKE_BRANCHES', '').split():\n"
+            "        print('sha\\trefs/heads/' + b)\n"
+            "sys.exit(0)\n"
+        )
+        git.chmod(0o755)
+        calls = tmp / "calls"
+        calls.touch()
+        state_file = tmp / "state.json"
+        state_file.write_text(json.dumps({"issues": {}, "prs": drafts}))
+        env = dict(os.environ)
+        env.update({
+            "PATH": f"{bin_dir}:{env['PATH']}",
+            "GH_STATE": str(state_file), "GH_CALLS": str(calls),
+            "GH_TOKEN": "fake-token", "GH_REPO": "owner/repo",
+            "ISSUE": "46", "KIND": "issue", "ROLE": "engineer",
+            "RUN_LABEL": "agent:queued", "JOB_STATUS": "failure",
+            "RUN_URL": "https://example.invalid/run",
+            "RUNNER_TEMP": str(tmp), "MAX_TURNS": "80",
+            "FAKE_BRANCHES": " ".join(branches),
+        })
+        script, _ = handback_script()
+        subprocess.run(["bash", "-e", "-c", script], env=env,
+                       capture_output=True, text=True)
+        return calls.read_text().splitlines()
 
 
 def main() -> int:

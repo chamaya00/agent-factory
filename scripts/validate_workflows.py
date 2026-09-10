@@ -583,6 +583,35 @@ def check_something_notices_the_silence() -> None:
         )
 
 
+def check_a_delivered_run_is_a_review() -> None:
+    """A run that got its work out is a review, whatever stopped it.
+
+    The turn cap is a spend limit. It was being read as a verdict too: hitting
+    it failed the job, which labelled the issue agent:blocked, which spent an
+    attempt - on new-project-agents-v3#50 and #51 all three fired on work that
+    was complete, tested, and merged unchanged. The orchestrator had to notice
+    and relabel by hand, twice.
+    """
+    for step in agent_run_steps():
+        if step.get("name") != HANDBACK_STEP:
+            continue
+        script = step.get("run") or ""
+        if "delivered()" not in script:
+            errors.append(
+                f".github/workflows/agent-run.yml: the {HANDBACK_STEP!r} step "
+                "does not check whether the run delivered, so a failed job "
+                "labels agent:blocked even when a pull request is sitting "
+                "ready for review."
+            )
+        if "isDraft" not in script:
+            errors.append(
+                f".github/workflows/agent-run.yml: the {HANDBACK_STEP!r} step "
+                "does not distinguish a draft pull request from a ready one. A "
+                "draft is work in progress and must not count as delivered."
+            )
+        return
+
+
 def main() -> int:
     paths = sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml"))
     if TEMPLATES.is_dir():
@@ -603,6 +632,7 @@ def main() -> int:
     check_a_merge_can_wake_an_objective()
     check_the_diagnosis_reads_the_turn_count()
     check_something_notices_the_silence()
+    check_a_delivered_run_is_a_review()
     if errors:
         print(f"guard: {len(errors)} problem(s)\n")
         for error in errors:
