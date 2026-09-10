@@ -203,6 +203,56 @@ def _():
     return not woke(run_case(state, role="orchestrator"), "28")
 
 
+def run_diagnosis(subtype: str, turns: int, cap: str = "40") -> str:
+    """Run the hand-back over a synthetic action result and return its comment."""
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        gh = tmp / "bin" / "gh"
+        gh.parent.mkdir()
+        gh.write_text(FAKE_GH)
+        gh.chmod(0o755)
+        calls = tmp / "calls"
+        calls.touch()
+        state_file = tmp / "state.json"
+        state_file.write_text(json.dumps({"issues": {}}))
+        (tmp / "claude-execution-output.json").write_text(
+            json.dumps({"type": "result", "subtype": subtype, "num_turns": turns})
+        )
+        env = dict(os.environ)
+        env.update({
+            "PATH": f"{gh.parent}:{env['PATH']}",
+            "GH_STATE": str(state_file), "GH_CALLS": str(calls),
+            "GH_TOKEN": "fake-token", "GH_REPO": "owner/repo",
+            "ISSUE": "46", "KIND": "issue", "ROLE": "engineer",
+            "RUN_LABEL": "agent:queued", "JOB_STATUS": "failure",
+            "RUN_URL": "https://example.invalid/run",
+            "RUNNER_TEMP": str(tmp), "MAX_TURNS": cap,
+        })
+        script, _ = handback_script()
+        subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True)
+        return calls.read_text()
+
+
+@case("a run over the cap is named as such even when it reports success")
+def _():
+    # The exact shape seen on new-project-agents-v3#46: `success`, 48 turns,
+    # cap 40. The old branch keyed on the subtype and said nothing about it.
+    said = run_diagnosis("success", 48)
+    return "cap" in said and "48" in said
+
+
+@case("a run inside the cap is not accused of hitting it")
+def _():
+    said = run_diagnosis("error_during_execution", 12)
+    return "is the cap" not in said
+
+
+@case("the diagnosis says pushed work survives its run")
+def _():
+    said = run_diagnosis("success", 48)
+    return "committed and pushed survives" in said
+
+
 MERGE_STEP = "Queue the parent objective"
 
 
