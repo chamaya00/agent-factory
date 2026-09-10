@@ -174,6 +174,20 @@ jobs:
             exit 0
           fi
 
+          # An objective waiting on a merge is the other silence, one layer up.
+          #
+          # The detector below looks for the run label, so a child sitting at
+          # agent:review with an open pull request is invisible to it - nothing
+          # is queued, nothing is stuck, and yet nothing will ever move again
+          # until a person merges. That is exactly how an objective can sit for
+          # days with a status comment nobody reads.
+          waiting="$(gh pr list --state open --json number,title,isDraft \
+            --jq '[.[] | select(.isDraft | not)] | length' 2>/dev/null || echo 0)"
+          case "$waiting" in ''|0) : ;; *)
+            echo "$waiting pull request(s) open and ready - an objective may be waiting on a merge."
+            ;;
+          esac
+
           for n in $issues; do
             labels="$(gh issue view "$n" --json labels --jq '.labels[].name' 2>/dev/null || true)"
             # Running is not stalled, and an issue a human has stopped is not
