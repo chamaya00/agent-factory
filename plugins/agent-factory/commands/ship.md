@@ -9,9 +9,15 @@ every open pull request opened by an agent run and treat them as one batch.
 
 This command exists because "merge when green" is a real standing instruction
 and was being carried in conversation rather than anywhere a later session
-could find it. A person driving a session may merge for them - see **Who
-merges** in the house-rules skill - and this is the shape that decision takes,
-so that what was checked is written down next to what was merged.
+could find it. A session carrying that instruction merges for the person who
+gave it - see **Who merges** in the house-rules skill - and this is the shape
+that decision takes, so that what was checked is written down next to what was
+merged.
+
+The instruction holds whether or not they are reading it happen. What changes
+when they are away is only that you cannot ask them anything, so step 3 below
+does more of the work: a pull request left open with the question on it is
+waiting for them, and a guess is not.
 
 ## 1. Find what is waiting
 
@@ -37,6 +43,13 @@ is worth looking for specifically. That is the failure mode that ships: every
 criterion satisfied and the hole still there, because the criteria were written
 before the consequence was known.
 
+Then read the same diff again against **What a revert does not undo**, which is
+a different question and needs a second pass. The gate asks whether the work is
+done; that list asks whether it is safe to be wrong about. A credential, a
+widened permission, a new outbound address, a deletion, a first dependency, or
+a change the pull request never mentions: any one of them is a question for the
+owner, not a merge, and a standing instruction does not cover it.
+
 ## 3. Merge, or say why not
 
 Merge the ones that pass. For each, say which parts of the gate you checked -
@@ -47,9 +60,14 @@ pull request. A pull request left open with no comment is indistinguishable
 from one nobody looked at.
 
 Where a diff needs a decision only the owner can make - product behaviour, a
-name that will outlive the issue, a trade-off with no obviously right answer -
-put the question to them and merge nothing. Being driven by someone is not the
-same as being able to answer for them.
+name that will outlive the issue, a trade-off with no obviously right answer,
+or anything off that second list - put the question to them and merge nothing.
+Carrying someone's instruction is not the same as being able to answer for
+them.
+
+Write those questions the way they would ask them, not the way the diff reads.
+An owner who does not read code can still tell you whether the site is meant to
+be calling out to somewhere new. One who is handed a patch cannot.
 
 ## 4. Say what happens next
 
