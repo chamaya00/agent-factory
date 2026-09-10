@@ -548,6 +548,10 @@ jobs:
               # pull request. No `gh pr merge`: merging stays a human's call.
               tools="$common,Write,Edit"
               tools="$tools,Bash(gh pr create:*),Bash(gh pr view:*),Bash(gh pr edit:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh pr checks:*)"
+              # `gh pr ready` is how a draft stops being a draft. Without it the
+              # role can open the draft this workflow now asks it to open first,
+              # and then cannot finish it.
+              tools="$tools,Bash(gh pr ready:*),Bash(gh pr list:*)"
               tools="$tools,Bash(npm ci:*),Bash(npm install:*),Bash(npm run:*),Bash(npm test:*)"
               # npm was once the only runner here, and the gate it is meant to
               # mirror is not a Node gate: ci.yml has a commands path precisely
@@ -648,6 +652,9 @@ jobs:
             You have ${{ inputs.max-turns }} turns. Reaching that cap kills the
             run where it stands: the whole job fails, nothing uncommitted
             survives, and the attempt is spent whether or not you had finished.
+            What you have already committed and pushed does survive, on its
+            branch - which is why pushing early is worth more than finishing
+            tidily.
             So spend the budget in that order - commit and push as soon as you
             have something coherent, and keep committing as you go, rather than
             reading everything first and writing at the end. A pushed branch
@@ -689,6 +696,7 @@ jobs:
           KIND: ${{ needs.preflight.outputs.kind }}
           ROLE: ${{ needs.preflight.outputs.role }}
           RUN_LABEL: ${{ inputs.run-label }}
+          MAX_TURNS: ${{ inputs.max-turns }}
           JOB_STATUS: ${{ job.status }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
@@ -781,6 +789,36 @@ jobs:
           gh "$KIND" edit "$ISSUE" --add-label 'agent:blocked' || true
           wake_parent
 
+          # What actually got delivered, as facts rather than an absence to be
+          # interpreted. An agent reading this comment can otherwise only see
+          # that no pull request exists, and "no pull request" is one short
+          # step from "nothing landed" - which is exactly the wrong conclusion
+          # when a branch is sitting there with the whole diff on it.
+          #
+          # Observed on new-project-agents-v3#46: both attempts pushed complete
+          # work, neither opened a pull request, and the orchestrator's
+          # diagnosis said nothing had been pushed. It had no instrument for
+          # branches, so it inferred. This gives it the answer instead.
+          delivery() {
+            [ "$KIND" = "issue" ] || return 0
+            branches="$(git ls-remote --heads origin "claude/issue-$ISSUE-*" 2>/dev/null \
+              | awk '{print $2}' | sed 's#refs/heads/##' || true)"
+            if [ -z "$branches" ]; then
+              echo "No branch was pushed for this issue."
+              return 0
+            fi
+            echo "Pushed, and where it got to:"
+            for b in $branches; do
+              n="$(gh pr list --head "$b" --state all --json number --jq '.[0].number' 2>/dev/null || true)"
+              if [ -n "$n" ] && [ "$n" != "null" ]; then
+                echo "- \`$b\` - pull request #$n"
+              else
+                echo "- \`$b\` - **no pull request**, so nothing downstream can see this work"
+              fi
+            done
+          }
+          landed="$(delivery || true)"
+
           # Why it failed, in one comment, rather than a bare label. The label
           # says a human is needed; it does not say whether the agent got the
           # work wrong or the harness stopped it, and those want opposite
@@ -820,6 +858,8 @@ jobs:
           if result is None:
               raise SystemExit(0)
 
+          cap = os.environ.get("MAX_TURNS") or ""
+          cap = int(cap) if cap.isdigit() else None
           subtype = str(result.get("subtype") or "unknown")
           turns = result.get("num_turns")
           denials = result.get("permission_denials_count")
@@ -831,11 +871,26 @@ jobs:
               parts.append(f"{denials} permission denial(s)")
           print("The run " + ", ".join(parts) + ".")
 
-          if subtype == "error_max_turns":
+          # The turn count decides this, not the subtype beside it. A run that
+          # died on the cap has been seen reporting `success` in the same
+          # sentence as a turn count above the cap - and because this branch
+          # once keyed on the subtype alone, the cap went unmentioned and every
+          # later reader went looking for a different explanation.
+          at_cap = subtype == "error_max_turns" or (
+              isinstance(turns, int) and cap is not None and turns >= cap
+          )
+          if at_cap:
               print()
+              if subtype != "error_max_turns":
+                  print(
+                      f"It reports `{subtype}`, but {turns} turns against a cap of "
+                      f"{cap} is the cap. Read the count, not the subtype."
+                  )
               print(
                   "That is the turn cap, not a verdict on this issue. The work "
-                  "was cut off mid-run and anything uncommitted is gone. Before "
+                  "was cut off mid-run: anything uncommitted is gone, but "
+                  "anything already committed and pushed survives on its branch "
+                  "- check what landed before assuming nothing did. Before "
                   "treating this as a scoping problem, check whether the run was "
                   "simply too big for the budget: raise `max-turns` on the caller "
                   "and re-queue, or split the issue."
@@ -850,9 +905,10 @@ jobs:
           PY
           )"
 
-          if [ -n "$summary" ]; then
-            gh "$KIND" comment "$ISSUE" --body "$(printf '%s\n\n%s\n\n%s' \
+          if [ -n "$summary" ] || [ -n "$landed" ]; then
+            gh "$KIND" comment "$ISSUE" --body "$(printf '%s\n\n%s\n\n%s\n\n%s' \
               "<!-- agent-factory:diagnosis --> **Run failed.**" \
               "$summary" \
+              "$landed" \
               "[Run log]($RUN_URL)")" || true
           fi

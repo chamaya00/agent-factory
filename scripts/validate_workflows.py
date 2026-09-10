@@ -486,6 +486,44 @@ def check_a_merge_can_wake_an_objective() -> None:
         )
 
 
+def check_the_diagnosis_reads_the_turn_count() -> None:
+    """A run at its cap must be named as such whatever subtype it reports.
+
+    On new-project-agents-v3#46 both attempts reported `success` with 42 and 48
+    turns against a cap of 40. Because this branch once keyed on the subtype
+    alone, the diagnosis said "ended `success`, 48 turns" and never mentioned
+    the cap - so every later reader, human and agent, went looking for a
+    different explanation. The count is the evidence; the subtype is a label
+    that has been observed to contradict it.
+    """
+    for step in agent_run_steps():
+        if step.get("name") != HANDBACK_STEP:
+            continue
+        script = step.get("run") or ""
+        env = step.get("env") or {}
+        if "MAX_TURNS" not in env:
+            errors.append(
+                f".github/workflows/agent-run.yml: the {HANDBACK_STEP!r} step "
+                "has no MAX_TURNS, so it cannot tell a run that hit its cap "
+                "from one that did not."
+            )
+        if "turns >= cap" not in script:
+            errors.append(
+                f".github/workflows/agent-run.yml: the {HANDBACK_STEP!r} step "
+                "does not compare the turn count against the cap, so a run that "
+                "died at the cap while reporting `success` is diagnosed as a "
+                "success."
+            )
+        if "git ls-remote" not in script:
+            errors.append(
+                f".github/workflows/agent-run.yml: the {HANDBACK_STEP!r} step "
+                "does not report which branches were pushed, leaving the "
+                "orchestrator to infer from the absence of a pull request that "
+                "nothing landed."
+            )
+        return
+
+
 def main() -> int:
     paths = sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml"))
     if TEMPLATES.is_dir():
@@ -504,6 +542,7 @@ def main() -> int:
     check_concurrency_gates_the_agent_not_the_preflight()
     check_only_our_own_app_may_start_a_run()
     check_a_merge_can_wake_an_objective()
+    check_the_diagnosis_reads_the_turn_count()
     if errors:
         print(f"guard: {len(errors)} problem(s)\n")
         for error in errors:
