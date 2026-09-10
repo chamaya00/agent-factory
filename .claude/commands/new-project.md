@@ -147,6 +147,26 @@ What goes in:
   Node path now; the comment at the top of the template says how. Otherwise
   leave it alone and say in the pull request body that the gate is a placeholder,
   what it does check, and that it fails the moment product code lands.
+
+  **Then ask what publishes this repository, and whether the gate runs it.**
+  A gate runs the commands the project chose; production runs whatever the
+  hosting platform chose. Those are two programs, and nothing measures the
+  distance between them unless somebody looks now. A repository once had a gate
+  that was green on every pull request for nineteen hours while the thing that
+  publishes it failed on all eight merges, because the two builds did not agree
+  on what the site even consisted of.
+
+  Three honest answers, in order of preference. The gate already runs what
+  publishes it - say so in the pull request body, and it is settled. It does
+  not, but it can - change the `commands` so it does. It cannot, because the
+  platform builds somewhere this gate cannot reach - then say so in an ADR:
+  what publishes it, how that differs from the gate, and what covers the gap.
+  The scheduled sweep reports a red default branch, so the gap is bounded in
+  time rather than unbounded, and the ADR is what tells the next reader that
+  bound is the whole of the protection.
+
+  What is not acceptable is not answering. An unstated assumption here is
+  invisible until it has been wrong for a day.
 - `.github/CODEOWNERS` - set the owner to the repository owner
 - `CLAUDE.md` - fill in the product sentence, the stack, and the commands from
   what is actually in the repository. Do not leave a bracketed placeholder
