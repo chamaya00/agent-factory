@@ -44,6 +44,12 @@ Before merging on someone's behalf, all of these hold. Any one failing is a reas
 
 Say which of these you checked. "Merged, green" is not a review; it is a status.
 
+**A merge is not finished when the pull request closes.** Every check in that list is scoped to the pull request, and a pull request's checks stop being true the moment it merges - they ran on a commit that no longer exists anywhere except in the merge. What runs afterwards is what decides whether the work reached anyone: a deployment, a publish, a post-merge suite. Watch the merge commit until that settles, and say what it did.
+
+Where it cannot be watched to the end - a pipeline measured in hours, an environment that promotes on its own schedule - say what you expect and where the answer will appear, and look at the next time you touch the repository. The point is that somebody is carrying the question, not that it is answered inside the minute.
+
+A project once ran nineteen hours and eight merges on a failing deployment, serving a build from before any of them, while every pull request in that window was honestly green. Nobody was wrong about anything they checked. Nobody had checked the thing that mattered.
+
 ### What a revert does not undo
 
 The gate above is mostly about whether the work is finished. It is not about whether the work is safe, and a diff can be exactly the issue's worth of work and still do something that outlives being reverted. Read every diff for these six. Any one of them means stop and ask, not merge - even under a standing instruction, because the standing instruction was about green, and this is not that.

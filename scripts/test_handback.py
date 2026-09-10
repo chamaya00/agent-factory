@@ -57,7 +57,10 @@ if args[:2] == ["issue", "view"]:
 
 # `gh issue list --label <l> --json number`
 if args[:2] == ["issue", "list"]:
-    print("\\n".join(str(n) for n in state.get("queued", [])))
+    if "objective" in args:
+        print("\\n".join(str(n) for n in state.get("objectives", [])))
+    else:
+        print("\\n".join(str(n) for n in state.get("queued", [])))
     sys.exit(0)
 
 # `gh pr list --head <branch> --json isDraft`
@@ -71,6 +74,24 @@ if args[:2] == ["pr", "list"]:
 if args[:2] == ["pr", "view"]:
     number = args[2]
     print("\\n".join(str(n) for n in state.get("closes", {}).get(number, [])))
+    sys.exit(0)
+
+# `gh run list --branch <b> --json headSha,conclusion,workflowName --jq ...`
+# The real gh applies the --jq itself, so the fake prints what that would
+# produce: one TSV row per run.
+if args[:2] == ["run", "list"]:
+    for run in state.get("runs", []):
+        print("\\t".join([run["sha"], run["conclusion"], run["workflow"]]))
+    sys.exit(0)
+
+# `gh api repos/<owner>/<repo>` -> default branch
+# `gh api repos/<owner>/<repo>/commits/<branch>` -> its tip sha
+if args[:1] == ["api"] and "/issues/" not in args[1]:
+    path = args[1]
+    if "/commits/" in path:
+        print(state.get("tip", ""))
+    else:
+        print(state.get("default_branch", "main"))
     sys.exit(0)
 
 # `gh api repos/<owner>/<repo>/issues/<n> --jq .parent.number`
@@ -134,12 +155,14 @@ def woke(calls: list[str], parent: str) -> bool:
     )
 
 
-def objective(labels=None, body="", parent=None, rest_parent=None) -> dict:
+def objective(labels=None, body="", parent=None, rest_parent=None,
+              last_marker="") -> dict:
     return {
         "labels": labels if labels is not None else ["objective"],
         "body": body,
         "parent": parent,
         "rest_parent": rest_parent,
+        "last_marker": last_marker,
     }
 
 
@@ -366,7 +389,7 @@ def _():
     return any("--add-label agent:blocked" in c for c in calls)
 
 
-STALE_STEP = "Name the issues that are queued and idle"
+STALE_STEP = "Name what is not moving"
 
 
 def stale_script() -> tuple[str, dict]:
@@ -507,6 +530,80 @@ def run_diagnosis_labels(branches: list[str], drafts: dict) -> list[str]:
         subprocess.run(["bash", "-e", "-c", script], env=env,
                        capture_output=True, text=True)
         return calls.read_text().splitlines()
+
+
+def told_undeployed(calls: list[str]) -> str | None:
+    for c in calls:
+        if c.startswith("issue comment") and "undeployed" in c:
+            return c
+    return None
+
+
+@case("a failed run on the default branch tip is reported")
+def _():
+    # The shape that shipped nothing for nineteen hours: a failing deployment
+    # sitting on the merge commit, with every pull request behind it green.
+    state = {
+        "queued": [], "objectives": [55], "issues": {"55": objective()},
+        "default_branch": "main", "tip": "abc1234def",
+        "runs": [
+            {"sha": "abc1234def", "conclusion": "success", "workflow": "ci"},
+            {"sha": "abc1234def", "conclusion": "failure",
+             "workflow": "pages build and deployment"},
+        ],
+    }
+    told = told_undeployed(run_stale(state))
+    return told is not None and "pages build and deployment" in told
+
+
+@case("a green default branch tip says nothing")
+def _():
+    state = {
+        "queued": [], "objectives": [55], "issues": {"55": objective()},
+        "default_branch": "main", "tip": "abc1234def",
+        "runs": [{"sha": "abc1234def", "conclusion": "success", "workflow": "ci"}],
+    }
+    return told_undeployed(run_stale(state)) is None
+
+
+@case("a failure on an older commit is not the tip's problem")
+def _():
+    # A run that failed before the fix merged is history, not news. Keyed on
+    # the sha, so a green tip stays green however bad last week was.
+    state = {
+        "queued": [], "objectives": [55], "issues": {"55": objective()},
+        "default_branch": "main", "tip": "abc1234def",
+        "runs": [
+            {"sha": "abc1234def", "conclusion": "success", "workflow": "ci"},
+            {"sha": "0000000old", "conclusion": "failure",
+             "workflow": "pages build and deployment"},
+        ],
+    }
+    return told_undeployed(run_stale(state)) is None
+
+
+@case("a red default branch is said once, not every half hour")
+def _():
+    state = {
+        "queued": [], "objectives": [55],
+        "issues": {"55": objective(
+            last_marker="<!-- agent-factory:undeployed --> already said")},
+        "default_branch": "main", "tip": "abc1234def",
+        "runs": [{"sha": "abc1234def", "conclusion": "failure", "workflow": "ci"}],
+    }
+    return told_undeployed(run_stale(state)) is None
+
+
+@case("a red default branch is reported with no queued issue at all")
+def _():
+    # The original bug had nothing queued - the objective was finished and
+    # closed. A watchdog that returns early on an empty queue never looks.
+    state = {
+        "queued": [], "objectives": [55], "issues": {"55": objective()},
+        "default_branch": "main", "tip": "abc1234def",
+        "runs": [{"sha": "abc1234def", "conclusion": "failure", "workflow": "ci"}],
+    }
+    return told_undeployed(run_stale(state)) is not None
 
 
 def main() -> int:

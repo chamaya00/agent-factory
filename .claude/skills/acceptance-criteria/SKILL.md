@@ -39,6 +39,10 @@ Criteria cover the states, not just the happy path. For anything a user touches,
 
 Criteria describe behaviour, not implementation. "Uses a reducer" is not a criterion; it is a decision, and it belongs in an ADR.
 
+**A criterion about a built artifact names which build produced it.** "Checked against the built output" sounds rigorous and is not: it says a file was read, not that the file is the one a user gets. A project's own build and the build that publishes it are frequently different programs, and a criterion that does not say which one it means will be satisfied by whichever is convenient. That is not a hypothetical - a repository once proved every criterion against output from a builder that never ran in production, and shipped a site nobody could load.
+
+So write the builder into the criterion: *when built by `<the thing that publishes this>`, then ...*. If the two builds differ and the checkable one is the local one, say that too, and say what covers the gap. A criterion that quietly measures the wrong artifact is worse than a missing one, because it ends the search.
+
 ## What a criterion costs to satisfy
 
 A criterion is also an instruction to spend a run's budget, and the agent writing it is not the agent paying. Write them knowing that.

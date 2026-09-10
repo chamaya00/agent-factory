@@ -148,13 +148,17 @@ jobs:
   # comment on the issue is not already its own. A run starting writes a marker,
   # which re-arms it.
   stale-queue:
-    name: say when a queued issue is not running
+    name: say what is not moving
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
       issues: write
+      # Reads workflow runs on the default branch. Everything else this job
+      # watches is inside the repository; whether a merge actually shipped is
+      # not, and this is the least access that can answer it.
+      actions: read
     env:
       APP_ID: ${{ secrets.app-id }}
     steps:
@@ -166,7 +170,7 @@ jobs:
           app-id: ${{ secrets.app-id }}
           private-key: ${{ secrets.app-private-key }}
 
-      - name: Name the issues that are queued and idle
+      - name: Name what is not moving
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
           GH_REPO: ${{ github.repository }}
@@ -175,11 +179,70 @@ jobs:
         run: |
           # Best effort, like every other hand-back path here: a watchdog that
           # fails a run would be worse than the silence it is reporting.
+          # The third silence: merged, and nothing shipped.
+          #
+          # Every check this system runs is scoped to a pull request, and a
+          # pull request's checks stop being true the moment it merges. What
+          # runs after the merge - a deployment, a publish, a post-merge suite -
+          # is the part that decides whether the work reached anyone, and until
+          # now nothing here looked at it. A project ran nineteen hours and
+          # eight merges with a failing deployment, serving a stale build,
+          # while every pull request in that window was honestly green.
+          #
+          # The signal is cheap: a run carries the sha it ran on, so the runs
+          # whose headSha is the default branch's tip are the ones that decide
+          # whether the tip is good. Reported, never fixed - the same posture as
+          # the rest of this job.
+          branch="$(gh api "repos/$GH_REPO" --jq .default_branch 2>/dev/null || true)"
+          tip="$(gh api "repos/$GH_REPO/commits/${branch:-main}" --jq .sha 2>/dev/null || true)"
+          if [ -n "$tip" ]; then
+            broken="$(gh run list --branch "$branch" --limit 40 \
+              --json headSha,conclusion,workflowName \
+              --jq '.[] | [.headSha, .conclusion, .workflowName] | @tsv' 2>/dev/null \
+              | awk -F'\t' -v sha="$tip" \
+                  '$1 == sha && ($2 == "failure" || $2 == "timed_out") { print $3 }' \
+              | sort -u | paste -sd ', ' - || true)"
+            if [ -n "$broken" ]; then
+              echo "$branch is red at ${tip:0:7}: $broken."
+
+              # Say it where the work is discussed rather than only in a log.
+              # The objective's status comment is what a person actually reads,
+              # and a red default branch is the one thing that can make an
+              # objective's own status wrong - "met" is a claim about the world,
+              # and the world is what did not get built.
+              #
+              # No open objective means the job log is the only surface there
+              # is. That is a real limit, not a design: nothing here can comment
+              # on a conversation that does not exist.
+              parent="$(gh issue list --label objective --state open \
+                --limit 1 --json number --jq '.[0].number' 2>/dev/null || true)"
+              if [ -n "$parent" ]; then
+                last="$(gh issue view "$parent" --json comments \
+                  --jq '[.comments[] | select(.body | contains("agent-factory:"))] | last | .body' \
+                  2>/dev/null || true)"
+                case "$last" in
+                  *"agent-factory:undeployed"*) echo "#$parent already told." ;;
+                  *)
+                    gh issue comment "$parent" --body "$(printf '%s %s\n\n%s\n\n%s' \
+                      '<!-- agent-factory:undeployed -->' \
+                      "**\`$branch\` is red at \`${tip:0:7}\`: $broken.**" \
+                      "Merged work is not shipped work. Every check this system runs is scoped to a pull request, and those stop being true the moment it merges - what runs afterwards is what decides whether anyone can see the change. This objective's status may say met while nothing reached a reader." \
+                      "Nothing here fixes it. Read that run, and treat the failure as this repository's newest problem rather than the pull request's oldest one." \
+                      )" >/dev/null 2>&1 && echo "Told #$parent." || true
+                    ;;
+                esac
+              else
+                echo "No open objective to tell - this log is the only surface."
+              fi
+            else
+              echo "$branch is green at ${tip:0:7}."
+            fi
+          fi
+
           issues="$(gh issue list --label "$RUN_LABEL" --state open \
             --json number --jq '.[].number' 2>/dev/null || true)"
           if [ -z "$issues" ]; then
             echo "Nothing is queued."
-            exit 0
           fi
 
           # An objective waiting on a merge is the other silence, one layer up.
@@ -639,6 +702,9 @@ jobs:
               # this role decides what runs, not what lands.
               tools="$common,Bash(gh issue create:*),Bash(gh issue edit:*),Bash(gh label list:*),Bash(gh search issues:*)"
               tools="$tools,Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh pr diff:*),Bash(gh pr checks:*)"
+              # Reads runs on the default branch, so "the objective is met" can
+              # be checked against what shipped rather than what merged.
+              tools="$tools,Bash(gh run list:*),Bash(gh run view:*)"
               ;;
             researcher)
               # The action lists WebSearch and WebFetch in its own

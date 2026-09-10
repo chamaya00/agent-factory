@@ -269,6 +269,7 @@ def check_allowlist_entries_can_match() -> None:
 
 HANDBACK_STEP = "Hand back to a human"
 PRIVILEGE_STEP = "A change to privilege is declared, not slipped in"
+SWEEP_STEP = "Name what is not moving"
 ATTEMPT_MARKER = "<!-- agent-factory:attempt -->"
 
 
@@ -686,6 +687,43 @@ def check_privilege_cannot_arrive_undeclared() -> None:
     )
 
 
+def check_the_sweep_looks_past_the_queue() -> None:
+    """Whether the default branch shipped is asked before the queue is read.
+
+    The failure this exists for had nothing queued: the objective was finished
+    and closed, and the deployment had been failing for nineteen hours. A
+    watchdog that returns early on an empty queue never looks at the branch,
+    and an empty queue is exactly the state a finished objective leaves behind.
+
+    So the order is the guarantee, and it is invisible in a diff - moving the
+    check below the queue fetch reads as tidying and silently restores the
+    blind spot.
+    """
+    for step in agent_run_steps():
+        if step.get("name") != SWEEP_STEP:
+            continue
+        script = step.get("run") or ""
+        if "gh run list" not in script:
+            errors.append(
+                f".github/workflows/agent-run.yml: the {SWEEP_STEP!r} step does "
+                "not read runs on the default branch, so a merge that shipped "
+                "nothing is invisible to it."
+            )
+            return
+        looked = script.index("gh run list")
+        queue = script.index("gh issue list")
+        if looked > queue:
+            errors.append(
+                f".github/workflows/agent-run.yml: the {SWEEP_STEP!r} step reads "
+                "the queue before it reads the default branch. An empty queue "
+                "must not stop it looking - a finished objective leaves one."
+            )
+        return
+    errors.append(
+        f".github/workflows/agent-run.yml: no {SWEEP_STEP!r} step."
+    )
+
+
 def main() -> int:
     paths = sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml"))
     if TEMPLATES.is_dir():
@@ -708,6 +746,7 @@ def main() -> int:
     check_something_notices_the_silence()
     check_a_delivered_run_is_a_review()
     check_privilege_cannot_arrive_undeclared()
+    check_the_sweep_looks_past_the_queue()
     if errors:
         print(f"guard: {len(errors)} problem(s)\n")
         for error in errors:
