@@ -55,5 +55,8 @@ jobs:
       - name: Agent-run hands a finished child back to its parent
         run: python scripts/test_handback.py
 
+      - name: A privilege change cannot arrive undeclared
+        run: python scripts/test_project_guard.py
+
       - name: Release resolves the right commit for a major tag
         run: python scripts/test_release.py

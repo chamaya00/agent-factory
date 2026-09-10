@@ -268,6 +268,7 @@ def check_allowlist_entries_can_match() -> None:
 
 
 HANDBACK_STEP = "Hand back to a human"
+PRIVILEGE_STEP = "A change to privilege is declared, not slipped in"
 ATTEMPT_MARKER = "<!-- agent-factory:attempt -->"
 
 
@@ -612,6 +613,55 @@ def check_a_delivered_run_is_a_review() -> None:
         return
 
 
+def check_privilege_cannot_arrive_undeclared() -> None:
+    """A widening of what the automation may do cannot be silent.
+
+    The merge gate in the house-rules skill asks the person merging to look for
+    a new permission, a new secret, an action nobody vetted. That gate is prose,
+    and under a standing "merge when green" the person applying it may be a
+    session acting on an owner's instruction while the owner is asleep. This is
+    the one item on that list with a machine behind it, so it has to survive an
+    edit that quietly drops it - including an exemption for maintainers, which
+    would exempt exactly the case the check is for.
+    """
+    path = WORKFLOWS / "project-guard.yml"
+    data = yaml.safe_load(path.read_text())
+    for job in (data.get("jobs") or {}).values():
+        for step in (job or {}).get("steps") or []:
+            if step.get("name") != PRIVILEGE_STEP:
+                continue
+            script = step.get("run") or ""
+            for pattern, why in (
+                ("permissions:", "a token permission"),
+                ("secrets[.:]", "a secret"),
+                ("pull_request_target", "a trigger that runs a fork's code"),
+                ("uses:", "an action the repository will execute"),
+            ):
+                if pattern not in script:
+                    errors.append(
+                        f"project-guard.yml: the {PRIVILEGE_STEP!r} step no "
+                        f"longer looks for {why}."
+                    )
+            if "^Privilege change:" not in script:
+                errors.append(
+                    f"project-guard.yml: the {PRIVILEGE_STEP!r} step does not "
+                    "require the declaration to start a line, so the phrase "
+                    "quoted anywhere in a body would pass it."
+                )
+            if "MAINTAINERS" in script or "AUTHOR" in script:
+                errors.append(
+                    f"project-guard.yml: the {PRIVILEGE_STEP!r} step exempts "
+                    "some authors. A pull request merged on the owner's behalf "
+                    "is authored by a maintainer, and that is the case this "
+                    "check exists for."
+                )
+            return
+    errors.append(
+        f"project-guard.yml: no {PRIVILEGE_STEP!r} step. Nothing then stops a "
+        "diff widening what the automation may do without saying so."
+    )
+
+
 def main() -> int:
     paths = sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml"))
     if TEMPLATES.is_dir():
@@ -633,6 +683,7 @@ def main() -> int:
     check_the_diagnosis_reads_the_turn_count()
     check_something_notices_the_silence()
     check_a_delivered_run_is_a_review()
+    check_privilege_cannot_arrive_undeclared()
     if errors:
         print(f"guard: {len(errors)} problem(s)\n")
         for error in errors:
