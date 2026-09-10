@@ -524,6 +524,65 @@ def check_the_diagnosis_reads_the_turn_count() -> None:
         return
 
 
+def check_something_notices_the_silence() -> None:
+    """A queued issue with no run must produce a signal, not nothing.
+
+    Five separate faults in this system produced one identical symptom: an
+    issue correctly labelled `agent:queued`, nothing running, and nothing in
+    any log saying so. Each was found by a human noticing an absence.
+
+    The detector must also stay report-only. Re-queueing from a watchdog is a
+    second path into the one place where a bug spends the subscription.
+    """
+    template = TEMPLATES / "project" / ".github" / "workflows" / "agent-run.yml"
+    if template.exists():
+        data = yaml.safe_load(template.read_text())
+        triggers = (data or {}).get("on", (data or {}).get(True)) or {}
+        if not triggers.get("schedule"):
+            errors.append(
+                f"{template.relative_to(ROOT)}: no schedule trigger, so nothing "
+                "ever looks for a queued issue that never started."
+            )
+
+    workflow = WORKFLOWS / "agent-run.yml"
+    if not workflow.exists():
+        return
+    data = yaml.safe_load(workflow.read_text())
+    jobs = (data or {}).get("jobs") or {}
+    stale = jobs.get("stale-queue")
+    if not stale:
+        errors.append(
+            ".github/workflows/agent-run.yml: no stale-queue job, so the "
+            "schedule the callers carry has nothing to handle it."
+        )
+        return
+    if "schedule" not in str(stale.get("if", "")):
+        errors.append(
+            ".github/workflows/agent-run.yml: stale-queue is not restricted to "
+            "the schedule, so it would run on ordinary issue events."
+        )
+    script = " ".join(
+        str((step or {}).get("run") or "") for step in (stale.get("steps") or [])
+    )
+    if "--add-label" in script or "--remove-label" in script:
+        errors.append(
+            ".github/workflows/agent-run.yml: stale-queue writes a label. It is "
+            "meant to report only - re-queueing from a watchdog is a second "
+            "path into the one place where a bug spends the subscription."
+        )
+    if "agent-factory:stalled" not in script:
+        errors.append(
+            ".github/workflows/agent-run.yml: stale-queue leaves no marker, so "
+            "it would repeat its comment on every tick."
+        )
+    preflight_if = str((jobs.get("preflight") or {}).get("if", ""))
+    if "schedule" not in preflight_if:
+        errors.append(
+            ".github/workflows/agent-run.yml: preflight does not exclude "
+            "schedule events, so every tick would reach it as work to do."
+        )
+
+
 def main() -> int:
     paths = sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml"))
     if TEMPLATES.is_dir():
@@ -543,6 +602,7 @@ def main() -> int:
     check_only_our_own_app_may_start_a_run()
     check_a_merge_can_wake_an_objective()
     check_the_diagnosis_reads_the_turn_count()
+    check_something_notices_the_silence()
     if errors:
         print(f"guard: {len(errors)} problem(s)\n")
         for error in errors:

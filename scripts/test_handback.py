@@ -49,8 +49,15 @@ if args[:2] == ["issue", "view"]:
         print(parent if parent is not None else "")
     elif "labels" in args:
         print("\\n".join(issue.get("labels", [])))
+    elif "comments" in args:
+        print(issue.get("last_marker", ""))
     elif "body" in args:
         print(issue.get("body", ""))
+    sys.exit(0)
+
+# `gh issue list --label <l> --json number`
+if args[:2] == ["issue", "list"]:
+    print("\\n".join(str(n) for n in state.get("queued", [])))
     sys.exit(0)
 
 # `gh pr view <n> --json closingIssuesReferences`
@@ -109,7 +116,7 @@ def run_case(state: dict, role: str = "engineer", kind: str = "issue") -> list[s
         env["RUN_URL"] = "https://example.invalid/run"
         env["RUNNER_TEMP"] = str(tmp)
 
-        subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True)
+        subprocess.run(["bash", "-e", "-c", script], env=env, capture_output=True, text=True)
         return calls.read_text().splitlines()
 
 
@@ -229,7 +236,7 @@ def run_diagnosis(subtype: str, turns: int, cap: str = "40") -> str:
             "RUNNER_TEMP": str(tmp), "MAX_TURNS": cap,
         })
         script, _ = handback_script()
-        subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True)
+        subprocess.run(["bash", "-e", "-c", script], env=env, capture_output=True, text=True)
         return calls.read_text()
 
 
@@ -284,7 +291,7 @@ def run_merge(state: dict, pr: str = "43") -> list[str]:
         env["GH_REPO"] = "owner/repo"
         env["PR"] = pr
         env["RUN_LABEL"] = "agent:queued"
-        subprocess.run(["bash", "-c", merge_script()], env=env,
+        subprocess.run(["bash", "-e", "-c", merge_script()], env=env,
                        capture_output=True, text=True)
         return calls.read_text().splitlines()
 
@@ -329,6 +336,108 @@ def _():
         },
     }
     return not woke(run_merge(state), "39")
+
+
+STALE_STEP = "Name the issues that are queued and idle"
+
+
+def stale_script() -> tuple[str, dict]:
+    """The step's script and its literal env.
+
+    The env matters: the marker this step writes is defined there, not in the
+    script, so a harness that supplies its own would be testing a value the
+    workflow does not use. Only literal values are taken - anything with a
+    ${{ }} expression in it is the runner's job and is set by the caller.
+    """
+    data = yaml.safe_load(WORKFLOW.read_text())
+    for job in (data.get("jobs") or {}).values():
+        for step in (job or {}).get("steps") or []:
+            if step.get("name") == STALE_STEP:
+                env = {
+                    k: str(v)
+                    for k, v in (step.get("env") or {}).items()
+                    if "${{" not in str(v)
+                }
+                return step["run"], env
+    raise SystemExit(f"no {STALE_STEP!r} step in agent-run.yml")
+
+
+def run_stale(state: dict) -> list[str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        gh = tmp / "bin" / "gh"
+        gh.parent.mkdir()
+        gh.write_text(FAKE_GH)
+        gh.chmod(0o755)
+        calls = tmp / "calls"
+        calls.touch()
+        state_file = tmp / "state.json"
+        state_file.write_text(json.dumps(state))
+        env = dict(os.environ)
+        env.update({
+            "PATH": f"{gh.parent}:{env['PATH']}",
+            "GH_STATE": str(state_file), "GH_CALLS": str(calls),
+            "GH_TOKEN": "fake-token", "GH_REPO": "owner/repo",
+            "RUN_LABEL": "agent:queued",
+        })
+        script, step_env = stale_script()
+        env.update(step_env)
+        subprocess.run(["bash", "-e", "-c", script], env=env,
+                       capture_output=True, text=True)
+        return calls.read_text().splitlines()
+
+
+def reported(calls: list[str], n: str) -> bool:
+    return any(c.startswith(f"issue comment {n}") and "stalled" in c for c in calls)
+
+
+@case("a queued issue with nothing running it is reported")
+def _():
+    state = {"queued": [46], "issues": {
+        "46": objective(labels=["agent:queued", "role:engineer"]),
+    }}
+    return reported(run_stale(state), "46")
+
+
+@case("a queued issue that is running is left alone")
+def _():
+    state = {"queued": [46], "issues": {
+        "46": objective(labels=["agent:queued", "agent:running"]),
+    }}
+    return not reported(run_stale(state), "46")
+
+
+@case("an issue already stopped for a human is not reported")
+def _():
+    state = {"queued": [46], "issues": {
+        "46": objective(labels=["agent:queued", "agent:blocked"]),
+    }}
+    return not reported(run_stale(state), "46")
+
+
+@case("the report is not repeated on the next tick")
+def _():
+    state = {"queued": [46], "issues": {
+        "46": dict(objective(labels=["agent:queued"]),
+                   last_marker="<!-- agent-factory:stalled --> already said"),
+    }}
+    return not reported(run_stale(state), "46")
+
+
+@case("a run starting since the last report re-arms it")
+def _():
+    state = {"queued": [46], "issues": {
+        "46": dict(objective(labels=["agent:queued"]),
+                   last_marker="<!-- agent-factory:attempt --> Starting engineer"),
+    }}
+    return reported(run_stale(state), "46")
+
+
+@case("the detector never writes a label")
+def _():
+    state = {"queued": [46], "issues": {"46": objective(labels=["agent:queued"])}}
+    return not any("--add-label" in c or "--remove-label" in c
+                   for c in run_stale(state))
 
 
 def main() -> int:

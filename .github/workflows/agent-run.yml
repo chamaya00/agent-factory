@@ -49,6 +49,15 @@ on:
           it needs denied - has spent an attempt too. Deliberate. The cost is a
           slice of the subscription either way, and the alternative is deciding
           after the fact which runs "really" counted.
+
+          Revisited after a run pushed a complete branch, opened no pull
+          request, and spent an attempt anyway - which looked like the rule
+          punishing work that had actually been done. Left as it is. The
+          engineer now opens its pull request as a draft before it starts, so
+          a run that dies late leaves something reviewable rather than nothing,
+          and the case that made this look unfair is mostly gone. Exempting
+          "runs that delivered something" would make the count arguable, and a
+          rule you can argue with is not a rule.
         type: number
         default: 3
       max-supervisions:
@@ -110,6 +119,85 @@ permissions:
   # Never actions: write. A system that can rewrite its own gates has no gates.
 
 jobs:
+  # Nothing ever noticed that nothing was happening, and that is how every
+  # fault in this system has presented.
+  #
+  # Five separate bugs - a cancelled pending run, an unresolvable parent, a
+  # refused bot actor, an invisible merge, a run that pushed but opened no pull
+  # request - produced one identical symptom: an issue correctly labelled
+  # `agent:queued`, nothing running against it, and nothing in any log saying
+  # so. Every one was found by a human noticing an absence, which does not
+  # scale and is the burden the orchestrator exists to remove.
+  #
+  # This job says so out loud. It does NOT re-queue anything, deliberately.
+  # Re-queueing would be a second path into the place where a bug spends the
+  # subscription, and a watchdog that is wrong spends it repeatedly. A comment
+  # costs nothing and turns silence into a signal a human or an orchestrator
+  # can act on - which was the actual complaint, since in every case above the
+  # state was recoverable the moment anybody looked.
+  #
+  # It stays quiet after saying it once: it speaks only when the newest marker
+  # comment on the issue is not already its own. A run starting writes a marker,
+  # which re-arms it.
+  stale-queue:
+    name: say when a queued issue is not running
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    env:
+      APP_ID: ${{ secrets.app-id }}
+    steps:
+      - name: Mint the agent identity token
+        id: app-token
+        if: env.APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.app-id }}
+          private-key: ${{ secrets.app-private-key }}
+
+      - name: Name the issues that are queued and idle
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_LABEL: ${{ inputs.run-label }}
+          MARKER: '<!-- agent-factory:stalled -->'
+        run: |
+          # Best effort, like every other hand-back path here: a watchdog that
+          # fails a run would be worse than the silence it is reporting.
+          issues="$(gh issue list --label "$RUN_LABEL" --state open \
+            --json number --jq '.[].number' 2>/dev/null || true)"
+          if [ -z "$issues" ]; then
+            echo "Nothing is queued."
+            exit 0
+          fi
+
+          for n in $issues; do
+            labels="$(gh issue view "$n" --json labels --jq '.labels[].name' 2>/dev/null || true)"
+            # Running is not stalled, and an issue a human has stopped is not
+            # this job's business.
+            echo "$labels" | grep -qx 'agent:running' && { echo "#$n is running."; continue; }
+            echo "$labels" | grep -qx 'agent:blocked' && continue
+            echo "$labels" | grep -qx 'needs-decomposition' && continue
+
+            # Say it once. The newest agent-factory marker tells us whether the
+            # last thing to happen here was a run starting or this job speaking.
+            last="$(gh issue view "$n" --json comments \
+              --jq '[.comments[] | select(.body | contains("agent-factory:"))] | last | .body' \
+              2>/dev/null || true)"
+            case "$last" in
+              *"agent-factory:stalled"*) echo "#$n already reported."; continue ;;
+            esac
+
+            echo "Reporting #$n as queued but idle."
+            gh issue comment "$n" --body "$(printf '%s %s\n\n%s\n\n%s' \
+              "$MARKER" "**Queued, but nothing is running it.**" \
+              "This issue carries \`$RUN_LABEL\` and has no \`agent:running\`, so a run should have started and did not. Every fault this system has had looks exactly like this - a correctly labelled issue with nothing behind it - and the state is usually recoverable the moment somebody looks." \
+              "Nothing has been re-queued automatically: that would be a second way to spend the subscription. Remove and re-add the label to start a run, or read the recent workflow runs if this repeats.")" || true
+          done
+
   # A merge is the other half of the loop, and it used to be missing.
   #
   # The hand-back wakes an objective when a child's run ends, so the
@@ -200,9 +288,9 @@ jobs:
 
   preflight:
     name: decide whether to run
-    # A merge is handled above. Without this, a pull_request event would reach
-    # the preflight as a pull request to work, and spend a run on it.
-    if: github.event_name != 'pull_request'
+    # A merge is handled above, and so is the schedule. Without this, either
+    # would reach the preflight as something to work and spend a run on it.
+    if: github.event_name != 'pull_request' && github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

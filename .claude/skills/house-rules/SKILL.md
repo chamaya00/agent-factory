@@ -17,6 +17,8 @@ Every issue names one role. Work that needs two roles is two issues.
 
 Tests before merge. Every acceptance criterion has a test that would fail if the criterion were violated. A criterion covered only by a manual check is not covered.
 
+**Watch each new check fail before you trust it passing.** Break the thing it guards, see it go red, put the thing back. A check that has only ever been green is not evidence; it is a check that has never been tested, and the two are indistinguishable from the outside. This applies to the test harness as much as to the code - a fixture that silently stops working turns its negative cases green for the wrong reason, and those are the cases nobody re-reads.
+
 The checks are the gate, and the gate is deterministic. Never skip, disable, or quarantine a test to get to green, and never widen a pull request to get around a failing check.
 
 A pull request changes one issue's worth of code. Things noticed along the way become issues, not commits.
