@@ -2,9 +2,10 @@ name: project-guard
 
 # The containment check, run inside each project rather than in the factory.
 #
-# Two things it enforces, both of which an agent would otherwise be able to
-# undo quietly: memory files stay inside their cap, and nothing that gates the
-# repo gets edited by whoever the gates apply to.
+# Three things it enforces, all of which an agent would otherwise be able to
+# undo quietly: memory files stay inside their cap, nothing that gates the repo
+# gets edited by whoever the gates apply to, and a change to what the
+# automation may do arrives declared rather than buried in a diff.
 #
 # Projects call it with:
 #   jobs:
@@ -110,3 +111,58 @@ jobs:
           done <<< "$changed"
           [ "$failed" -eq 0 ] && echo "No protected path was touched."
           exit "$failed"
+
+      - name: A change to privilege is declared, not slipped in
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+
+          # Deliberately no maintainer exemption, unlike the protected-paths
+          # check above. That one asks who is editing a gate, and trusts the
+          # owner with it. This one asks whether a diff quietly widens what the
+          # automation can reach - and the case worth catching is precisely a
+          # pull request merged on the owner's behalf under a standing "merge
+          # when green", where nobody read the diff and the author is a
+          # maintainer. An exemption here would exempt the only case it is for.
+
+          added="$(git diff --unified=0 "$BASE_SHA" "$HEAD_SHA" \
+            | grep -E '^\+' | grep -vE '^\+\+\+' || true)"
+
+          scopes='actions|attestations|checks|contents|deployments|discussions'
+          scopes="$scopes|id-token|issues|models|packages|pages|pull-requests"
+          scopes="$scopes|repository-projects|security-events|statuses"
+
+          found=""
+          report() {
+            hits="$(printf '%s\n' "$added" | grep -E "$2" || true)"
+            [ -z "$hits" ] && return 0
+            found="yes"
+            echo "$1"
+            printf '%s\n' "$hits" | sed 's/^/    /' | head -10
+          }
+
+          report "Token permissions" \
+            "permissions:|^\+[[:space:]]*($scopes):[[:space:]]*write"
+          report "A secret" "secrets[.:]"
+          report "A trigger that runs against code from a fork" \
+            "pull_request_target|workflow_run"
+          report "An action this repository will execute" "uses:[[:space:]]*[^[:space:]]"
+
+          if [ -z "$found" ]; then
+            echo "Nothing in this diff changes what the automation may do."
+            exit 0
+          fi
+
+          if printf '%s' "$BODY" | grep -qE '^Privilege change:[[:space:]]*[^[:space:]]'; then
+            echo
+            echo "Declared in the pull request body. A person still has to agree with it."
+            exit 0
+          fi
+
+          echo
+          echo "::error::This diff changes what the automation may do, and the pull request does not say so. Reverting a merge does not take back a permission that ran, a secret that was read, or an action that executed. Add a line to the body starting 'Privilege change:' saying what widened and why, so the person merging is deciding rather than discovering. The check does not forbid the change - it forbids doing it silently."
+          exit 1

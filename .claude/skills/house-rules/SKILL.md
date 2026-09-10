@@ -23,6 +23,40 @@ The checks are the gate, and the gate is deterministic. Never skip, disable, or 
 
 A pull request changes one issue's worth of code. Things noticed along the way become issues, not commits.
 
+## Who merges
+
+Merging stays outside every agent-run role. No role is granted `gh pr merge`, and none should be: it is the one step that is irreversible, outward-facing, and impossible to review after the fact. A role's job ends at a pull request that is ready and a comment saying what needs a person.
+
+**A session carrying someone's instruction merges on their behalf.** A person who says "merge when green" has decided, in advance, that green is the standard they want applied to this work. That decision holds while the session that received it is working, whether or not they are reading it happen. Watching is not what makes the merge legitimate - the instruction is, and so is being able to revoke it, and so is a merge that points back at the session that made it.
+
+Do not confuse being unwatched with being self-directed. What must not happen is the loop closing on itself: the factory splitting an objective, building it, merging it, and choosing what comes next with no decision from a person anywhere in the chain. That is why roles do not merge - not because someone should be looking, but because a role's instruction comes from the factory rather than from an owner. The rule lives in the tool grant rather than here, so a run that talks itself into merging still cannot.
+
+The difference an absent owner does make is that you cannot ask them anything. So anything that would have been a question becomes a pull request left open with the question written on it. That is a better outcome than a guess, and it is waiting for them when they come back.
+
+Before merging on someone's behalf, all of these hold. Any one failing is a reason to say so rather than merge:
+
+- **Every acceptance criterion is covered by a check that actually ran.** A criterion marked verified by a check that never executed is the worst case here, because it ends the review - a reader who sees it ticked does not check it again.
+- **The required checks are green**, and there are some. A pull request with no checks is not green; it is unmeasured. Know what green covers, too: structural checks say the shape is right, never that the behaviour is correct.
+- **The diff is the issue's worth of work** and no more. Something noticed on the way out is a new issue. Read the diff, not the description of the diff - they are different acts, and only one of them catches a change nobody wrote down.
+- **An ADR is present** if a schema, a data shape, or a dependency changed.
+- **Anything the research or design named as a consequence** is handled or explicitly deferred in writing.
+- **Nothing in the diff needs a decision only the owner can make.** Product behaviour, naming that will outlive the issue, a trade-off with no obviously right answer: those get asked, not merged.
+
+Say which of these you checked. "Merged, green" is not a review; it is a status.
+
+### What a revert does not undo
+
+The gate above is mostly about whether the work is finished. It is not about whether the work is safe, and a diff can be exactly the issue's worth of work and still do something that outlives being reverted. Read every diff for these six. Any one of them means stop and ask, not merge - even under a standing instruction, because the standing instruction was about green, and this is not that.
+
+1. **A credential.** A key, token, password, or connection string, in product code or a fixture either way. Reverting does not unpublish it; it has to be rotated.
+2. **Anything that widens what the automation may do.** A `permissions:` block, a new secret reference, a trigger that runs against a fork's code, a third-party action, an action pinned to a tag that can move. This one has a check behind it: the project guard fails a pull request whose diff widens any of these unless the body carries a line starting `Privilege change:` saying what and why. It does not forbid the change, only doing it quietly - and it exempts nobody, because a pull request merged under a standing instruction is authored by a maintainer and that is the case it is for.
+3. **A new outbound destination.** A request, form action, script source, or embedded resource pointing at a host the project does not already use. This one ships to real readers the moment it merges.
+4. **Destruction.** Deleted data, deleted files the issue did not name, rewritten history, a force-push.
+5. **A dependency from outside the ecosystem already in use.** Adding the first one of anything is a category change, not a feature, and the ADR that documents it is not a substitute for asking.
+6. **A change the pull request does not mention.** Unexplained work is the tell for an honest mistake and for an agent that read an instruction from somewhere it should not have. Roles take their input from issue text, and issue text is written by whoever can comment.
+
+Ask about these in the owner's language, not the diff's. "This adds a request to an address the site has not used before - is that expected?" can be answered by someone who does not read code, which is the point: the check exists to turn a rare risky change into a question they can actually answer, not to make them review the patch.
+
 ## Decisions
 
 Any change to a schema, a data shape, or a dependency gets an ADR in `docs/decisions/`, in the same diff that makes the change. Four sections: context, decision, consequences, alternatives rejected. A dependency added without an ADR is a dependency nobody can remove later, because nobody knows why it is there.

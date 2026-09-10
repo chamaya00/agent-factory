@@ -161,7 +161,8 @@ Then the roles and the commands themselves, copied rather than referenced:
 
 - `.claude/agents/*.md` - every file in `<factory root>/agents/`
 - `.claude/skills/*/SKILL.md` - every skill in `<factory root>/skills/`
-- `.claude/commands/retro.md`, `decompose.md`, `update-agents.md` - from
+- `.claude/commands/retro.md`, `decompose.md`, `update-agents.md`,
+  `ship.md` - from
   `<factory root>/commands/`. Not `new-project.md`: provisioning is the
   factory's job, and a project that can provision another project is a way to
   get a second factory nobody is maintaining.
@@ -175,7 +176,8 @@ the repository it cloned, and installs no plugin. A marketplace declared in
 `.claude/settings.json` is dropped unless the folder has been trusted, and a
 cloud session has nobody to answer the trust prompt, so a project that relied
 on one would open with none of these commands. Copying is what puts `/retro`,
-`/decompose`, and `/update-agents` in a session opened on this repository.
+`/decompose`, `/update-agents`, and `/ship` in a session opened on this
+repository.
 
 Copying rather than fetching is the whole design. It means this repository's
 agents keep behaving the way they behaved on the day it was provisioned, no
