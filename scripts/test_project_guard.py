@@ -49,17 +49,31 @@ def git(repo: Path, *args: str) -> None:
     )
 
 
-def run_case(before: str, after: str, body: str = "") -> int:
-    """Build a real two-commit repo, diff it, and return the step's exit code."""
+def run_case(before, after, body: str = "") -> int:
+    """Build a real two-commit repo, diff it, and return the step's exit code.
+
+    `before` and `after` are either a string, meaning one file called
+    `file.yml`, or a {filename: content} mapping when a case needs to say
+    which file a change landed in.
+    """
+    if isinstance(before, str):
+        before = {"file.yml": before}
+    if isinstance(after, str):
+        after = {"file.yml": after}
     with tempfile.TemporaryDirectory() as tmp:
         repo = Path(tmp)
         git(repo, "init", "-q", "-b", "main")
-        (repo / "file.yml").write_text(before)
+        for name, text in before.items():
+            (repo / name).write_text(text)
         git(repo, "add", "-A")
         git(repo, "commit", "-qm", "base")
         base = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo,
                               capture_output=True, text=True).stdout.strip()
-        (repo / "file.yml").write_text(after)
+        for name in before:
+            if name not in after:
+                (repo / name).unlink()
+        for name, text in after.items():
+            (repo / name).write_text(text)
         git(repo, "add", "-A")
         git(repo, "commit", "-qm", "head")
         head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo,
@@ -143,6 +157,38 @@ def _():
 def _():
     before = "permissions:\n  contents: write\n" + PLAIN
     return run_case(before, PLAIN) == 0
+
+
+@case("prose describing a permissions block is not a permissions block")
+def _():
+    # The house-rules skill documents this very check, quoting `permissions:`
+    # and `secrets:` as it does. Markdown cannot grant either. Left in the
+    # scan it fired on every repository carrying the skill.
+    doc = "# House rules\n"
+    return run_case({"doc.md": doc, "file.yml": PLAIN},
+                    {"doc.md": doc + "Watch for a `permissions:` block or a secrets: reference.\n",
+                     "file.yml": PLAIN}) == 0
+
+
+@case("a documentation-only diff passes")
+def _():
+    return run_case({"doc.md": "a\n"}, {"doc.md": "a\nb\n"}) == 0
+
+
+@case("documentation alongside a real widening does not hide it")
+def _():
+    return run_case(
+        {"doc.md": "a\n", "file.yml": PLAIN},
+        {"doc.md": "a\nb\n", "file.yml": "permissions:\n  contents: write\n" + PLAIN},
+    ) == 1
+
+
+@case("a shell script is not documentation")
+def _():
+    # The exclusion is by extension, so it has to stay narrow enough that
+    # anything executable is still read.
+    return run_case({"go.sh": "echo hi\n"},
+                    {"go.sh": "echo hi\ncurl -H \"$SECRET\" # secrets.TOKEN\n"}) == 1
 
 
 def main() -> int:

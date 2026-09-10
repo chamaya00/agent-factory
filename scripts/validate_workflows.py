@@ -648,6 +648,30 @@ def check_privilege_cannot_arrive_undeclared() -> None:
                     "require the declaration to start a line, so the phrase "
                     "quoted anywhere in a body would pass it."
                 )
+            # The documentation exclusion is a narrowing, and a narrowing is
+            # how a check dies quietly: one more extension each time it is
+            # inconvenient, until nothing is read. Markdown cannot grant a
+            # permission; a workflow, a script, or a lockfile can. So read the
+            # alternation itself rather than looking for a substring - the
+            # first version of this check matched ".yml" and sailed past a
+            # pattern that had grown "|yml)".
+            exclusion = re.search(r"grep -vE '\\\.\(([^)]*)\)\$'", script)
+            if exclusion is None:
+                errors.append(
+                    f"project-guard.yml: cannot find the file-type exclusion "
+                    f"in the {PRIVILEGE_STEP!r} step, so nothing here can say "
+                    "what it lets through."
+                )
+            else:
+                allowed = {"md", "markdown", "txt", "rst", "adoc"}
+                excluded = {e.strip() for e in exclusion.group(1).split("|")}
+                for extension in sorted(excluded - allowed):
+                    errors.append(
+                        f"project-guard.yml: the {PRIVILEGE_STEP!r} step "
+                        f"excludes .{extension} files from the scan. Only "
+                        "documentation may be excluded - anything that runs "
+                        "has to be read."
+                    )
             if "MAINTAINERS" in script or "AUTHOR" in script:
                 errors.append(
                     f"project-guard.yml: the {PRIVILEGE_STEP!r} step exempts "

@@ -129,7 +129,21 @@ jobs:
           # when green", where nobody read the diff and the author is a
           # maintainer. An exemption here would exempt the only case it is for.
 
-          added="$(git diff --unified=0 "$BASE_SHA" "$HEAD_SHA" \
+          # Documentation is excluded, and the reason is that it cannot do
+          # any of what this step looks for: prose describing a `permissions:`
+          # block does not grant one. Left in, it fires on the house-rules
+          # skill that documents this very check - a false positive on every
+          # repository that carries it, which is all of them. A check that is
+          # routinely red is one people stop reading, and that costs more than
+          # the narrowing does. Nothing executable is excluded.
+          files="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" \
+            | grep -vE '\.(md|markdown|txt)$' || true)"
+          if [ -z "$files" ]; then
+            echo "Only documentation changed. Nothing here can widen anything."
+            exit 0
+          fi
+
+          added="$(git diff --unified=0 "$BASE_SHA" "$HEAD_SHA" -- $files \
             | grep -E '^\+' | grep -vE '^\+\+\+' || true)"
 
           scopes='actions|attestations|checks|contents|deployments|discussions'
