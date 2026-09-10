@@ -21,6 +21,12 @@ on:
   # spend a run on the pull request itself.
   pull_request:
     types: [closed]
+  # Nothing ever noticed that nothing was happening. Every fault this system
+  # has had looked the same from outside: an issue correctly labelled, no run
+  # against it, and no log saying so. The factory workflow uses this tick to
+  # say so out loud; it re-queues nothing.
+  schedule:
+    - cron: '*/30 * * * *'
   workflow_dispatch:
     inputs:
       issue-number:

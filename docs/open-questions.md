@@ -250,8 +250,15 @@ automated path that used to hit this no longer does.
 and watch whether both run. That confirms the shape; the decision after it is a
 judgement, not an observation.
 
-**What changes.** Either the group loosens - per-issue rather than per-repo, and
-the budget is protected some other way - or something notices an issue that has
-carried the run label with no run for some minutes and re-raises it. The second
-keeps the guarantee and is the smaller change, but it is a watchdog, and a
-watchdog that is wrong spends the subscription on its own.
+**What was done about it, and what is left.** The second option, halfway. A
+`stale-queue` job now ticks on a schedule and comments on any issue carrying the
+run label with nothing running it. It does not re-raise anything: re-queueing
+from a watchdog is a second path into the one place where a bug spends the
+subscription, and that risk has not changed. So the loss is no longer silent,
+which was the part that made it dangerous, and recovery is still a human
+removing and re-adding a label.
+
+What is genuinely still open is whether that is enough. If the report turns out
+to fire often, the answer is to loosen the group - per-issue rather than
+per-repo, with the budget protected some other way - rather than to let a
+watchdog start spending. If it never fires, this entry can go.

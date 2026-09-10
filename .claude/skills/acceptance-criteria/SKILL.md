@@ -39,6 +39,18 @@ Criteria cover the states, not just the happy path. For anything a user touches,
 
 Criteria describe behaviour, not implementation. "Uses a reducer" is not a criterion; it is a decision, and it belongs in an ADR.
 
+## What a criterion costs to satisfy
+
+A criterion is also an instruction to spend a run's budget, and the agent writing it is not the agent paying. Write them knowing that.
+
+The cost is in *setups*, not assertions. A fixture that has to be built, seeded, torn down, or compiled is expensive; another assertion against a fixture that already exists is nearly free. Three criteria each demanding their own build cost roughly three times one criterion demanding a build that three assertions then read - and the observable behaviour proved is identical.
+
+So when several criteria describe the same starting state, say so once: `Given <that state>, when <action>, then <result>, and <result>, and <result>`. Split them only when the starting states genuinely differ.
+
+This is not a licence to ask for less. Nothing about what "done" looks like changes - the same behaviours are still proved, and a criterion that needs its own expensive setup keeps it. What changes is that the issue fits in the budget that has to satisfy it, instead of dying at the turn cap with the work half done and the attempt spent.
+
+If an issue cannot be stated inside its budget even written this way, that is the finding: it is two issues, and saying so costs nothing compared to discovering it from a run that ran out.
+
 ## How many
 
 Between two and six per issue. One criterion means the issue is a task and probably belongs inside another issue. More than six means it is two issues wearing a coat.
