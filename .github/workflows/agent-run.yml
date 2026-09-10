@@ -30,8 +30,16 @@ on:
           cannot spend deliberately - and the hand-back step names it on the
           issue when a run dies on it, so the next reader can tell a cap from a
           scoping problem without opening the job log.
+
+          Raised from 40 after three engineer runs on the same repository
+          finished materially complete at 45, 48 and 57 turns - every one of
+          them past the cap, and one of them twice in a row on the same issue.
+          40 was below the floor for a role that has to build a site and run
+          its fixtures, exactly as 15 was below the floor before it. This is a
+          spend cap and nothing else: it stops a runaway run, and a run that
+          reaches it has not been judged, only stopped.
         type: number
-        default: 40
+        default: 80
       timeout-minutes:
         description: Wall-clock cap for the agent job.
         type: number
@@ -888,7 +896,37 @@ jobs:
             exit 0
           fi
 
-          gh "$KIND" edit "$ISSUE" --add-label 'agent:blocked' || true
+          # A run that delivered is a review, whatever stopped it.
+          #
+          # The cap is a spend limit, not a verdict, and it was being read as
+          # three things at once: this run cost too much, therefore the work is
+          # bad, therefore the issue is scoped wrong. On
+          # new-project-agents-v3#50 and #51 all three fired on work that was
+          # complete, tested, and merged unchanged - the orchestrator had to
+          # notice and relabel by hand both times.
+          #
+          # So the delivery decides the label. A ready, non-draft pull request
+          # means the engineer got its work out; the issue belongs in review
+          # even though the job failed. Anything else is still agent:blocked.
+          # A draft does not count: that is work in progress, which is what the
+          # draft says.
+          delivered() {
+            [ "$KIND" = "issue" ] || return 1
+            for b in $(git ls-remote --heads origin "claude/issue-$ISSUE-*" 2>/dev/null \
+              | awk '{print $2}' | sed 's#refs/heads/##'); do
+              state="$(gh pr list --head "$b" --state open \
+                --json isDraft --jq '.[0].isDraft' 2>/dev/null || true)"
+              [ "$state" = "false" ] && return 0
+            done
+            return 1
+          }
+
+          if delivered; then
+            echo "#$ISSUE has a pull request ready for review. Labelling it so."
+            gh "$KIND" edit "$ISSUE" --add-label 'agent:review' || true
+          else
+            gh "$KIND" edit "$ISSUE" --add-label 'agent:blocked' || true
+          fi
           wake_parent
 
           # What actually got delivered, as facts rather than an absence to be
