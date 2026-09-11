@@ -101,12 +101,71 @@ objective it is working, the factory would be authorising its own merges, and
 "the loop closing on itself" would be back with a written record that looks
 like consent.
 
-So: **the line is only honoured when a person put it there.** An objective's
-body is attributable - GitHub records who authored and who last edited it. A
-session writes the line only as the direct result of a person answering the
-question, and never on its own initiative.
+Start from what is actually true, rather than from what would be convenient:
+**a driver holding a person's credentials is indistinguishable from that
+person.** A driver session files issues as the account it authenticates as, and
+in the setup this was designed against that is the owner's own account, not a
+bot. So no check can separate "the person told the driver to write this" from
+"the driver decided to write it" - not by author, not by edit history, and not
+by any token a different harness could present instead. Any design that claims
+otherwise is describing a check it does not have.
 
-Whether that is enforced or merely stated is the main open question below.
+That is not the failure worth preventing, though, and the one that is happens
+to be cleanly separable. The dangerous case is an **unattended** run - the
+orchestrator waking on a label event with no person in the conversation at all -
+granting itself authority to merge. Runs like that authenticate as the agent
+identity App, and drivers do not. So the boundary is drawn there, and it is
+drawn in terms of identities rather than of any particular harness:
+
+**Enforced.** A `Merge policy` line is honoured only when the objective's body
+was last edited by an account that is not the agent identity App. A driver
+authenticating as the person passes whatever tool it is built from; anything
+running as the App is refused. The orchestrator and every other role are
+additionally told never to write the line, and to ignore one that is present,
+because it is not addressed to them - a rule that can graduate into a preflight
+check rather than staying prose.
+
+**Stated, and unenforceable by construction.** A driver writes the line only as
+the direct result of a person answering the question, never on its own
+initiative. There is no mechanism behind this and there should not be a pretence
+of one. What makes it a different risk from the unattended case is structural
+rather than cryptographic: a driver is, by definition, mid-conversation with a
+person, and an unattended run is not.
+
+**Recorded, for legibility rather than security.** The line carries who set it
+and when - `Merge policy: green (set by @owner, 2026-09-11)` - so the provenance
+is readable at a glance. This is self-reported and forgeable by the same account
+that writes the line. It is worth having because it makes a surprising policy
+easy to notice and question, and it is worth not overselling.
+
+The line may appear anywhere in the objective's body, matched line-anchored;
+`/objective` writes it in a consistent place near the top so it is visible
+without scrolling.
+
+### What the policy does not authorise: failure
+
+A `green` policy authorises merging. It says nothing about what to do when work
+fails, and the two must not be conflated - the person decided that green is a
+standard they trust, not that the driver should decide on their behalf what a
+second block means.
+
+So when a child blocks a second time, after the orchestrator's one corrective
+pass, **that child stops and comes to the person** with what was tried and how
+each attempt failed. No third rewrite, no fourth attempt in a different coat:
+the three-strike rule already says that three attempts means the issue was
+scoped wrong, and scoping is not a driver's call.
+
+**Its siblings keep moving.** Children that are ready and passing still merge
+under the policy, because one badly scoped child is not evidence about the
+others and freezing the whole objective turns a local problem into a global
+stall. The objective gets `needs-human` for the blocked child while the rest of
+it continues.
+
+The exception worth naming: if a second block suggests the *objective* was
+scoped wrong rather than the child - the same finding surfacing from more than
+one child, or a dependency nobody spotted at decomposition - then merging
+siblings is premature and the driver says so instead of continuing. That is a
+judgment call, which is exactly why it comes to a person.
 
 ## The four pieces
 
@@ -123,8 +182,14 @@ Collapses the opening prompt to one line. What it does, in order:
    like, and a "for the orchestrator" section naming the traps.
 3. **Asks the merge policy question, once**, and writes the answer into the
    body as the line above.
-4. **Files it, labels it `objective` and `agent:queued`.**
-5. **Then drives it**, per the driver section below.
+4. **Shows the drafted body and waits for a yes before filing.** One
+   keystroke, and it is the last beat of the refinement conversation rather
+   than a separate approval step. It buys the thing that is expensive to fix
+   later: a mis-scoped objective that is already queued has started spending
+   runs, and children that arrive at a person with a third of their attempt
+   budget gone is a failure this system has already had.
+5. **Files it, labels it `objective` and `agent:queued`.**
+6. **Then drives it**, per the driver section below.
 
 The refinement step is why this is a command and not a workflow. Everything
 after step 1 is mechanical; step 1 is the whole value.
@@ -167,6 +232,13 @@ is genuinely waiting on a person - a decision only they can make, a child at
 `needs-decomposition`, a second block after a corrective pass - and clears it
 when the objective is moving again.
 
+One flat label, not a suffixed family. The label answers "does anything need
+me?" from the issue list; the orchestrator's status comment answers "what?" in
+prose, which it already does well, and duplicating that into the label set buys
+filtering at the cost of three labels to provision and a suffix the orchestrator
+can pick wrongly. Creating labels is still one of the handful of steps a person
+does by hand, and that argues for the small set.
+
 Note what this does *not* include once `Merge policy: green` is recorded: a
 pull request waiting to be merged is no longer waiting on a person. That is the
 point of the policy line, and `needs-human` should not be applied for it.
@@ -202,35 +274,28 @@ observed cost of that is four hours of apparent nothing.
 
 ## Open questions
 
-Each needs an answer before the piece it belongs to ships. An entry is deleted
-when it is answered, not annotated.
+Four of the five questions this document opened with have been answered, and
+the answers are folded into the sections above rather than recorded here - an
+entry is deleted when it is answered, not annotated. What remains is the one
+thing the design knowingly does not solve.
 
-1. **Is "only a person may write the merge policy line" enforced, or only
-   stated?** Stated is one sentence and trusts the roles. Enforced means
-   something reads the issue's edit history and refuses to honour a line last
-   touched by the agent identity - real protection against the one failure that
-   matters here, at the cost of a check that has to know which account is the
-   bot. Recommendation: enforce it. This is the hinge the whole mechanism turns
-   on, and it is the kind of rule that is obeyed right up until the run that
-   does not.
+1. **Should the driver have its own identity, separate from the person's?**
+   Everything above accepts that a driver authenticating as the owner is
+   indistinguishable from the owner, and draws its enforceable boundary around
+   the agent identity App instead. That boundary is real and it stops the
+   failure that matters, but it leaves a gap: nothing can tell a policy line the
+   person dictated from one a driver wrote unprompted, because both arrive from
+   the same account.
 
-2. **Does `/objective` file the issue, or file it and queue it?** Filing and
-   queueing in one step is what the person asked for. It also means a
-   mis-scoped objective starts burning runs before anyone has re-read it.
-   Possible answer: queue immediately by default, show the drafted body first
-   and let them say no.
+   Giving the driver its own identity - a second App, or a token that is not the
+   owner's - would close it. Then "the owner edited this" and "a driver edited
+   this" are separable facts, the enforced rule can require the former, and the
+   behavioural rule stops being load-bearing.
 
-3. **Where does the merge policy line live in the body - anywhere, or a fixed
-   position?** Anywhere is friendlier to a human editing it later. A fixed
-   position is greppable and unambiguous. If question 1 is answered
-   "enforced", this probably has to be fixed-position.
-
-4. **Should `needs-human` carry the reason?** One label is simple.
-   `needs-human:decision` versus `needs-human:decomposition` is filterable but
-   multiplies the label set, and the provisioning step that creates labels is
-   already one of the four things a person has to do by hand.
-
-5. **What happens to an objective whose policy is `green` when a child blocks
-   twice?** The policy authorises merging, not deciding what to do about
-   failure. Presumably it still stops and asks - but that should be written
-   down rather than inferred.
+   The cost is a new identity to create, store, and rotate, on a system whose
+   setup already has several steps only a person can do, and it buys protection
+   against a driver that has gone wrong while holding credentials the person
+   handed it deliberately. That is a real risk but not obviously this system's
+   biggest one, which is why this is a question rather than a decision. It
+   should be settled before the policy mechanism is relied on anywhere the
+   consequences of a wrong merge are worse than they are today.
