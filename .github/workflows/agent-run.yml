@@ -688,6 +688,29 @@ jobs:
           common='Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh issue comment:*)'
           common="$common,Bash(git push:*),Bash(git status:*),Bash(git diff:*)"
 
+          # Opening a pull request is not an engineer-only act. Every role that
+          # writes a file has to be able to land it, because the chain is gated
+          # on a *merged* pull request: a role that can push a branch but not
+          # open a pull request produces work that is complete, labelled
+          # agent:review, and unreachable by the next child forever.
+          #
+          # That is not a risk, it is a bill this system paid. On
+          # new-project-agents-v3#66 the designer finished #67 in four minutes
+          # and pushed a correct spec. Nothing moved for the next four hours.
+          # The orchestrator woke four times, read the state correctly each
+          # time, refused to queue the child that depended on it - correctly,
+          # it was not merged - and spent two supervision runs re-reporting the
+          # same blocker, because the only step left was mechanical and no role
+          # in this system could perform it. The engineer's own role text has
+          # argued exactly this since the draft-first change ("a finished diff
+          # on a branch nobody opened a pull request for is invisible to
+          # everyone downstream"); it simply was not applied to the two roles
+          # that also write files.
+          #
+          # No `gh pr merge` here either. This grants landing the work, not
+          # deciding it is good: merging stays a human's call for every role.
+          authoring_pr='Bash(gh pr create:*),Bash(gh pr view:*),Bash(gh pr edit:*),Bash(gh pr list:*),Bash(gh pr comment:*)'
+
           case "$ROLE" in
             orchestrator)
               # Creates and labels children, and decides which of them runs.
@@ -715,9 +738,11 @@ jobs:
               # role with no web access still writes a confident Sources
               # section.
               tools="$common,Write,Edit,WebFetch,WebSearch"
+              tools="$tools,$authoring_pr"
               ;;
             designer)
               tools="$common,Write,Edit,WebFetch"
+              tools="$tools,$authoring_pr"
               ;;
             engineer)
               # Writes code, runs the checks the gate runs, and opens the
