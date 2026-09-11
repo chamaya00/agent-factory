@@ -1,7 +1,7 @@
 name: bootstrap
 
 # Thin caller. Run once, by hand, from the Actions tab after this lands on the
-# default branch: it creates the nine labels and reports the exact check names
+# default branch: it creates the ten labels and reports the exact check names
 # to put in the branch protection rule.
 #
 # workflow_dispatch only. Nothing about this should happen automatically.

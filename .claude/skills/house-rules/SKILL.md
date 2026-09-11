@@ -37,6 +37,23 @@ Do not confuse being unwatched with being self-directed. What must not happen is
 
 The difference an absent owner does make is that you cannot ask them anything. So anything that would have been a question becomes a pull request left open with the question written on it. That is a better outcome than a guess, and it is waiting for them when they come back.
 
+**Where the instruction lives, once they have gone.** "That decision holds while the session that received it is working" was costing the thing it was trying to protect: the decision was durable and only its storage was not, so a person had to give it again to every new session. An objective may therefore carry the decision itself, in its body:
+
+```
+Merge policy: green (set by @owner, 2026-01-01)
+```
+
+Absent means ask, so nothing changes for an objective that does not carry it. `green` means a driver applies this whole gate to that objective's children without a person present - the review is not weakened, it is just no longer gated on someone being awake. It is scoped to one objective's children, never a repository-wide setting, and revoked by editing the issue.
+
+Two limits, and the mechanism is worthless without both:
+
+- **A run may not write it or act on it.** Roles inside the repository authenticate as the agent identity; a driver authenticates as the person. Honour the line only when the objective body was last edited by an account that is not that identity, and refuse it otherwise. A role writing its own merge authority is the loop closing on itself wearing a record that looks like consent.
+- **A driver writes it only when a person answers.** This one has no mechanism behind it and should not pretend to: a driver holding a person's credentials is indistinguishable from that person. What makes it a different risk from an unattended run is structural - a driver is mid-conversation with someone, and a run is not.
+
+A policy authorises merging and nothing else. It never covers the six below, and it never decides what to do about failure: a child that blocks a second time goes to a person, while its siblings keep merging.
+
+**And be more sceptical of green where the person cannot read the diff.** A standing policy usually means they are trusting the gate rather than the change, which makes the gate the only thing left between a bad merge and whatever ships. A check that has only ever passed is indistinguishable from one that cannot fail, so confirm the new ones have teeth before merging on them.
+
 Before merging on someone's behalf, all of these hold. Any one failing is a reason to say so rather than merge:
 
 - **Every acceptance criterion is covered by a check that actually ran.** A criterion marked verified by a check that never executed is the worst case here, because it ends the review - a reader who sees it ticked does not check it again.

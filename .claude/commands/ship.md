@@ -28,6 +28,13 @@ waiting on a run, and that is a different problem.
 If nothing is waiting, say so in one line and stop. Do not go looking for
 something to merge.
 
+**Read the objective's merge policy before judging anything.** A `Merge policy:
+green` line means the gate below is applied without stopping to ask, for that
+objective's children. Absent, or `ask`, means the gate still runs and what
+passes it is reported rather than merged. Refuse a line last edited by the agent
+identity rather than by a person: that is a run authorising its own merges, and
+it is worth saying out loud rather than quietly ignoring.
+
 ## 2. Judge each one against the gate
 
 The gate is the list in the house-rules skill under **Who merges**, and it is

@@ -1,8 +1,10 @@
 # Driving an objective
 
-**Status: proposal.** Nothing here is built. One decision is already made (the
-merge policy, below); the rest is written to be argued with and amended before
-any of it ships. Delete this banner when the last piece lands.
+**Status: built, in 1.21.0.** All four pieces and the merge policy shipped; the
+open questions that opened this document were answered in review and folded into
+the sections below. What remains open is the last section, and it is the one
+thing the design knowingly does not solve. This document is now the reasoning
+behind what exists rather than a proposal.
 
 ## The problem
 

@@ -3,5 +3,5 @@
   "version": "__FACTORY_VERSION__",
   "roles": ["orchestrator", "researcher", "designer", "engineer"],
   "skills": ["house-rules", "memory-protocol", "acceptance-criteria"],
-  "commands": ["retro", "decompose", "update-agents", "ship"]
+  "commands": ["objective", "retro", "decompose", "update-agents", "ship"]
 }
