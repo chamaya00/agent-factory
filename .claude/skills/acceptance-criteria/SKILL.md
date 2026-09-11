@@ -43,6 +43,12 @@ Criteria describe behaviour, not implementation. "Uses a reducer" is not a crite
 
 So write the builder into the criterion: *when built by `<the thing that publishes this>`, then ...*. If the two builds differ and the checkable one is the local one, say that too, and say what covers the gap. A criterion that quietly measures the wrong artifact is worse than a missing one, because it ends the search.
 
+**A criterion that names a value says what the value has to be, not that it is there.** "Then the page contains a link back to the listing", "then the config sets a timeout", "then the response includes a user id" are all satisfied by a value that is present and wrong. The check written from one greps for existence, goes green, and the criterion is ticked - so the reviewer stops looking, which is the whole cost.
+
+Presence is the right shape only when presence is genuinely the requirement - an optional field rendering at all, an element being absent in an empty state. Whenever the thing could be present and still broken, write the correct value into the criterion and let the check assert that: *then the page contains a link to the listing that resolves from the entry's own URL*, not *then the page contains a link*.
+
+The tell is that you can imagine a plausible wrong implementation passing. A repository lost this one twice over in a single objective: a spec said an entry page's "back" link should be a bare relative path, a criterion asked only that the built page "contains a link back to its collection's listing", and the one grep that might have caught it only looked for root-absolute paths. Every criterion would have passed with the link 404ing from every entry page on the site.
+
 ## What a criterion costs to satisfy
 
 A criterion is also an instruction to spend a run's budget, and the agent writing it is not the agent paying. Write them knowing that.
