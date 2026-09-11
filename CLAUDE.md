@@ -85,6 +85,9 @@ Do not read all of `docs/`. Read the one that matches what you are doing:
 - `docs/checkpoint.md` - the steps only a human with account access can do
 - `docs/open-questions.md` - what is still undecided, and where an answer has
   to land before an entry may be deleted
+- `docs/driving-an-objective.md` - the interactive session's role and the
+  per-objective merge policy, before changing a command or the project
+  template's CLAUDE.md
 - `docs/proving-the-gate.md` and `docs/smoke-test.md` - the two runbooks
 - `README.md` - the tour, if none of the above is the thing
 
