@@ -54,12 +54,13 @@ is the whole surface - a human reads that and nothing else, and hears from the
 orchestrator when a decision is genuinely theirs.
 
 Ready means the issues a child depends on are merged to the default branch, not
-merely finished and labelled `agent:review`. The researcher and the designer
-cannot open pull requests - they push a branch and leave a link for a human -
-so their work can be complete and still invisible to the next agent, which
-reads the default branch. A run started too early refuses, correctly, and still
-spends one of that issue's three attempts. That check is now the orchestrator's
-to make before it queues anything.
+merely finished and labelled `agent:review`. Every role opens a pull request
+for its own work, the researcher and the designer included, so the usual gap is
+an open pull request nobody has merged yet rather than a branch with no pull
+request behind it - and either way the work is invisible to the next agent,
+which reads the default branch. A run started too early refuses, correctly, and
+still spends one of that issue's three attempts. That check is now the
+orchestrator's to make before it queues anything.
 
 The human still decides what merges. The orchestrator queues work and reports on
 it; it does not merge a pull request, and it cannot break a child down further -
