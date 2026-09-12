@@ -32,6 +32,13 @@ rename it in `.github/workflows/ci.yml` in the same commit, and re-point the
 branch protection rule in the same sitting, or the gate silently stops checking
 that thing.
 
+<!-- agent-factory:begin -->
+<!-- Everything from here to the agent-factory:end marker describes the shared
+     process rather than this project, and /update-agents replaces the whole
+     block when this repository moves to a new factory release. An edit inside
+     it is lost on the next update: put anything specific to this repository
+     outside the block, where nothing will overwrite it. -->
+
 ## How work moves
 
 Objectives become issues labelled `objective`. A human labels the objective
@@ -128,3 +135,5 @@ per role, 40 lines each. They are proposed in a pull request, never written
 silently. A lesson that has graduated into a test, a lint rule, or a type gets
 deleted - the check enforces it now, and the sentence is competing for attention
 with the lessons nothing enforces yet.
+
+<!-- agent-factory:end -->

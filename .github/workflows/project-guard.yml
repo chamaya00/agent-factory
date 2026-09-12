@@ -75,6 +75,45 @@ jobs:
           [ "$failed" -eq 0 ] && echo "Memory files are inside the cap."
           exit "$failed"
 
+      - name: The managed block in CLAUDE.md is intact
+        run: |
+          set -euo pipefail
+
+          # The block is how shared process prose reaches this repository:
+          # /update-agents replaces everything between the markers and leaves
+          # the rest of CLAUDE.md alone. A half-present pair is the dangerous
+          # state - the command cannot tell where the block was meant to start,
+          # and a wrong guess deletes prose somebody wrote about their own
+          # repository while looking like a successful update.
+          #
+          # Absent entirely is fine and must stay fine: a repository provisioned
+          # before the markers existed has not migrated yet, and failing it here
+          # would block every merge over a chore it never agreed to.
+
+          [ -f CLAUDE.md ] || { echo "No CLAUDE.md; nothing to check."; exit 0; }
+
+          begins="$(grep -c '^<!-- agent-factory:begin -->$' CLAUDE.md || true)"
+          ends="$(grep -c '^<!-- agent-factory:end -->$' CLAUDE.md || true)"
+
+          if [ "$begins" -eq 0 ] && [ "$ends" -eq 0 ]; then
+            echo "CLAUDE.md carries no managed block. Not migrated yet - /update-agents inserts it."
+            exit 0
+          fi
+
+          if [ "$begins" -ne 1 ] || [ "$ends" -ne 1 ]; then
+            echo "::error file=CLAUDE.md::Found $begins agent-factory:begin and $ends agent-factory:end marker(s); each must appear exactly once. /update-agents refuses to replace a block it cannot locate, so shared process prose silently stops reaching this repository."
+            exit 1
+          fi
+
+          begin_line="$(grep -n '^<!-- agent-factory:begin -->$' CLAUDE.md | cut -d: -f1)"
+          end_line="$(grep -n '^<!-- agent-factory:end -->$' CLAUDE.md | cut -d: -f1)"
+          if [ "$begin_line" -ge "$end_line" ]; then
+            echo "::error file=CLAUDE.md::agent-factory:end is at line $end_line, before or at begin on line $begin_line. The block has no contents and /update-agents cannot replace it."
+            exit 1
+          fi
+
+          echo "CLAUDE.md's managed block is intact (lines $begin_line-$end_line)."
+
       - name: Nothing that gates this repo was edited
         if: github.event_name == 'pull_request'
         env:

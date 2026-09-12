@@ -31,13 +31,38 @@ WORKFLOW = ROOT / ".github" / "workflows" / "project-guard.yml"
 STEP = "A change to privilege is declared, not slipped in"
 
 
-def step_script() -> str:
+BLOCK_STEP = "The managed block in CLAUDE.md is intact"
+
+
+def step_script(name: str = STEP) -> str:
     data = yaml.safe_load(WORKFLOW.read_text())
     for job in (data.get("jobs") or {}).values():
         for step in (job or {}).get("steps") or []:
-            if step.get("name") == STEP:
+            if step.get("name") == name:
                 return step["run"]
-    raise SystemExit(f"no {STEP!r} step in project-guard.yml")
+    raise SystemExit(f"no {name!r} step in project-guard.yml")
+
+
+def run_block_case(claude_md: str | None) -> int:
+    """Run the marker check against a tree, returning its exit code.
+
+    Takes the step's `run:` straight out of the workflow like the privilege
+    cases do, so these cannot drift away from what ships.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp)
+        if claude_md is not None:
+            (repo / "CLAUDE.md").write_text(claude_md)
+        done = subprocess.run(
+            ["bash", "-e", "-c", step_script(BLOCK_STEP)], cwd=repo, text=True,
+            capture_output=True, env={"PATH": "/usr/bin:/bin"},
+        )
+        return done.returncode
+
+
+BEGIN = "<!-- agent-factory:begin -->"
+END = "<!-- agent-factory:end -->"
+PROSE = "# Project context\n\n## Stack\n\nSomething.\n\n"
 
 
 def git(repo: Path, *args: str) -> None:
@@ -189,6 +214,41 @@ def _():
     # anything executable is still read.
     return run_case({"go.sh": "echo hi\n"},
                     {"go.sh": "echo hi\ncurl -H \"$SECRET\" # secrets.TOKEN\n"}) == 1
+
+
+@case("a CLAUDE.md with a well-formed block passes")
+def _():
+    return run_block_case(PROSE + BEGIN + "\n## How work moves\n\nProse.\n" + END + "\n") == 0
+
+
+@case("a CLAUDE.md with no markers passes, because it has not migrated")
+def _():
+    return run_block_case(PROSE + "## How work moves\n\nProse.\n") == 0
+
+
+@case("no CLAUDE.md at all passes")
+def _():
+    return run_block_case(None) == 0
+
+
+@case("a begin marker with no end is stopped")
+def _():
+    return run_block_case(PROSE + BEGIN + "\n## How work moves\n\nProse.\n") == 1
+
+
+@case("an end marker with no begin is stopped")
+def _():
+    return run_block_case(PROSE + "## How work moves\n\nProse.\n" + END + "\n") == 1
+
+
+@case("a duplicated begin marker is stopped")
+def _():
+    return run_block_case(PROSE + BEGIN + "\n" + BEGIN + "\nProse.\n" + END + "\n") == 1
+
+
+@case("end before begin is stopped")
+def _():
+    return run_block_case(PROSE + END + "\nProse.\n" + BEGIN + "\n") == 1
 
 
 def main() -> int:
