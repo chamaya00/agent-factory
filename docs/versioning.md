@@ -6,15 +6,39 @@ pull request there and merges it.
 
 That is the whole design, and everything below is the mechanics of it.
 
-## Three things travel, separately
+## Four things travel, separately
 
 | What | Lives in a project as | Moves when |
 |---|---|---|
 | Role, skill, and command definitions | copies under `.claude/agents/`, `.claude/skills/`, and `.claude/commands/` | `/update-agents` opens a pull request there and it merges |
 | Workflows (the gates) | four thin callers pinned to a release tag | the same pull request bumps the pins |
+| Shared process prose | the managed block in `CLAUDE.md`, between the `agent-factory:begin` and `agent-factory:end` markers | the same pull request replaces the block |
 | Repo-specific lessons | `.claude/memory/<role>.md` | never - these are written in that repository and stay there |
 
-The third row never leaves a repository, and the first row is the reason it
+The second-to-last row is the newest and was missing for a long time, which
+cost something worth writing down. `CLAUDE.md` was skipped by `/update-agents`
+entirely, on the stated grounds that it describes the product rather than the
+process. Measured against a real project that was true of about half the file:
+its stack and its commands are the repository's own, and its account of how work
+moves, what drives an objective, the standing rules and the labels came from
+here.
+
+With two ownerships interleaved in one file and no boundary between them,
+skipping all of it was the only safe thing the command could do - so every
+release that changed process desynchronised every project's description of
+itself, silently, and the drift stayed invisible until somebody read a sentence
+that contradicted the roles they were watching run. That is how a project came
+to be running roles that open their own pull requests while its `CLAUDE.md`
+still told the reader those roles could not.
+
+The markers are the boundary that makes the file updatable without overwriting
+what belongs to the repository. Inside them is ours and gets replaced wholesale;
+outside them is the project's and is never touched. A repository that predates
+the markers keeps working - the guard passes a file that has none - and gets
+them on its next update, which is the one step in that command that shows a
+person what it is about to replace before it does it.
+
+The last row never leaves a repository, and the first row is the reason it
 does not have to. The roles are copied in rather than fetched at run time, so a
 project's agents behave the way they behaved the day it was provisioned, and
 its lessons stay next to the roles that learned them.

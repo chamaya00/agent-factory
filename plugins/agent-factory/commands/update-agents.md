@@ -121,7 +121,57 @@ Leave alone, always:
 - Everything under `.claude/memory/`. Those are this repository's lessons, and
   they are the reason the roles are copied in rather than shared live. Nothing
   in an update reads them, writes them, or carries them anywhere.
-- `CLAUDE.md`. It describes this product, not the process.
+- The part of `CLAUDE.md` outside the managed block. That half describes this
+  product - its stack, its commands, what it is - and belongs to the repository.
+  The block is a different matter; see below.
+
+## 3b. Replace the managed block in `CLAUDE.md`
+
+`CLAUDE.md` was skipped entirely for a long time, on the stated grounds that it
+describes the product rather than the process. That was true of about half of
+it. The other half - how work moves, what drives an objective, the standing
+rules, the labels - describes the shared system, and skipping it meant every
+release quietly desynchronised every project's own description of itself. The
+drift was invisible until somebody read a sentence that contradicted the roles
+they were watching run.
+
+So the file carries a boundary now:
+
+```
+<!-- agent-factory:begin -->
+...shared process prose, owned here...
+<!-- agent-factory:end -->
+```
+
+**If both markers are present:** replace everything between them with the block
+from this release's `templates/project/CLAUDE.md`, and change nothing outside
+them. That is the whole operation - no merging, no reconciling, no cleverness.
+
+**If the markers are absent**, the repository predates them, and inserting them
+is the one genuinely dangerous step in this command. Sections that the factory
+now owns may have been edited in place over months, and wrapping them means the
+next update overwrites whatever is there. So do not wrap silently:
+
+1. Find the sections the block covers by heading. They are stable names and they
+   sit together at the end of the file.
+2. Diff what is there against this release's block, and **put the differences in
+   the pull request body, quoted**, under a heading that says these lines will be
+   replaced. Prose a person wrote about their own repository is the thing being
+   destroyed, and they get to see it before it goes.
+3. Anything that is plainly specific to this repository - a note about a step
+   only this project needs, a caveat about its own setup - is moved *outside*
+   the block rather than dropped. Say in the body where it went.
+4. Only then insert the markers.
+
+**If a marker is present but malformed** - one without the other, or `end`
+before `begin` - stop and say so. Do not guess where the block was meant to
+start; a wrong guess deletes the repository's own prose and looks like a
+successful update.
+
+**When the block cannot be replaced for any reason**, report rather than skip
+silently: list, in the body, the statements in `CLAUDE.md` that this release has
+made false. A drift a person can see is a chore; a drift nobody can see is what
+this step exists to end.
 
 ## 4. Say what it does in the body
 
