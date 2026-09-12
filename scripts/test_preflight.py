@@ -64,6 +64,8 @@ def resolve(expression: str, event: dict) -> str:
         "github.event_name": event["event_name"],
         "github.event.action": event.get("action", ""),
         "github.event.comment.body": event.get("comment_body", ""),
+        "github.event.comment.user.login": event.get("comment_author", "chamaya00"),
+        "github.event.comment.author_association": event.get("comment_association", "OWNER"),
         "github.event.label.name": event.get("label", ""),
     }
     body = expression.strip()
@@ -142,6 +144,8 @@ def event(**overrides) -> dict:
         "number": 7,
         "kind": "issue",
         "comment_body": "",
+        "comment_author": "chamaya00",
+        "comment_association": "OWNER",
         "inputs": dict(DEFAULT_INPUTS),
     }
     base.update(overrides)
@@ -206,6 +210,42 @@ CASES = [
         event(event_name="issue_comment", comment_body="@claude please fix the empty state"),
         state(["role:engineer"]),
         ("true", "engineer", 0),
+    ),
+    (
+        # The gate this repo owns. `claude-code-action` refuses a triggering
+        # actor without write access too, but a job later - by which point the
+        # preflight has already run with `issues: write` and can have labelled
+        # and commented on the issue at a stranger's request.
+        "a stranger's trigger-phrase comment does not run",
+        event(event_name="issue_comment", comment_body="@claude please fix this",
+              comment_author="randomuser", comment_association="NONE"),
+        state(["role:engineer"]),
+        ("false", "", 0),
+    ),
+    (
+        # CONTRIBUTOR means "has had a pull request merged here", which on a
+        # public repository is one drive-by typo fix. It is not write access.
+        "a past contributor is not a write-access author",
+        event(event_name="issue_comment", comment_body="@claude please fix this",
+              comment_author="driveby", comment_association="CONTRIBUTOR"),
+        state(["role:engineer"]),
+        ("false", "", 0),
+    ),
+    (
+        "a collaborator's trigger-phrase comment runs",
+        event(event_name="issue_comment", comment_body="@claude please fix this",
+              comment_author="devfriend", comment_association="COLLABORATOR"),
+        state(["role:engineer"]),
+        ("true", "engineer", 0),
+    ),
+    (
+        # A stranger must not be able to reach the budget path either: that one
+        # labels agent:blocked, strips the run label, comments, and exits 1.
+        "a stranger cannot spend the budget path on an exhausted issue",
+        event(event_name="issue_comment", comment_body="@claude retry",
+              comment_author="randomuser", comment_association="NONE"),
+        state(["role:engineer"], attempts=3),
+        ("false", "", 0),
     ),
     (
         "the third attempt still runs",
