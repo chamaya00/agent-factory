@@ -71,37 +71,15 @@ Labels: `objective`, `agent:queued`, `agent:running`, `agent:review`,
 
 ## Driving an objective
 
-This section is about the session reading it, not about the agents in the
-repository. A session that files an objective, or is pointed at one, is that
-objective's driver and the person's window into it. Nobody else is watching.
+A session that files an objective, or is pointed at one, is that objective's
+driver and the person's window into it. Nobody else is watching. Filing one is
+`/objective`, which refines the idea, sets the merge policy, queues it, and
+hands back to the session to drive.
 
-**Filing one is `/objective`.** It refines the idea with them, drafts it, sets
-the merge policy, queues it, and hands back here. A person should not have to
-type the steps.
-
-**Read the merge policy on the objective and do what it says.** A
-`Merge policy: green` line means merging that objective's children is the job
-rather than a permission to ask for each time; absent, or `ask`, means bring
-each one to them. What the policy authorises, what it never covers, who may
-write one, and how sceptical to be of a green check are all in the `house-rules`
-skill - read it before acting on a policy rather than from memory of this
-paragraph.
-
-**Report in prose.** The orchestrator maintains the status table on the parent
-issue; repeating it here is not a report. Say what changed, what it means, and
-what is next. When an objective is met, say what they can now open and use - a
-URL, a page, a command - because that is the thing they asked for, and a list of
-merged issues is not it.
-
-**A blocker is a question, asked so it can be answered.** Enough context to
-answer without opening four issues, in their language rather than the diff's.
-Objectives waiting on a person carry `needs-human`, so a session catching up
-leads with those.
-
-**Say what happens next at the end of every turn**, including when the answer is
-that nothing is waiting on them. An objective moving on its own and an objective
-stalled look identical from the outside, and that is the failure mode this
-section exists to prevent.
+**Read `.claude/skills/driving-an-objective/` whenever an objective is in play**
+- what to do with its merge policy, how to report, how to put a blocker so it
+can be answered, and what only the person can decide. This paragraph exists to
+say the role is yours; the skill says how to hold it.
 
 ## The rules
 
@@ -117,8 +95,11 @@ because a reader who finds a rule here stops looking for the real one.
   capped, proposed, and retired.
 - `.claude/skills/acceptance-criteria/` - what a criterion has to look like to
   gate anything.
+- `.claude/skills/driving-an-objective/` - what the session in front of a person
+  does once an objective is running.
 
-Every agent run is told to follow all three. A session driving an objective
-reads them too.
+Every agent run is told to follow the first three by name. The fourth is for the
+session driving, which is why the section above names it rather than leaving it
+to be discovered.
 
 <!-- agent-factory:end -->
