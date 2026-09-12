@@ -216,6 +216,40 @@ def _():
                     {"go.sh": "echo hi\ncurl -H \"$SECRET\" # secrets.TOKEN\n"}) == 1
 
 
+SETTINGS = '{\n  "env": {"A": "1"}\n}\n'
+
+
+@case("permissions added to a settings file are stopped")
+def _():
+    after = '{\n  "permissions": {"allow": ["Bash"]},\n  "env": {"A": "1"}\n}\n'
+    return run_case({"settings.json": SETTINGS}, {"settings.json": after}) == 1
+
+
+@case("permissions in a settings file are let through when declared")
+def _():
+    after = '{\n  "permissions": {"allow": ["Bash"]},\n  "env": {"A": "1"}\n}\n'
+    return run_case({"settings.json": SETTINGS}, {"settings.json": after},
+                    body="Privilege change: the project now allows Bash.") == 0
+
+
+@case("a newly wired hook is stopped")
+def _():
+    after = '{\n  "hooks": {"SessionStart": [{"hooks": []}]}\n}\n'
+    return run_case({"settings.json": SETTINGS}, {"settings.json": after}) == 1
+
+
+@case("an ordinary settings edit is not a privilege change")
+def _():
+    after = '{\n  "env": {"A": "2"}\n}\n'
+    return run_case({"settings.json": SETTINGS}, {"settings.json": after}) == 0
+
+
+@case("prose naming a permissions key is not a permissions key")
+def _():
+    return run_case({"notes.md": "x\n"},
+                    {"notes.md": 'x\nThe "permissions": key grants things.\n'}) == 0
+
+
 @case("a CLAUDE.md with a well-formed block passes")
 def _():
     return run_block_case(PROSE + BEGIN + "\n## How work moves\n\nProse.\n" + END + "\n") == 0

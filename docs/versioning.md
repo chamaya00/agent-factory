@@ -6,13 +6,14 @@ pull request there and merges it.
 
 That is the whole design, and everything below is the mechanics of it.
 
-## Four things travel, separately
+## Five things travel, separately
 
 | What | Lives in a project as | Moves when |
 |---|---|---|
 | Role, skill, and command definitions | copies under `.claude/agents/`, `.claude/skills/`, and `.claude/commands/` | `/update-agents` opens a pull request there and it merges |
 | Workflows (the gates) | four thin callers pinned to a release tag | the same pull request bumps the pins |
 | Shared process prose | the managed block in `CLAUDE.md`, between the `agent-factory:begin` and `agent-factory:end` markers | the same pull request replaces the block |
+| The session-start hook | `.claude/hooks/session-start.sh`, wired by one key in `.claude/settings.json` | the same pull request copies the script and adds only that key |
 | Repo-specific lessons | `.claude/memory/<role>.md` | never - these are written in that repository and stay there |
 
 The second-to-last row is the newest and was missing for a long time, which
@@ -37,6 +38,28 @@ outside them is the project's and is never touched. A repository that predates
 the markers keeps working - the guard passes a file that has none - and gets
 them on its next update, which is the one step in that command that shows a
 person what it is about to replace before it does it.
+
+There is one rule underneath all of this, and it is worth stating plainly
+because it now covers three different shapes and will cover more:
+
+**A file the factory wholly owns travels wholesale. A file it shares with the
+project gets a bounded edit and a migration that shows a person what it is about
+to do.**
+
+Roles, skills, commands and the hook script are wholly ours, so they are copied
+over without ceremony. `CLAUDE.md` and `.claude/settings.json` are shared, and
+each gets the narrowest edit that does the job - a marked block in one, a single
+key in the other, because Markdown can carry comment markers and JSON cannot.
+The shapes differ; the rule does not.
+
+The settings file carries one extra constraint the others do not need. It is
+where permissions live, so shipping it at all creates a route by which a single
+release could widen what automation may do in every project at once. Two things
+close that: the shipped copy is checked here to contain hooks and nothing else,
+and `project-guard` fails a project's own pull request that adds a permissions
+key or wires a new hook without a `Privilege change:` line. The first stops the
+factory doing it; the second means no project starts executing something new
+without somebody being told.
 
 The last row never leaves a repository, and the first row is the reason it
 does not have to. The roles are copied in rather than fetched at run time, so a

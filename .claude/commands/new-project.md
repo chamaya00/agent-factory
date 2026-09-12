@@ -179,6 +179,10 @@ What goes in:
 
 Then the roles and the commands themselves, copied rather than referenced:
 
+- `.claude/hooks/session-start.sh` - from the template, and **executable**;
+  a hook without the execute bit is wired, silent, and looks like it ran
+- `.claude/settings.json` - from the template, which wires that hook and
+  carries nothing else. Permissions and env are the project's to add later
 - `.claude/agents/*.md` - every file in `<factory root>/agents/`
 - `.claude/skills/*/SKILL.md` - every skill in `<factory root>/skills/`
 - `.claude/commands/objective.md`, `retro.md`, `decompose.md`, `update-agents.md`,
