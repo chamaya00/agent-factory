@@ -58,5 +58,10 @@ jobs:
       - name: A privilege change cannot arrive undeclared
         run: python scripts/test_project_guard.py
 
+      # Reads English rather than structure, so it is the one check here that
+      # can be wrong in both directions. Pinned in both.
+      - name: Prose still agrees with what each role is granted
+        run: python scripts/test_capability_claims.py
+
       - name: Release resolves the right commit for a major tag
         run: python scripts/test_release.py

@@ -42,21 +42,26 @@ exercises a real agent, and the only one a human has to sit through.
 
 ## Layer 1: guard.yml
 
-The factory's own CI, and the closest thing here to a test suite. Five scripts,
-all Python, all pass or fail without interpretation.
+The factory's own CI, and the closest thing here to a test suite. All Python,
+all pass or fail without interpretation. No count is given here: this table
+once said five while `guard.yml` ran seven, so `validate_plugin.py` now checks
+that the table, `CLAUDE.md`, and `guard.yml` name the same scripts.
 
 | Script | Proves |
 |---|---|
-| `validate_plugin.py` | the plugin is structurally intact and still portable |
+| `validate_plugin.py` | the plugin is structurally intact, still portable, and its prose agrees with each role's tool list |
 | `validate_workflows.py` | every workflow parses, stays inside its limits, and grants each role the tools it declares |
 | `test_ci.py` | the gate fails what it is supposed to fail |
 | `test_preflight.py` | agent-run refuses the runs it is supposed to refuse |
+| `test_handback.py` | a finished child wakes its parent, and silence gets reported |
+| `test_project_guard.py` | a privilege change cannot arrive undeclared |
+| `test_capability_claims.py` | the capability checks fire on drift and stay quiet on prose |
 | `test_release.py` | a release tag cannot move or disagree with the manifest |
 
-The last three do not read the workflows. They lift the `run:` block straight
-out of the YAML and execute it, substituting only the `${{ }}` expressions the
-runner would. So a test cannot drift away from what ships: change the shell and
-the tests run the change.
+Most of the `test_` scripts do not read the workflows as data. They lift the
+`run:` block straight out of the YAML and execute it, substituting only the
+`${{ }}` expressions the runner would. So a test cannot drift away from what
+ships: change the shell and the tests run the change.
 
 ### validate_plugin.py
 
@@ -84,6 +89,21 @@ than a convention:
 - **The manifest matches disk.** The roles, skills, and commands named in
   `agent-factory.json` have to be the ones actually present, or provisioning
   copies nothing and succeeds.
+- **Prose agrees with the tool list.** No file in the repository may say a role
+  cannot do something its own frontmatter grants a tool for, and no role file
+  may ask for something it holds no tool to do. Both directions have shipped:
+  the researcher and the designer were granted `create_pull_request` and told to
+  open one, and four places kept saying they could not - one of them the shared
+  block in the project template's CLAUDE.md, which `/update-agents` rewrites, so
+  a human correcting it downstream lost the correction on the next update. The
+  mirror check could not catch it, because both copies were equally wrong. It
+  catches the assertion, not the insinuation: prose that merely implies the
+  limit matches nothing, and separating that from true prose needs judgment.
+  `test_capability_claims.py` pins both directions.
+- **The gate names itself consistently.** Every `scripts/*.py` must be run by
+  `guard.yml` and named in both `CLAUDE.md` and this file. A script nobody runs
+  proves nothing, and an inventory that omits one sends a reader looking for a
+  check that is there.
 - No emoji in any `.md`, `.json`, `.yml`, or `.py` file in the repository.
 
 ### validate_workflows.py
@@ -279,7 +299,7 @@ the source.
 
 ## Running the checks yourself
 
-All five run locally, in seconds, with no credentials:
+They all run locally, in seconds, with no credentials:
 
 ```
 python -m pip install pyyaml
@@ -287,8 +307,11 @@ python scripts/validate_plugin.py
 python scripts/validate_workflows.py
 python scripts/test_ci.py
 python scripts/test_preflight.py
+python scripts/test_handback.py
+python scripts/test_project_guard.py
+python scripts/test_capability_claims.py
 python scripts/test_release.py
 ```
 
-Run them before opening a pull request here. They are the same five commands
+Run them before opening a pull request here. They are the same commands
 `guard.yml` runs, in the same order.
