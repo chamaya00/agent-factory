@@ -181,7 +181,7 @@ Then the roles and the commands themselves, copied rather than referenced:
 
 - `.claude/agents/*.md` - every file in `<factory root>/agents/`
 - `.claude/skills/*/SKILL.md` - every skill in `<factory root>/skills/`
-- `.claude/commands/retro.md`, `decompose.md`, `update-agents.md`,
+- `.claude/commands/objective.md`, `retro.md`, `decompose.md`, `update-agents.md`,
   `ship.md` - from
   `<factory root>/commands/`. Not `new-project.md`: provisioning is the
   factory's job, and a project that can provision another project is a way to
@@ -226,7 +226,7 @@ the pull request path the human merges step 3 first. Then:
 > 2. Tap **Run workflow**, then **Run workflow** again to confirm
 > 3. When it finishes, open the run and read its summary
 
-The summary lists the nine labels and, more usefully, the check names as they
+The summary lists the ten labels and, more usefully, the check names as they
 were actually reported. Step 5 needs those.
 
 Verify a sample rather than trusting the run: `mcp__github__get_label` for

@@ -5,7 +5,7 @@ name: bootstrap
 #
 # This workflow exists because of where the person running this system works
 # from. A cloud session has no `gh` binary, and there is no tool available to
-# it for creating a label, so the nine labels are either typed by hand nine
+# it for creating a label, so the ten labels are either typed by hand nine
 # times per project on a phone or they are created here. The names are
 # load-bearing - the agent-run preflight matches them exactly - which is the
 # same reason they are defined in one place rather than retyped per project.
@@ -50,6 +50,7 @@ jobs:
           label agent:review        0E8A16 "Agent finished. Waiting on a human."
           label agent:blocked       B60205 "Refused or failed. Needs a human."
           label needs-decomposition D93F0B "Too big to work as one issue."
+          label needs-human        FBB040 "Waiting on a person, not on a run."
           label role:researcher     5319E7 "Investigates options. Writes to docs/research/."
           label role:designer       E99695 "Specifies flows and states. Writes to docs/design/."
           label role:engineer       0052CC "Implements and opens the pull request."

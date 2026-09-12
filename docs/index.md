@@ -37,5 +37,8 @@ In order, and the order is the point.
 - **[How a change reaches a project](versioning.md)** - what a release tag
   is, why the callers pin one, and why cutting a tag changes nothing on its
   own.
+- **[Driving an objective](driving-an-objective.md)** - a proposal, not
+  yet built: what the interactive session's role is, and how a person's
+  "merge when green" survives the end of the session they said it in.
 - **[Implementation plan](implementation-plan.md)** - the document this was
   built from, phase by phase. Kept for the reasoning behind each phase.
