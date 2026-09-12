@@ -71,69 +71,35 @@ Labels: `objective`, `agent:queued`, `agent:running`, `agent:review`,
 
 ## Driving an objective
 
-This section is about the session reading it, not about the agents in the
-repository. A session that files an objective, or is pointed at one, is that
-objective's driver and the person's window into it. Nobody else is watching.
+A session that files an objective, or is pointed at one, is that objective's
+driver and the person's window into it. Nobody else is watching. Filing one is
+`/objective`, which refines the idea, sets the merge policy, queues it, and
+hands back to the session to drive.
 
-**Filing one is `/objective`.** It refines the idea with them, drafts it, sets
-the merge policy, queues it, and hands back here. A person should not have to
-type the steps.
+**Read `.claude/skills/driving-an-objective/` whenever an objective is in play**
+- what to do with its merge policy, how to report, how to put a blocker so it
+can be answered, and what only the person can decide. This paragraph exists to
+say the role is yours; the skill says how to hold it.
 
-**Read the merge policy on the objective and do what it says.** A line reading
-`Merge policy: green` means merging that objective's children as they pass the
-gate in the `house-rules` skill is the job, not a favour to ask permission for
-each time. Absent, or `Merge policy: ask`, means bring each one to them. The
-policy is theirs: never write that line except as the direct result of a person
-answering, never on an objective you were not asked to set it on, and ignore one
-that was written by the agent identity rather than by a person - a run granting
-itself authority to merge is the one thing this arrangement exists to prevent.
+## The rules
 
-**A green policy authorises merging, never deciding about failure.** The six in
-**What a revert does not undo** still come to them. A child that blocks a second
-time stops and comes to them with what was tried, while its siblings keep
-merging - unless the block suggests the objective was scoped wrong rather than
-the child, which is a judgment call and therefore theirs.
+Not restated here. Two sections used to summarise them and every line had a
+fuller source a click away, so the summaries could only ever drift out of
+agreement with the thing they summarised - which is worse than not having them,
+because a reader who finds a rule here stops looking for the real one.
 
-**Be more sceptical of green, not less.** Where a person cannot read the diff,
-the checks are the only thing between a bad change and whatever this repository
-publishes, and a check that has only ever been green is indistinguishable from
-one that cannot fail. Before merging on a policy, confirm that each criterion is
-covered by a check that ran, and that a new check would actually go red - break
-the thing it guards and watch it, rather than trusting the tick.
+- `.claude/skills/house-rules/` - what must be true before work starts and
+  before anything merges, who may merge, the three-strike rule, and what no
+  agent may touch.
+- `.claude/skills/memory-protocol/` - how this repository's lessons are stored,
+  capped, proposed, and retired.
+- `.claude/skills/acceptance-criteria/` - what a criterion has to look like to
+  gate anything.
+- `.claude/skills/driving-an-objective/` - what the session in front of a person
+  does once an objective is running.
 
-**Report in prose.** The orchestrator maintains the status table on the parent
-issue; repeating it here is not a report. Say what changed, what it means, and
-what is next. When an objective is met, say what they can now open and use - a
-URL, a page, a command - because that is the thing they asked for, and a list of
-merged issues is not it.
-
-**A blocker is a question, asked so it can be answered.** Enough context to
-answer without opening four issues, in their language rather than the diff's.
-Objectives waiting on a person carry `needs-human`, so a session catching up
-leads with those.
-
-**Say what happens next at the end of every turn**, including when the answer is
-that nothing is waiting on them. An objective moving on its own and an objective
-stalled look identical from the outside, and that is the failure mode this
-section exists to prevent.
-
-## Standing rules
-
-Acceptance criteria before work starts. Tests before merge. An ADR in
-`docs/decisions/` for any schema or dependency change, in the same diff.
-
-Three failed attempts on one issue means the issue was scoped wrong. Stop and
-ask for decomposition rather than trying a fourth time.
-
-Never edit `.github/workflows/`, `CODEOWNERS`, or anything under a plugin
-directory. If the work seems to need it, say so in a comment and stop.
-
-## Memory
-
-Lessons specific to this repository live in `.claude/memory/<role>.md`, one file
-per role, 40 lines each. They are proposed in a pull request, never written
-silently. A lesson that has graduated into a test, a lint rule, or a type gets
-deleted - the check enforces it now, and the sentence is competing for attention
-with the lessons nothing enforces yet.
+Every agent run is told to follow the first three by name. The fourth is for the
+session driving, which is why the section above names it rather than leaving it
+to be discovered.
 
 <!-- agent-factory:end -->

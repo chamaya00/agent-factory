@@ -205,6 +205,24 @@ jobs:
             "pull_request_target|workflow_run"
           report "An action this repository will execute" "uses:[[:space:]]*[^[:space:]]"
 
+          # The two above are YAML-shaped and miss the settings file entirely.
+          # `permissions:` does not match `"permissions":` - the quote sits
+          # between the word and the colon - so a JSON settings file could grant
+          # what a workflow could not, through the same check, silently.
+          #
+          # This matters because the factory ships `.claude/settings.json`. That
+          # makes it a route by which one release could widen what automation may
+          # do in every project at once, and this step is the only thing that
+          # reads a project's diff before it merges.
+          report "Permissions in a settings file" \
+            '"permissions"[[:space:]]*:'
+          # A hook is arbitrary code this repository starts executing on its own,
+          # without anybody invoking it. Adding one is not forbidden - the
+          # factory ships exactly one - but it is not something to discover
+          # afterwards either.
+          report "A hook this repository will execute on its own" \
+            '"(SessionStart|SessionEnd|UserPromptSubmit|PreToolUse|PostToolUse|Stop|SubagentStop|Notification|PreCompact)"[[:space:]]*:'
+
           if [ -z "$found" ]; then
             echo "Nothing in this diff changes what the automation may do."
             exit 0

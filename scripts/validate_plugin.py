@@ -52,6 +52,12 @@ ROLES = ["orchestrator", "researcher", "designer", "engineer"]
 # provision another project is a second factory nobody is maintaining.
 PROJECT_COMMANDS = ["objective", "retro", "decompose", "update-agents", "ship"]
 
+# Hooks a provisioned project receives. Unlike roles, skills and commands these
+# are not mirrored into this repository's own `.claude/`: the factory runs its
+# own session-start hook for its own reasons, and the two have nothing to say to
+# each other.
+PROJECT_HOOKS = ["session-start"]
+
 errors: list[str] = []
 
 
@@ -296,6 +302,38 @@ def check_vendored_roles() -> None:
     for name in PROJECT_COMMANDS:
         if not (PLUGIN_DIR / "commands" / f"{name}.md").is_file():
             errors.append(f"plugins/agent-factory/commands/{name}.md: missing, but projects are provisioned with it")
+
+    if set(data.get("hooks") or []) != set(PROJECT_HOOKS):
+        fail(
+            manifest,
+            f"hooks {sorted(data.get('hooks') or [])} do not match the set a "
+            f"project is provisioned with, {sorted(PROJECT_HOOKS)}",
+        )
+    template_claude = PLUGIN_DIR / "templates" / "project" / ".claude"
+    for name in PROJECT_HOOKS:
+        hook = template_claude / "hooks" / f"{name}.sh"
+        if not hook.is_file():
+            errors.append(f"{hook.relative_to(ROOT)}: missing, but projects are provisioned with it")
+        elif not hook.stat().st_mode & 0o111:
+            fail(hook, "is not executable, so the hook it is wired to will never run")
+
+    # The factory ships this file, and it is the file where permissions live.
+    # That makes it a channel by which a release could widen what automation may
+    # do in every project at once - the thing project-guard exists to catch, and
+    # which it cannot see here because it reads workflow YAML. So the shipped
+    # copy carries hooks and nothing else, enforced rather than promised.
+    settings = template_claude / "settings.json"
+    if not settings.is_file():
+        errors.append(f"{settings.relative_to(ROOT)}: missing, but projects are provisioned with it")
+    else:
+        shipped = check_json(settings)
+        if shipped is not None and set(shipped) - {"hooks"}:
+            fail(
+                settings,
+                f"declares {sorted(set(shipped) - {'hooks'})}; the shipped copy carries "
+                "hooks and nothing else. Permissions and env belong to the project, "
+                "and a factory release must not be able to widen them everywhere at once.",
+            )
 
 
 def check_self_vendored() -> None:

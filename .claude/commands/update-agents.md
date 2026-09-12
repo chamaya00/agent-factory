@@ -121,6 +121,8 @@ Leave alone, always:
 - Everything under `.claude/memory/`. Those are this repository's lessons, and
   they are the reason the roles are copied in rather than shared live. Nothing
   in an update reads them, writes them, or carries them anywhere.
+- `.claude/settings.json`, apart from the one `SessionStart` entry named in
+  step 3c. Permissions, env, and the project's own hooks are the project's.
 - The part of `CLAUDE.md` outside the managed block. That half describes this
   product - its stack, its commands, what it is - and belongs to the repository.
   The block is a different matter; see below.
@@ -172,6 +174,41 @@ successful update.
 silently: list, in the body, the statements in `CLAUDE.md` that this release has
 made false. A drift a person can see is a chore; a drift nobody can see is what
 this step exists to end.
+
+## 3c. The session-start hook, and the one key it is wired by
+
+Two files, and they do not travel the same way, for the same reason `CLAUDE.md`
+needed a block: one is wholly ours and one is not.
+
+**`.claude/hooks/session-start.sh` is wholly the factory's.** Copy it wholesale,
+exactly like a skill, and make sure it stays executable - a hook without the
+execute bit is wired, silent, and looks like it ran.
+
+**`.claude/settings.json` belongs to the project.** It is where permissions, env,
+and the project's own hooks live, and overwriting it destroys configuration
+nobody asked you to touch. So make a **bounded edit**:
+
+- Add or update **only** the `SessionStart` entry that points at
+  `$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh`. Leave every other key
+  exactly as it is, including other hooks on the same event.
+- If the file does not exist, create it carrying that one key and nothing else.
+- Never add a `permissions` key, and never widen one that is there. The factory
+  does not get to decide what a project's automation may do, and
+  `project-guard` now fails a diff that tries - which is a backstop, not
+  permission to lean on it.
+
+**Say it in the body, under a `Privilege change:` line.** A repository that
+merges this starts executing a script on every session start that it was not
+executing before. That is true even though the script is ours and does nothing
+but report, and it is exactly the kind of change this system refuses to let
+through quietly. The guard will stop the pull request without that line, and it
+is right to.
+
+What the hook buys is worth stating for the person reading: `CLAUDE.md` is
+static and can only say a session is the driver; the hook runs, so it can say
+what is actually waiting. If a project would rather not run it, deleting the
+`SessionStart` entry costs them the briefing and nothing else - the driver role
+comes from `CLAUDE.md` and survives.
 
 ## 4. Say what it does in the body
 
