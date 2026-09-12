@@ -287,8 +287,8 @@ jobs:
   #
   # The hand-back wakes an objective when a child's run ends, so the
   # orchestrator learns that a child finished. It cannot learn that the child's
-  # work actually landed: the researcher and the designer push a branch and a
-  # human merges it later, and a merge raises no issue event. So an objective
+  # work actually landed: every role opens a pull request and a human merges
+  # it later, and a merge raises no issue event. So an objective
   # would report "waiting on #40 to merge", the human would merge, and nothing
   # would wake it - the orchestrator's own status comment promised it would
   # pick that up, and it could not.

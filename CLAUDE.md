@@ -34,16 +34,22 @@ file, or `.claude/hooks/`.
 
 ## Commands
 
-There is no package manager here and no build. The gate is six Python scripts,
-run in this order by `.github/workflows/guard.yml`:
+There is no package manager here and no build. The gate is the Python scripts
+below, run in this order by `.github/workflows/guard.yml`. No count is given
+because a count is the thing that goes stale; `validate_plugin.py` checks that
+this list, `docs/what-is-checked.md`, and `guard.yml` name the same scripts.
 
 - `python scripts/validate_plugin.py` - manifests, roles, skills, portability,
-  and the mirror
+  the mirror, and prose that disagrees with a role's own tool list
 - `python scripts/validate_workflows.py` - the workflows parse and stay inside
   their limits (needs `pyyaml`)
 - `python scripts/test_ci.py` - the gate still fails what it should fail
 - `python scripts/test_preflight.py` - agent-run still refuses what it should refuse
 - `python scripts/test_handback.py` - a finished child still wakes its parent
+- `python scripts/test_project_guard.py` - a privilege change cannot arrive
+  undeclared
+- `python scripts/test_capability_claims.py` - the capability checks still fire
+  on drift and stay quiet on prose
 - `python scripts/test_release.py` - release still refuses to tag unmerged history
 
 `python -m pip install --quiet pyyaml` is the only dependency. The SessionStart

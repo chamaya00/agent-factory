@@ -43,6 +43,92 @@ BANNED_NOUNS = [
 
 MAX_AGENT_BODY_LINES = 45
 
+# Capabilities a role either has or does not have, for the check that keeps
+# prose and frontmatter telling the same story.
+#
+# `tools` is every tool that would let the role do the thing: holding any one of
+# them makes a sentence saying it cannot a false statement.
+#
+# Entries are hand-written and the list is short on purpose. A denial has to be
+# a claim about capability here, never a restriction on a tool the role holds -
+# a role is legitimately handed `Write` and told never to touch source code, and
+# that sentence must not fail the gate. So file writing is not in this table and
+# must not be added to it, and neither may anything else a role is granted and
+# then told not to use. The test for a new entry is whether "granted, but
+# forbidden to use it" would be an incoherent arrangement for that capability.
+CAPABILITIES = [
+    {
+        "name": "open a pull request",
+        "tools": {"mcp__github__create_pull_request", "Bash"},
+        "object": r"pull\s+requests?",
+        "verbs": r"(?:open|opens|opening|create|creates|creating|file|files|"
+                 r"filing|raise|raises|raising|submit|submits|submitting)",
+        # Imperative or gerund only. "nobody opened a pull request for it" is a
+        # description of what went wrong, not an instruction to open one.
+        "instruction": r"(?:\bopen(?:ing)?\s+(?:a|an|its\s+own|their\s+own|the|one)"
+                       r"(?:\s+\w+){0,2}\s+pull\s+request|\bgh\s+pr\s+create\b)",
+    },
+    {
+        "name": "file an issue",
+        # No Bash. A role holding a shell could in principle reach any of this,
+        # which would make Bash a wildcard that claims every role capable of
+        # everything - and the first sentence saying a role with a shell does
+        # not file issues would fail the gate for being true. Bash is listed
+        # only for pull requests, where a role file does instruct the shell form.
+        "tools": {"mcp__github__issue_write", "mcp__github__sub_issue_write"},
+        "object": r"\bissues?\b",
+        "verbs": r"(?:file|files|filing|open|opens|opening|create|creates|"
+                 r"creating|write|writes|writing|label|labels|labelling|labeling)",
+        "instruction": r"\b(?:file|open|create)\s+(?:a|an|the|each|its\s+own)"
+                       r"(?:\s+\w+){0,2}\s+issues?\b",
+    },
+    {
+        "name": "search the web",
+        "tools": {"WebSearch"},
+        "object": r"(?:\bthe\s+web\b|\bweb\s+search)",
+        "verbs": r"(?:search|searches|searching|query|queries|querying|browse|"
+                 r"browses|browsing|look|looks|looking)",
+        "instruction": r"\bsearch\s+the\s+web\b",
+    },
+]
+
+# A role name reaches prose as itself or as a plural.
+ROLE_MENTION = r"\b{role}s?\b"
+
+# Ways prose says a subject cannot do something. Deliberately explicit: "nobody
+# opened one" and "no pull request exists" describe a state of the world and are
+# not claims about what a role is able to do.
+NEGATION = (
+    r"(?:cannot|can\s+not|can't|could\s+not|couldn't|may\s+not|"
+    r"is\s+unable\s+to|are\s+unable\s+to|is\s+not\s+able\s+to|"
+    r"are\s+not\s+able\s+to|isn't\s+able\s+to|aren't\s+able\s+to|"
+    r"has\s+no\s+way\s+to|have\s+no\s+way\s+to|"
+    r"lacks\s+the\s+ability\s+to|lack\s+the\s+ability\s+to|"
+    r"no\s+role\s+(?:\w+\s+){0,4}can)"
+)
+
+# Words that scope a claim to a condition rather than denying a capability.
+QUALIFIER = r"\b(?:without|unless|until|except|before|only\s+(?:when|if|after))\b"
+
+# Sentence ends, a blank line, a list item, or a heading. Prose here wraps
+# mid-sentence, so a single newline is not a boundary.
+SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+|\n\s*\n+|\n(?=\s*[-*+]\s)|\n(?=\s*\#)")
+
+# Suffixes carrying prose a session or an agent reads and believes.
+PROSE_SUFFIXES = {".md", ".yml", ".yaml", ".py"}
+
+# Comment markers stripped before a block is read as prose, so a claim spread
+# over several comment lines reads as the one sentence it is.
+COMMENT_PREFIX = re.compile(r"^\s*(?:\#+|//)\s?", re.M)
+
+# The two files that contain false capability claims on purpose: this script,
+# which carries the patterns, and the script that proves them. Kept to exactly
+# these two by path - a wider exemption would hide the drift this is for.
+CLAIM_FIXTURES = {
+    "scripts/validate_plugin.py",
+    "scripts/test_capability_claims.py",
+}
+
 # What a template writes instead of a release tag. Provisioning substitutes it.
 PIN_PLACEHOLDER = "__FACTORY_VERSION__"
 ROLES = ["orchestrator", "researcher", "designer", "engineer"]
@@ -372,6 +458,209 @@ def check_self_vendored() -> None:
                 )
 
 
+def role_tools() -> dict[str, set[str]]:
+    """What each role is actually granted, read off its own frontmatter."""
+    granted: dict[str, set[str]] = {}
+    for path in sorted((PLUGIN_DIR / "agents").glob("*.md")):
+        fields, _ = split_frontmatter(path.read_text(), path)
+        granted[path.stem] = {
+            tool.strip() for tool in fields.get("tools", "").split(",") if tool.strip()
+        }
+    return granted
+
+
+def prose_sentences(text: str):
+    """Yield the text one flattened sentence at a time."""
+    for chunk in SENTENCE_SPLIT.split(COMMENT_PREFIX.sub("", text)):
+        yield " ".join(chunk.split())
+
+
+def denial_pattern(capability: dict) -> str:
+    """A sentence saying a subject cannot do this capability.
+
+    The object has to follow the verb, and nothing but a word or two may sit
+    between them: that is what makes the match a claim rather than two words
+    that happen to share a sentence. Without it "may not edit this file, and
+    the first pull request" reads "file" as the verb, and this repository is
+    full of the noun. Commas and semicolons are excluded for the same reason -
+    they mark the clause boundary the noun reading needs.
+    """
+    return (
+        NEGATION
+        + r"[^.,;:]{0,40}?\b"
+        + capability["verbs"]
+        + r"\b[^.,;:]{0,25}?"
+        + capability["object"]
+    )
+
+
+def capability_claim_violations(
+    sentence: str, granted: dict[str, set[str]]
+) -> list[tuple[str, str, str]]:
+    """Which roles a sentence falsely says cannot do something.
+
+    Returns (role, capability name, the tool it holds) for each. Empty when the
+    sentence makes no such claim, or makes one that is true.
+    """
+    found: list[tuple[str, str, str]] = []
+    for capability in CAPABILITIES:
+        if not re.search(denial_pattern(capability), sentence, re.I):
+            continue
+        # "no role can open one" is a claim about every role at once and names
+        # none of them, so the named-role search would miss it entirely. Not
+        # when it is qualified though: "no role can file an issue without the
+        # label" is a claim about a condition, and reading it as a capability
+        # denial would fail the gate for a sentence that is true. This form is
+        # the loose one, so it is the one that gets the guard.
+        if re.search(r"\bno\s+role\b", sentence, re.I):
+            if re.search(QUALIFIER, sentence, re.I):
+                continue
+            subjects = sorted(granted)
+        else:
+            subjects = [
+                role
+                for role in sorted(granted)
+                if re.search(ROLE_MENTION.format(role=role), sentence, re.I)
+            ]
+        for role in subjects:
+            held = sorted(granted[role] & capability["tools"])
+            if held:
+                found.append((role, capability["name"], held[0]))
+    return found
+
+
+def instruction_violations(body: str, tools: set[str]) -> list[str]:
+    """Capabilities the text asks for that none of these tools can perform."""
+    return [
+        capability["name"]
+        for capability in CAPABILITIES
+        if re.search(capability["instruction"], body, re.I)
+        and not tools & capability["tools"]
+    ]
+
+
+def check_capability_claims() -> None:
+    """No file may say a role cannot do something it is granted a tool for.
+
+    This is the failure the check exists for, and it has happened. The
+    researcher and the designer were given `create_pull_request` and told to
+    open one; the role files and the orchestrator's readiness paragraph were
+    updated, and four other places kept the old sentence. One of them was the
+    shared block in the project template's CLAUDE.md, so every repository
+    provisioned or updated afterwards was handed a false statement about what
+    two of its own agents could do - and because `/update-agents` rewrites that
+    block, a human correcting it in a project lost the correction on the next
+    update.
+
+    Prose is the product here, so prose drifting from frontmatter is a product
+    bug rather than a documentation one, and nothing else in this repository
+    would have caught it: the mirror check compares two copies of one file and
+    both copies were equally wrong.
+
+    The whole repository is in scope. Three of the four survivors were outside
+    `plugins/` - comments explaining a workflow trigger, and a docstring - and a
+    session that reads one believes it.
+
+    What this does not catch: prose that implies the limit without stating it.
+    Those same three comments said the two roles "push a branch and a human
+    merges it later", which is not a denial of anything and matches nothing
+    here. Separating that from true prose needs judgment, and a check that needs
+    judgment is not a gate. This catches the assertion, not the insinuation.
+    """
+    granted = role_tools()
+    for path in sorted(ROOT.rglob("*")):
+        relative = str(path.relative_to(ROOT))
+        if not path.is_file() or relative.startswith(".git/"):
+            continue
+        if path.suffix not in PROSE_SUFFIXES or relative in CLAIM_FIXTURES:
+            continue
+        try:
+            text = path.read_text()
+        except UnicodeDecodeError:
+            continue
+        for sentence in prose_sentences(text):
+            for role, capability, tool in capability_claim_violations(sentence, granted):
+                fail(
+                    path,
+                    f"says the {role} cannot {capability}, but "
+                    f"agents/{role}.md grants {tool}. One of the two is wrong: "
+                    f"correct the sentence, or drop the tool. "
+                    f"Sentence: {sentence[:100]!r}",
+                )
+
+
+def check_roles_can_do_what_they_are_told() -> None:
+    """A role told to do something must hold a tool that can do it.
+
+    The other direction of the same drift, and the one that came first: the
+    engineer's text argued for opening a pull request before writing code long
+    before the researcher and the designer were granted the tool, and their own
+    text asked them for a pull request they had no way to open. A run told to do
+    something it has no tool for spends one of three attempts finding out.
+    """
+    granted = role_tools()
+    for path in sorted((PLUGIN_DIR / "agents").glob("*.md")):
+        _, body = split_frontmatter(path.read_text(), path)
+        for capability in instruction_violations(body, granted[path.stem]):
+            wanted = " or ".join(
+                sorted(
+                    tool
+                    for entry in CAPABILITIES
+                    if entry["name"] == capability
+                    for tool in entry["tools"]
+                )
+            )
+            fail(
+                path,
+                f"tells the {path.stem} to {capability} but grants no tool that "
+                f"can: add one of {wanted} to the frontmatter, or stop asking.",
+            )
+
+
+def check_gate_inventory() -> None:
+    """Every check script is run by the gate and named in both inventories.
+
+    A script nobody runs proves nothing, and an inventory that omits one sends a
+    reader looking for a check that is already there. Both have happened:
+    `test_project_guard.py` ran in `guard.yml` and appeared in neither
+    `CLAUDE.md` nor `docs/what-is-checked.md`, and `docs/what-is-checked.md`
+    announced five scripts and listed five while the gate ran seven.
+
+    This is the same drift as a capability claim - prose restating something
+    that has a real source - and it gets the same treatment. The counts came out
+    of both files, because a count cannot be checked against anything without
+    guessing at the sentence around it, and a list of names can.
+    """
+    workflow = ROOT / ".github" / "workflows" / "guard.yml"
+    inventories = [ROOT / "CLAUDE.md", ROOT / "docs" / "what-is-checked.md"]
+    if not workflow.exists():
+        return
+    on_disk = {path.name for path in (ROOT / "scripts").glob("*.py")}
+    workflow_text = workflow.read_text()
+    run_by_gate = set(re.findall(r"scripts/([a-z_]+\.py)", workflow_text))
+
+    for name in sorted(on_disk - run_by_gate):
+        fail(
+            ROOT / "scripts" / name,
+            "is not run by .github/workflows/guard.yml, so nothing it proves is "
+            "enforced: add a step for it, or delete the script.",
+        )
+    for name in sorted(run_by_gate - on_disk):
+        fail(workflow, f"runs scripts/{name}, which does not exist.")
+
+    for inventory in inventories:
+        if not inventory.exists():
+            continue
+        text = inventory.read_text()
+        for name in sorted(run_by_gate & on_disk):
+            if name not in text:
+                fail(
+                    inventory,
+                    f"does not name scripts/{name}, which guard.yml runs. Every "
+                    "check script belongs in this inventory.",
+                )
+
+
 def check_no_stale_marketplace_pin() -> None:
     """Nothing should declare a marketplace to get these commands loaded.
 
@@ -407,6 +696,9 @@ def main() -> int:
     check_vendored_roles()
     check_self_vendored()
     check_no_stale_marketplace_pin()
+    check_gate_inventory()
+    check_capability_claims()
+    check_roles_can_do_what_they_are_told()
     check_portability()
     check_no_emoji()
     if errors:

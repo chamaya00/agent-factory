@@ -445,9 +445,8 @@ def check_a_merge_can_wake_an_objective() -> None:
     """A merge is the other half of the loop and needs its own trigger and job.
 
     The hand-back tells an objective that a child's run ended. It cannot tell
-    it that the child's work landed - the researcher and designer push a branch
-    and a human merges it later - and landing is what makes the next child
-    ready. Without this an objective reports "waiting on the merge", the merge
+    it that the child's work landed - every role opens a pull request and a
+    human merges it later - and landing is what makes the next child ready. Without this an objective reports "waiting on the merge", the merge
     happens, and nothing wakes it.
     """
     template = TEMPLATES / "project" / ".github" / "workflows" / "agent-run.yml"
