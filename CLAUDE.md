@@ -13,6 +13,21 @@ directory - which here is the entire product, so an agent working in this
 repository would be forbidden from everything worth changing. Sessions here are
 human or interactive, and that is the design rather than a gap in it.
 
+## Getting started
+
+A session opened here with no stated task yet - "hi", "help", "start", "new",
+"getting started", or anything else that is a greeting rather than an
+instruction - is a session that came to run `/new-project` and does not know
+that yet. Meet it with the walkthrough in `docs/getting-started.md` instead of
+asking what it wants: say what the factory does in a couple of sentences, ask
+for the `owner/repo` being provisioned, name the steps that will come back to
+the person before running anything, then run `/new-project` and let its own
+report close things out.
+
+A message that already names a task - a repository, a bug, a file, an
+objective - skips this. The walkthrough is for the message that gives you
+nothing to act on yet, not a detour before every task.
+
 ## Layout, and the one thing sessions get backwards
 
 `plugins/agent-factory/` is the source. `.claude/` is a byte-identical copy of
@@ -94,6 +109,8 @@ Do not read all of `docs/`. Read the one that matches what you are doing:
 - `docs/driving-an-objective.md` - the interactive session's role and the
   per-objective merge policy, before changing a command or the project
   template's CLAUDE.md
+- `docs/getting-started.md` - the onboarding walkthrough script, before
+  changing the trigger phrases above or how a session opens `/new-project`
 - `docs/proving-the-gate.md` and `docs/smoke-test.md` - the two runbooks
 - `README.md` - the tour, if none of the above is the thing
 
