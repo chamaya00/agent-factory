@@ -77,6 +77,13 @@ driver and the person's window into it. Nobody else is watching. Filing one is
 `/objective`, which refines the idea, sets the merge policy, queues it, and
 hands back to the session to drive.
 
+**Shorthand:** a message starting with `obj` - any case, with or without a
+trailing `.` or `:` - means the same thing as typing `/objective`. Read
+`.claude/commands/objective.md` and follow it, treating the rest of the
+message as the rough idea. Nothing else is shorthand for anything; a plain
+description of work with no `obj` prefix is a question or a discussion, not an
+instruction to file something.
+
 **Read `.claude/skills/driving-an-objective/` whenever an objective is in play**
 - what to do with its merge policy, how to report, how to put a blocker so it
 can be answered, and what only the person can decide. This paragraph exists to
