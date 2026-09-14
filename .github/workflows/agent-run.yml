@@ -407,6 +407,8 @@ jobs:
           MAX_ATTEMPTS: ${{ inputs.max-attempts }}
           MAX_SUPERVISIONS: ${{ inputs.max-supervisions }}
           COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          COMMENT_ASSOCIATION: ${{ github.event.comment.author_association }}
           LABEL_NAME: ${{ github.event.label.name }}
           SKIP_PATTERNS: ${{ inputs.skip-path-patterns }}
           MARKER: '<!-- agent-factory:attempt -->'
@@ -424,12 +426,36 @@ jobs:
 
           [ -n "${NUMBER:-}" ] || skip "No issue or pull request in context. Nothing to run."
 
-          # A comment only counts when it carries the trigger phrase.
+          # A comment only counts when it carries the trigger phrase AND the
+          # person who wrote it can already write to this repository.
+          #
+          # The trigger phrase was the whole gate until now, and on a public
+          # repository that is not a gate at all: anyone with a GitHub account
+          # can comment `@claude` on an open issue. `claude-code-action` does
+          # refuse a triggering actor without write access, and that check is
+          # what has actually been holding - but it holds one job too late.
+          # By then this preflight has already run with `issues: write`, and
+          # on the budget-exceeded path below it labels the issue
+          # `agent:blocked`, strips the run label and comments, all on the say
+          # so of a stranger. Refusing here costs nothing and means the
+          # untrusted case stops before anything writes.
+          #
+          # It is also the only gate this workflow owns. The action's check
+          # lives in a dependency, is configurable from outside this file
+          # (`allowed_non_write_users`), and is not something a reader of this
+          # workflow can see. Two independent checks, one of them local.
           case "$EVENT_NAME" in
             issue_comment|pull_request_review_comment)
               case "$COMMENT_BODY" in
                 *"$TRIGGER_PHRASE"*) : ;;
                 *) skip "Comment does not carry $TRIGGER_PHRASE." ;;
+              esac
+              # OWNER, MEMBER and COLLABORATOR are the associations that imply
+              # write access. CONTRIBUTOR means "has had a pull request merged
+              # here", which is not write access and must not read as it.
+              case "$COMMENT_ASSOCIATION" in
+                OWNER|MEMBER|COLLABORATOR) : ;;
+                *) skip "$COMMENT_AUTHOR is $COMMENT_ASSOCIATION, not a write-access author. Refusing to spend a run." ;;
               esac
               ;;
           esac
@@ -765,8 +791,28 @@ jobs:
               # exists to prevent, so the runners are granted per stack.
               #
               # Scoped per runner rather than Bash(bash:*), for the same reason
-              # `gh` is scoped above: a role that can run any shell command can
-              # rewrite the gates it is being checked by.
+              # `gh` is scoped above: it keeps an honest run from reaching for a
+              # shell it has no business in, and it makes the log of what a run
+              # ran readable.
+              #
+              # What it does NOT do is contain a run that has been talked into
+              # something - and the comment here used to claim it did. This
+              # role holds `Write` and `Edit` alongside `Bash(bash tests/*)`,
+              # `Bash(./scripts/*)`, `Bash(npm install:*)` and `Bash(make:*)`.
+              # A run can therefore author `tests/check.sh`, a `postinstall`
+              # hook, or a `Makefile` target and then execute it, satisfying
+              # the allowlist at every step. That is not a hole to be patched
+              # by trimming this list: an engineer that writes tests and runs
+              # them has arbitrary execution by construction, and taking the
+              # runners away is what made a role verify its criteria with
+              # inline greps and ship a test script that could not pass.
+              #
+              # So the containment is elsewhere, and it has to be, because this
+              # step's environment holds GH_TOKEN and the job holds the OAuth
+              # token: the write-access check on who may trigger a run at all,
+              # branch protection and CODEOWNERS on what a run's diff can
+              # reach, and the project guard on the gates themselves. Read this
+              # list as scoping, never as a sandbox.
               tools="$tools,Bash(make:*),Bash(pytest:*),Bash(python -m pytest:*),Bash(python3 -m pytest:*)"
               tools="$tools,Bash(go test:*),Bash(cargo test:*)"
               #
