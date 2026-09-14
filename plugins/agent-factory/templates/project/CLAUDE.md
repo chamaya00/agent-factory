@@ -84,6 +84,11 @@ message as the rough idea. Nothing else is shorthand for anything; a plain
 description of work with no `obj` prefix is a question or a discussion, not an
 instruction to file something.
 
+**Waking back up is `/check-in`.** Whether that is a person resuming a
+session, a scheduled wake, or a subscribed pull request's activity firing one,
+it runs the same catch-up: what is waiting on the person first, then the state
+of every child, merging under the policy where it applies.
+
 **Read `.claude/skills/driving-an-objective/` whenever an objective is in play**
 - what to do with its merge policy, how to report, how to put a blocker so it
 can be answered, and what only the person can decide. This paragraph exists to
