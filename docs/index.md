@@ -28,6 +28,9 @@ In order, and the order is the point.
 
 ## Reference
 
+- **[Getting started](getting-started.md)** - the walkthrough a session
+  follows when it is opened with a greeting instead of a task, so the answer
+  to "hi" is a guided run of `/new-project` rather than a menu.
 - **[What is checked](what-is-checked.md)** - which parts of the system are
   verified automatically, which are verified by hand, and which are not
   verified at all. Start here if you are asking whether any of this works.
