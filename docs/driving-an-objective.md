@@ -274,6 +274,29 @@ poll while a person is present and it is useful when it works. It must never be
 the thing a report depends on, because when it fails it fails silently, and the
 observed cost of that is four hours of apparent nothing.
 
+## Addendum: how a driver actually wakes (1.26.0)
+
+The line above said what not to do. It did not say what to do instead, and the
+gap kept getting refilled with exactly the forbidden thing - a driver setting
+itself a reminder because nothing else was named.
+
+`driving-an-objective`'s "How to wake" section names the substitute: what a
+driver is waiting on decides the mechanism, not a habit of scheduling
+something. A pull request gets a subscription, so its own activity - a CI
+failure, a review comment - wakes the next check instead of a session polling
+for it. A wait on the person is not scheduled at all; the blocker goes on the
+issue, per the skill's "Say it on the issue, not only in this turn", and the
+wake is the person reading it. Only a wait with no signal available anywhere -
+something outside the pull request's own activity - falls back to a durable
+reminder, and even that wakes a session that re-reads the objective's actual
+state rather than trusting what the reminder says.
+
+`/check-in` is the fixed shape catch-up takes, whatever woke it: what is
+waiting on the person first, then the state of every child, then act under the
+policy. It exists as a command rather than three lines retyped from memory for
+the same reason `/objective` does - so the same procedure runs regardless of
+who or what invoked it.
+
 ## Open questions
 
 Four of the five questions this document opened with have been answered, and
