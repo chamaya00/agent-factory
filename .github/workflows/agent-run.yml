@@ -743,6 +743,24 @@ jobs:
             designer)
               tools="$common,Write,Edit,WebFetch"
               tools="$tools,$authoring_pr"
+              # A visual spec is settled by looking, and until this the designer
+              # had nothing it could look at. It specified a refresh of a page it
+              # had never seen rendered; the engineers who built it could not open
+              # a browser either, so every "checked visually" criterion in that
+              # objective was discharged by reading compiled CSS. Nothing went
+              # red. The result was simply nobody's idea of a design, and the
+              # first eye to reach the rendered page arrived after the last of
+              # four pull requests had merged.
+              #
+              # Granted as the project's own entry points rather than a shell,
+              # for the reason the engineer's list gives below: a role that can
+              # run any command can rewrite the gates it is checked by. A project
+              # that wants its mocks rendered exposes a command that renders one;
+              # a project that exposes none leaves the designer to name what
+              # refused in the pull request, which is what its role tells it to
+              # do, and a reviewer supplies the eyes instead.
+              tools="$tools,Bash(npm ci:*),Bash(npm install:*),Bash(npm run:*),Bash(make:*)"
+              tools="$tools,Bash(bash scripts/*),Bash(sh scripts/*),Bash(./scripts/*)"
               ;;
             engineer)
               # Writes code, runs the checks the gate runs, and opens the
