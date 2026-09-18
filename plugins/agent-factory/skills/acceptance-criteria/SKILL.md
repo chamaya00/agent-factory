@@ -49,6 +49,12 @@ Presence is the right shape only when presence is genuinely the requirement - an
 
 The tell is that you can imagine a plausible wrong implementation passing. A repository lost this one twice over in a single objective: a spec said an entry page's "back" link should be a bare relative path, a criterion asked only that the built page "contains a link back to its collection's listing", and the one grep that might have caught it only looked for root-absolute paths. Every criterion would have passed with the link 404ing from every entry page on the site.
 
+**A criterion about how something looks names what a reviewer opens and what they should see in it.** "Then the page is visually distinct from default browser styling" is the floor: any stylesheet at all satisfies it, including one nobody would ship, and work written against a floor clears the floor and stops. "Matches the design spec" is no better when the spec is prose - two readers of the same paragraph disagree about what it asked for, which is the disagreement this whole file exists to prevent.
+
+So name the artifact and the treatment: *given the mock at `docs/design/<file>`, when the built page is opened beside it at a desktop width and at 375px, then the card is the element the eye lands on first at both widths, and the two variant accents still read as cool against warm.* The mock is what makes that checkable at all - it is the place a human looks, which every user-visible criterion is supposed to name, and a criterion written before one exists is usually a criterion nobody can settle.
+
+A repository learned this the expensive way. Every visual criterion across a four-child objective read "visually distinct from default browser styling" or "checked visually against the spec", none of them named anything to look at, the agents that could not open a browser discharged them by reading compiled CSS, and every one was ticked. No eye reached the rendered page until after the last pull request had merged.
+
 ## What a criterion costs to satisfy
 
 A criterion is also an instruction to spend a run's budget, and the agent writing it is not the agent paying. Write them knowing that.

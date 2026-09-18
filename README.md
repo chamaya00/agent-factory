@@ -35,7 +35,7 @@ Everything except the two manifests sits at the plugin root, not inside `.claude
 
 - `orchestrator` - reads an objective, produces 2-5 child issues with acceptance criteria. No file writes, no grandchildren.
 - `researcher` - investigates options and constraints, writes to `docs/research/`. No source access.
-- `designer` - produces flows, states, and component specs, writes to `docs/design/`. No source access.
+- `designer` - produces flows, states, and component specs, plus a rendered mock when the issue is visual, writes to `docs/design/`. No source access.
 - `engineer` - implements against the acceptance criteria, writes the tests, opens the pull request.
 
 ## Commands
