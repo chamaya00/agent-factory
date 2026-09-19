@@ -8,6 +8,7 @@ script requires judgment, because a check that requires judgment is not a gate.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -298,6 +299,49 @@ def check_commands() -> None:
         fields, _ = split_frontmatter(path.read_text(), path)
         if not fields.get("description"):
             fail(path, "frontmatter missing required field 'description'")
+
+
+def check_named_project_commands() -> None:
+    """A command a role is told the name of has to be a command that exists.
+
+    The designer held a shell grant for rendering mocks through an entire
+    objective and never rendered one. Nothing was broken: the grant was real,
+    the role was told to render, and the two never met, because no project
+    shipped anything to call and the role had no name to reach for. The design
+    was specified, built and merged with no eye on a rendered page, and every
+    check stayed green throughout - the failure mode of a capability is silence.
+
+    So the moment a role names `./scripts/<thing>`, the project template owes
+    every repository that file, executable. This is deliberately about the
+    template rather than about any one project: a role file and the template
+    ship together in a release, so if they disagree here they disagree
+    everywhere at once, which is exactly the class of thing a gate should
+    refuse before it is cut rather than after.
+    """
+    named: dict[str, list[str]] = {}
+    for path in sorted((PLUGIN_DIR / "agents").glob("*.md")):
+        for match in re.finditer(r"`\./scripts/([A-Za-z0-9_.-]+)", path.read_text()):
+            named.setdefault(match.group(1), []).append(path.name)
+
+    template_scripts = PLUGIN_DIR / "templates" / "project" / "scripts"
+    for name, roles in sorted(named.items()):
+        where = ", ".join(sorted(set(roles)))
+        script = template_scripts / name
+        if not script.is_file():
+            fail(
+                script,
+                f"{where} tells a role to run './scripts/{name}', and the project "
+                f"template does not ship it - every repository provisioned from "
+                f"this release would name a command it does not have",
+            )
+            continue
+        if not os.access(script, os.X_OK):
+            fail(
+                script,
+                f"is not executable; {where} calls it as './scripts/{name}', "
+                f"which refuses without the execute bit - present, silent, and "
+                f"indistinguishable from having run",
+            )
 
 
 def check_portability() -> None:
@@ -699,6 +743,7 @@ def main() -> int:
     check_gate_inventory()
     check_capability_claims()
     check_roles_can_do_what_they_are_told()
+    check_named_project_commands()
     check_portability()
     check_no_emoji()
     if errors:

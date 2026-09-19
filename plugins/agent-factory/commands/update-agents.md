@@ -184,6 +184,28 @@ needed a block: one is wholly ours and one is not.
 exactly like a skill, and make sure it stays executable - a hook without the
 execute bit is wired, silent, and looks like it ran.
 
+**If this release added a label, say so and hand the person `bootstrap`.** The
+label vocabulary is created by that workflow and nowhere else, so a repository
+provisioned before a release that added one simply does not have it, and the
+run that first tries to apply it fails at the `gh` call. Compare the `label`
+lines in this release's `bootstrap.yml` against what the repository has. If any
+is missing, put it in the pull request body as a step for them: open the
+Actions tab, run `bootstrap`, and it creates whatever is absent. It is
+idempotent, so running it is never the wrong call. Do not try to create labels
+from here - this command writes files, and the vocabulary has one source.
+
+**`scripts/design-render` is the factory's interface and the project's body.**
+If the repository does not have it, copy it in from this release's
+`templates/project/scripts/` and make it executable: the design role is told to
+call it by name, and a project without it has a role reaching for a command
+that is not there. If it is already present, **leave it alone** - a project that
+has replaced the default has replaced it on purpose, because what renders a
+mock is a choice with a dependency and sometimes a credential behind it, and
+that choice is recorded there rather than here. Say in the body which of the two
+happened. The interface is the factory's to change and the body never is, so an
+existing file is only ever overwritten when this release changes the arguments
+themselves, and then the change is named in the body as a breaking one.
+
 **`.claude/settings.json` belongs to the project.** It is where permissions, env,
 and the project's own hooks live, and overwriting it destroys configuration
 nobody asked you to touch. So make a **bounded edit**:

@@ -741,7 +741,16 @@ jobs:
               tools="$tools,$authoring_pr"
               ;;
             designer)
-              tools="$common,Write,Edit,WebFetch"
+              # WebSearch for the same reason the researcher has it, arrived at
+              # the same way. A designer with WebFetch can open a page it
+              # already knows the address of and nothing else, so a role told to
+              # push past what is already here had no way to see what "already
+              # here" is being measured against. It chose from memory instead,
+              # which averages several years of training data and reads as
+              # bland - and, like the researcher's case, the failure was silent,
+              # because a role with no way to look still writes a confident
+              # paragraph about a direction.
+              tools="$common,Write,Edit,WebFetch,WebSearch"
               tools="$tools,$authoring_pr"
               # A visual spec is settled by looking, and until this the designer
               # had nothing it could look at. It specified a refresh of a page it
@@ -759,6 +768,18 @@ jobs:
               # a project that exposes none leaves the designer to name what
               # refused in the pull request, which is what its role tells it to
               # do, and a reviewer supplies the eyes instead.
+              #
+              # That command now has a fixed name - `./scripts/design-render`,
+              # shipped in the project template - because the open-ended version
+              # of this grant was dormant for every run that held it. The grant
+              # was here, no project exposed anything to call, no role knew what
+              # to reach for, and nothing said so: the design that resulted was
+              # specified, reviewed and merged without one eye on a rendered
+              # page. A capability nobody is told the name of is not a
+              # capability. The name is in the role file and the contract is in
+              # the script's own header; what it shells out to is the project's
+              # decision and never the plugin's, which is how a vendor tool gets
+              # in here at all without a vendor's name entering the plugin.
               tools="$tools,Bash(npm ci:*),Bash(npm install:*),Bash(npm run:*),Bash(make:*)"
               tools="$tools,Bash(bash scripts/*),Bash(sh scripts/*),Bash(./scripts/*)"
               ;;
@@ -814,6 +835,16 @@ jobs:
 
           echo "Allowing for $ROLE: $tools"
           echo "allowed=$tools" >> "$GITHUB_OUTPUT"
+
+      # The instant before the agent starts, so the handback below can tell a
+      # question this run asked from one an earlier attempt asked. Without it
+      # the marker is permanent: attempt 1 asks, a person answers and clears the
+      # label, attempt 2 runs and the handback finds the old comment and raises
+      # the same question again - a loop that looks exactly like the system
+      # working, which is the worst kind to debug.
+      - name: Stamp the run start
+        id: stamp
+        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
       - uses: anthropics/claude-code-action@v1
         env:
@@ -917,6 +948,7 @@ jobs:
           RUN_LABEL: ${{ inputs.run-label }}
           MAX_TURNS: ${{ inputs.max-turns }}
           JOB_STATUS: ${{ job.status }}
+          RUN_STARTED: ${{ steps.stamp.outputs.at }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           # Hand back to the orchestrator where there is one, and to a human
@@ -998,9 +1030,65 @@ jobs:
             gh issue edit "$parent" --add-label "$RUN_LABEL" || true
           }
 
+          # A question this run asked, carried out of the run as a label.
+          #
+          # There was nowhere to put "I finished, and somebody has to decide
+          # something before this merges". The vocabulary had two terminal
+          # states and both are verdicts on the run: agent:review says it went
+          # fine, agent:blocked says it did not. A role with a real question had
+          # three bad options - block itself and spend an attempt on work that
+          # succeeded, write the question in a comment that the orchestrator's
+          # next status rewrite buries, or pick silently. Across an entire
+          # design objective every role picked silently, every time.
+          #
+          # So a role writes the marker into a comment and this reads it back.
+          # The label is the durable half and the comment is the readable half:
+          # a label survives every rewrite and can be queried, and the question
+          # itself stays where it was asked, next to the work it is about. The
+          # orchestrator then renders it onto the parent rather than storing it,
+          # which is what keeps "replace, do not append" from eating questions.
+          #
+          # Deliberately not a new authority. No role gains a label grant; the
+          # marker is a string in a comment any role can already write, and this
+          # step already holds the token and already edits labels. It costs one
+          # grep and it works for every role at once.
+          carry_question() {
+            [ -n "$RUN_STARTED" ] || return 0
+            # ISO 8601 in UTC sorts lexically, so a string compare is a date
+            # compare here, and jq needs no date parsing to do it.
+            asked="$(gh "$KIND" view "$ISSUE" --json comments \
+              --jq ".comments[] | select(.createdAt >= \"$RUN_STARTED\") | .body" \
+              2>/dev/null | grep -c 'agent-factory:needs-input' || true)"
+            [ "${asked:-0}" -gt 0 ] || return 0
+            echo "#$ISSUE asked a question this run. Labelling it agent:needs-input."
+            # Not `|| true`. Every other label here predates every project, and
+            # this one does not: a repository provisioned before the release
+            # that added it has no such label, `gh` fails, and swallowing that
+            # would leave the question sitting in a comment with nothing
+            # pointing at it - a silent failure of the mechanism built to stop
+            # silent failures. So say so where the question is.
+            if ! gh "$KIND" edit "$ISSUE" --add-label 'agent:needs-input'; then
+              echo "::warning::Could not apply agent:needs-input to #$ISSUE."
+              # printf rather than a heredoc: a heredoc body has to start at
+              # column 0, which ends the YAML block scalar this whole script
+              # lives in, and the workflow then stops parsing.
+              gh "$KIND" comment "$ISSUE" --body "$(printf '%s\n' \
+                'A question was raised on this issue and the `agent:needs-input`' \
+                'label could not be applied, so nothing but this comment marks it.' \
+                '' \
+                'The usual cause is a repository provisioned before the release that' \
+                'added the label. Re-run the `bootstrap` workflow from the Actions' \
+                'tab - it is idempotent and creates whichever labels are missing.' \
+                '' \
+                'Until then, treat this issue as waiting on an answer before its' \
+                'pull request merges.')" || true
+            fi
+          }
+
           gh "$KIND" edit "$ISSUE" --remove-label 'agent:running' || true
           if [ "$JOB_STATUS" = "success" ]; then
             gh "$KIND" edit "$ISSUE" --add-label 'agent:review' || true
+            carry_question
             wake_parent
             exit 0
           fi
@@ -1036,6 +1124,10 @@ jobs:
           else
             gh "$KIND" edit "$ISSUE" --add-label 'agent:blocked' || true
           fi
+          # Either way. A run cut off at its turn cap can have asked a good
+          # question and then died, and that question is worth more than the
+          # half-finished branch it died on.
+          carry_question
           wake_parent
 
           # What actually got delivered, as facts rather than an absence to be

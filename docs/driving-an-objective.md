@@ -324,3 +324,51 @@ thing the design knowingly does not solve.
    biggest one, which is why this is a question rather than a decision. It
    should be settled before the policy mechanism is relied on anywhere the
    consequences of a wrong merge are worse than they are today.
+
+## Addendum: a question is a third terminal state (1.28.0)
+
+The label set above had two terminal states for a child and both are verdicts on
+the run: `agent:review` says it went fine, `agent:blocked` says it did not.
+Neither says "it went fine and somebody has to decide something before this
+merges", and that turned out to be a common and expensive case.
+
+A role that hit one had three options and all were bad. Block itself, and spend
+one of the issue's three attempts on a run that had actually succeeded. Write
+the question in a comment, where the orchestrator's next status rewrite buries
+it - the parent picture is *replaced* on every wake by design, so anything held
+only in its prose has a lifetime of one child finishing. Or pick silently. Over
+an entire design objective across two repositories, every role picked silently,
+every time, and nobody found out until the work was merged.
+
+So `agent:needs-input`, and the thing to understand about it is where the
+question actually lives:
+
+- **The comment holds the question.** It stays where it was asked, beside the
+  work it is about, which is also where a driver reading pull requests will
+  meet it.
+- **The label holds the fact.** A label survives every comment rewrite and can
+  be queried, which prose cannot.
+- **The parent issue holds neither - it renders them.** The orchestrator rebuilds
+  its "waiting on you" section every wake by reading the children's labels. That
+  is what makes "replace, do not append" safe: the orchestrator displays
+  questions and never stores them, so a wake that forgets to re-read shows
+  nothing rather than losing something.
+
+A role raises one by writing `<!-- agent-factory:needs-input -->` into its issue
+comment. The run's handback greps for it and applies the label. No role gained a
+label grant for this: the marker is a string any role could already write, and
+the handback step already held the token and already edited labels. It is
+compared against a timestamp taken just before the agent starts, so a question
+answered on attempt one is not re-raised by attempt two.
+
+It rides *alongside* `agent:review` rather than replacing it, costs no attempt,
+and stops nothing except the merge. The role is told to ask the question and
+then finish the work anyway under its own recommendation - a question with a
+delivered recommendation attached is a far better question than the same words
+with nothing to look at.
+
+And it is the one thing `Merge policy: green` does not cover. The person
+delegated the gate; this is what they kept. A driver relays it and waits, and
+must not answer it on their behalf - a driver holding someone's credentials can
+always produce an answer that sounds like theirs, which is exactly why it may
+not.

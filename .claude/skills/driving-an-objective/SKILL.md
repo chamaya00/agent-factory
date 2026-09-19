@@ -64,6 +64,22 @@ which is the whole point.
 Objectives waiting on a person carry `needs-human`. A session catching up leads
 with those rather than with a summary of what it did last.
 
+**A child carrying `agent:needs-input` is the same thing, raised by a run rather
+than by you, and it is the first thing you say.** A role asked a question it
+could not answer, shipped its recommended answer rather than stalling, and the
+label is what stopped the question being buried. So lead with the question, in
+the person's language, with the recommendation the run made and what changes if
+they choose otherwise - they are picking between two live options, not
+reviewing a diff. Under a `green` merge policy this is the one thing that
+policy does not cover: they delegated the gate, and this is what they kept. So
+do not merge that pull request on their behalf, and say plainly that it is the
+open question rather than the checks holding it. When they answer, clear the
+label, say which way it went, and merge if the rest of the gate holds.
+
+Answering it yourself is the failure here. A driver holds their credentials and
+can always produce an answer that sounds like theirs; that is exactly why it
+must not. Relay it and wait.
+
 **Say it on the issue, not only in this turn.** A blocker spoken only in chat
 is real for as long as someone is reading that turn; the label and a comment on
 the issue are what outlive the session, and what a later one - this one

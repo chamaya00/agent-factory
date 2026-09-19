@@ -5,8 +5,8 @@ name: bootstrap
 #
 # This workflow exists because of where the person running this system works
 # from. A cloud session has no `gh` binary, and there is no tool available to
-# it for creating a label, so the ten labels are either typed by hand nine
-# times per project on a phone or they are created here. The names are
+# it for creating a label, so the labels are either typed by hand, once each,
+# per project on a phone, or they are created here. The names are
 # load-bearing - the agent-run preflight matches them exactly - which is the
 # same reason they are defined in one place rather than retyped per project.
 #
@@ -49,6 +49,17 @@ jobs:
           label agent:running       FBCA04 "An agent holds this right now."
           label agent:review        0E8A16 "Agent finished. Waiting on a human."
           label agent:blocked       B60205 "Refused or failed. Needs a human."
+          # The third terminal state, and the only one that is not a verdict on
+          # the run. A role can deliver its work and still need an answer before
+          # anyone should merge it: a direction only the owner can pick, a
+          # trade-off with no right answer, a question the issue did not settle.
+          # Before this there was nowhere to put that, so it went in a comment
+          # and was overwritten, or the role blocked itself and spent an attempt
+          # on a run that had actually succeeded - and most often the role just
+          # picked silently, which is the outcome this exists to stop.
+          # It never suppresses agent:review: the work shipped, the question
+          # rides alongside it, and what it gates is the merge.
+          label agent:needs-input   C2E0C6 "Delivered, and waiting on an answer before merge."
           label needs-decomposition D93F0B "Too big to work as one issue."
           label needs-human        FBB040 "Waiting on a person, not on a run."
           label role:researcher     5319E7 "Investigates options. Writes to docs/research/."
@@ -72,7 +83,7 @@ jobs:
           {
             echo "## Labels created"
             echo
-            echo "All nine. Re-run this workflow any time one gets renamed or deleted."
+            echo "Re-run this workflow any time one gets renamed or deleted."
             echo
             echo "## Required checks for branch protection"
             echo
