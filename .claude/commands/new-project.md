@@ -238,7 +238,7 @@ the pull request path the human merges step 3 first. Then:
 > 2. Tap **Run workflow**, then **Run workflow** again to confirm
 > 3. When it finishes, open the run and read its summary
 
-The summary lists the ten labels and, more usefully, the check names as they
+The summary lists the labels and, more usefully, the check names as they
 were actually reported. Step 5 needs those.
 
 Verify a sample rather than trusting the run: `mcp__github__get_label` for

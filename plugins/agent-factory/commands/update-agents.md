@@ -184,6 +184,16 @@ needed a block: one is wholly ours and one is not.
 exactly like a skill, and make sure it stays executable - a hook without the
 execute bit is wired, silent, and looks like it ran.
 
+**If this release added a label, say so and hand the person `bootstrap`.** The
+label vocabulary is created by that workflow and nowhere else, so a repository
+provisioned before a release that added one simply does not have it, and the
+run that first tries to apply it fails at the `gh` call. Compare the `label`
+lines in this release's `bootstrap.yml` against what the repository has. If any
+is missing, put it in the pull request body as a step for them: open the
+Actions tab, run `bootstrap`, and it creates whatever is absent. It is
+idempotent, so running it is never the wrong call. Do not try to create labels
+from here - this command writes files, and the vocabulary has one source.
+
 **`scripts/design-render` is the factory's interface and the project's body.**
 If the repository does not have it, copy it in from this release's
 `templates/project/scripts/` and make it executable: the design role is told to
