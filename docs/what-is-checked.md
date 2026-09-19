@@ -68,7 +68,7 @@ ships: change the shell and the tests run the change.
 Eleven groups of structural checks. The ones with a reason behind them rather
 than a convention:
 
-- **Roles carry the containment clause.** All four role files must exist, have
+- **Roles carry the containment clause.** Every role file the manifest lists must exist, have
   `name` and `description` frontmatter matching the filename, keep the body
   under 45 lines, and end with the memory-and-containment paragraph verbatim. A
   role missing it can read the wrong memory file or write where it must not.
@@ -276,7 +276,7 @@ Everything automated tests form. Nothing automated tests behaviour, by design -
 no model runs in `guard.yml`, because a check that needs judgment is not a gate.
 That leaves real gaps, and they are worth naming.
 
-- **Three of the four roles have never completed a run.** Only the researcher
+- **Most roles have never completed a run.** Only the researcher
   has run successfully under the current allowlist. The engineer is the one to
   watch: it is the only role that needs `Bash(npm run:*)` and the only one
   whose output has to pass the gate rather than merely exist. It has now been

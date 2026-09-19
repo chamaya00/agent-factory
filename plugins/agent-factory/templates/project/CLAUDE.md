@@ -68,7 +68,7 @@ that comes back as `needs-decomposition` and a comment on the parent.
 
 Labels: `objective`, `agent:queued`, `agent:running`, `agent:review`,
 `agent:blocked`, `needs-decomposition`, `needs-human`, `role:researcher`,
-`role:designer`, `role:engineer`.
+`role:analyst`, `role:designer`, `role:engineer`.
 
 ## Driving an objective
 

@@ -171,11 +171,12 @@ What goes in:
 - `CLAUDE.md` - fill in the product sentence, the stack, and the commands from
   what is actually in the repository. Do not leave a bracketed placeholder
   behind; if you cannot tell what belongs in one, ask rather than guess.
-- `.claude/memory/orchestrator.md`, `researcher.md`, `designer.md`,
-  `engineer.md` - empty, with their headers
+- `.claude/memory/orchestrator.md`, `researcher.md`, `analyst.md`,
+  `designer.md`, `engineer.md` - empty, with their headers
 - `.claude/agent-factory.json` - the record of which release this repository
   took, with the version filled in
-- `docs/research/`, `docs/design/`, `docs/decisions/` with the ADR template
+- `docs/research/`, `docs/measurement/`, `docs/design/`, `docs/decisions/`
+  with the ADR template
 
 Then the roles and the commands themselves, copied rather than referenced:
 
@@ -230,8 +231,8 @@ the pull request path the human merges step 3 first. Then:
 > 2. Tap **Run workflow**, then **Run workflow** again to confirm
 > 3. When it finishes, open the run and read its summary
 
-The summary lists the ten labels and, more usefully, the check names as they
-were actually reported. Step 5 needs those.
+The summary lists every label it created and, more usefully, the check names
+as they were actually reported. Step 5 needs those.
 
 Verify a sample rather than trusting the run: `mcp__github__get_label` for
 `agent:queued` and `role:engineer`. If either is missing the run did not do what

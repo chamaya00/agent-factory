@@ -166,6 +166,12 @@ CASES = [
         ("true", "engineer", 0),
     ),
     (
+        "analyst role label runs the analyst",
+        event(),
+        state(["role:analyst", "agent:queued"]),
+        ("true", "analyst", 0),
+    ),
+    (
         "no role label does not run",
         event(),
         state(["agent:queued"]),

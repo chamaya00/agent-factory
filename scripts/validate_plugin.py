@@ -131,7 +131,7 @@ CLAIM_FIXTURES = {
 
 # What a template writes instead of a release tag. Provisioning substitutes it.
 PIN_PLACEHOLDER = "__FACTORY_VERSION__"
-ROLES = ["orchestrator", "researcher", "designer", "engineer"]
+ROLES = ["orchestrator", "researcher", "analyst", "designer", "engineer"]
 
 # The commands a provisioned project receives. `new-project` is deliberately not
 # among them: provisioning is the factory's job, and a project that can

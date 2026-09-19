@@ -18,7 +18,7 @@ The third row is what keeps the first two reusable. Agents get smarter inside a 
 .claude-plugin/marketplace.json      marketplace manifest
 plugins/agent-factory/
   .claude-plugin/plugin.json         plugin manifest (explicit name, always)
-  agents/                            the four roles
+  agents/                            the roles
   skills/                            the process instructions
   commands/                          slash commands
   templates/project/                 what /new-project drops into a fresh repo
@@ -31,10 +31,11 @@ docs/                                the operating documentation, also a Pages s
 
 Everything except the two manifests sits at the plugin root, not inside `.claude-plugin/`.
 
-## The four roles
+## The roles
 
 - `orchestrator` - reads an objective, produces 2-5 child issues with acceptance criteria. No file writes, no grandchildren.
 - `researcher` - investigates options and constraints, writes to `docs/research/`. No source access.
+- `analyst` - specifies the event contract, the exposure event, and the metrics a result is read with, writes to `docs/measurement/`. No source access.
 - `designer` - produces flows, states, and component specs, plus a rendered mock when the issue is visual, writes to `docs/design/`. No source access.
 - `engineer` - implements against the acceptance criteria, writes the tests, opens the pull request.
 

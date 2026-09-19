@@ -52,6 +52,7 @@ jobs:
           label needs-decomposition D93F0B "Too big to work as one issue."
           label needs-human        FBB040 "Waiting on a person, not on a run."
           label role:researcher     5319E7 "Investigates options. Writes to docs/research/."
+          label role:analyst        F5A623 "Specifies the event contract and the metrics. Writes to docs/measurement/."
           label role:designer       E99695 "Specifies flows and states. Writes to docs/design/."
           label role:engineer       0052CC "Implements and opens the pull request."
 
