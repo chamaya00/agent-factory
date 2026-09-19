@@ -54,7 +54,7 @@ Then confirm by hand:
 - No file under `.github/workflows/` still contains `__FACTORY_VERSION__`. The
   placeholder is substituted at provision time; one that survived means the
   callers address a ref that does not exist.
-- `.claude/agents/` has four role files. The agent job refuses to start
+- `.claude/agents/` has a file for every role. The agent job refuses to start
   without them, which is the correct behaviour and a confusing first failure
   if you were not expecting it.
 

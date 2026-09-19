@@ -9,7 +9,7 @@ Learning belongs to the repository that produced it. A lesson about one project'
 
 ## Where memory lives
 
-Repository learning lives at `.claude/memory/<role>.md`, one file per role: `orchestrator.md`, `researcher.md`, `designer.md`, `engineer.md`.
+Repository learning lives at `.claude/memory/<role>.md`, one file per role: `orchestrator.md`, `researcher.md`, `analyst.md`, `designer.md`, `engineer.md`.
 
 Every agent reads its own file at the start of a run. An agent does not read another role's file.
 

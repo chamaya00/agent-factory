@@ -146,10 +146,14 @@ and will hit the cap after two real ones.
 
 ---
 
-## 4. Two of the four roles have still never run
+## 4. Some roles have still never run
 
 `researcher` and `orchestrator` are both proven under `v1.4.0`, on runs
 33792437707 and 33843275814 respectively.
+
+`analyst` has not run at all: it was added in `v1.29.0` and no objective has
+yet been split in a way that queues one, so every claim its role file makes
+about what a run produces is untested.
 
 `designer` and `engineer` have not run. The engineer is the one to watch,
 because it is the only role that needs `Bash(npm run:*)` to work and the only

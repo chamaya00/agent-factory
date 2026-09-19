@@ -171,11 +171,12 @@ What goes in:
 - `CLAUDE.md` - fill in the product sentence, the stack, and the commands from
   what is actually in the repository. Do not leave a bracketed placeholder
   behind; if you cannot tell what belongs in one, ask rather than guess.
-- `.claude/memory/orchestrator.md`, `researcher.md`, `designer.md`,
-  `engineer.md` - empty, with their headers
+- `.claude/memory/orchestrator.md`, `researcher.md`, `analyst.md`,
+  `designer.md`, `engineer.md` - empty, with their headers
 - `.claude/agent-factory.json` - the record of which release this repository
   took, with the version filled in
-- `docs/research/`, `docs/design/`, `docs/decisions/` with the ADR template
+- `docs/research/`, `docs/measurement/`, `docs/design/`, `docs/decisions/`
+  with the ADR template
 - `scripts/design-render` - from the template, and **executable**, for the same
   reason the hook is: without the bit it is present, silent, and refuses. This
   is the one command the design role is told the name of, and the contract it

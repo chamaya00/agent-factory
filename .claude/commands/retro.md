@@ -20,7 +20,7 @@ Never write these files outside a pull request.
 ## A repository with no `.claude/memory/`
 
 Check for the directory before you write. No directory means no agent has ever
-run here and none is meant to, so creating the four role files would leave four
+run here and none is meant to, so creating a memory file per role would leave
 files that nothing ever reads and a cap that nothing ever tests.
 
 Propose every lesson against the Lessons section of `CLAUDE.md` instead, under

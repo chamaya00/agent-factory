@@ -76,7 +76,7 @@ and no merge policy covers it - that one is always the person's.
 
 Labels: `objective`, `agent:queued`, `agent:running`, `agent:review`,
 `agent:blocked`, `agent:needs-input`, `needs-decomposition`, `needs-human`,
-`role:researcher`, `role:designer`, `role:engineer`.
+`role:researcher`, `role:analyst`, `role:designer`, `role:engineer`.
 
 ## Driving an objective
 

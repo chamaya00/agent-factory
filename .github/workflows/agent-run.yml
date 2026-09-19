@@ -457,7 +457,7 @@ jobs:
           if has_label 'objective'; then
             role="orchestrator"
           fi
-          for candidate in researcher designer engineer; do
+          for candidate in researcher analyst designer engineer; do
             if has_label "role:$candidate"; then
               if [ -n "$role" ]; then
                 edit --add-label 'agent:blocked' || true
@@ -738,6 +738,17 @@ jobs:
               # role with no web access still writes a confident Sources
               # section.
               tools="$common,Write,Edit,WebFetch,WebSearch"
+              tools="$tools,$authoring_pr"
+              ;;
+            analyst)
+              # Writes one document and lands it. No web and no shell: the
+              # contract is derived from this repository's own issue, design
+              # doc, and event code, and an approach that needs investigating
+              # is the researcher's issue rather than a second job inside this
+              # one. Deciding which product stores the events is the same kind
+              # of question, which is why this role specifies what a store has
+              # to satisfy and never names one.
+              tools="$common,Write,Edit"
               tools="$tools,$authoring_pr"
               ;;
             designer)
