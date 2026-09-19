@@ -108,11 +108,15 @@ because a reader who finds a rule here stops looking for the real one.
   capped, proposed, and retired.
 - `.claude/skills/acceptance-criteria/` - what a criterion has to look like to
   gate anything.
+- `.claude/skills/instrumentation/` - what earns an event, how a logged
+  event or an exposure point is proved, and what a store has to satisfy.
 - `.claude/skills/driving-an-objective/` - what the session in front of a person
   does once an objective is running.
 
-Every agent run is told to follow the first three by name. The fourth is for the
-session driving, which is why the section above names it rather than leaving it
-to be discovered.
+Every agent run is told to follow house-rules, memory-protocol, and
+acceptance-criteria by name. Instrumentation is named by the roles that need it
+rather than forced on every run, because most issues do not log anything.
+Driving-an-objective is for the session in front of a person, which is why the
+section above names it rather than leaving it to be discovered.
 
 <!-- agent-factory:end -->
