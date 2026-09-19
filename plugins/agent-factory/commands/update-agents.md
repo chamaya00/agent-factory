@@ -184,6 +184,18 @@ needed a block: one is wholly ours and one is not.
 exactly like a skill, and make sure it stays executable - a hook without the
 execute bit is wired, silent, and looks like it ran.
 
+**`scripts/design-render` is the factory's interface and the project's body.**
+If the repository does not have it, copy it in from this release's
+`templates/project/scripts/` and make it executable: the design role is told to
+call it by name, and a project without it has a role reaching for a command
+that is not there. If it is already present, **leave it alone** - a project that
+has replaced the default has replaced it on purpose, because what renders a
+mock is a choice with a dependency and sometimes a credential behind it, and
+that choice is recorded there rather than here. Say in the body which of the two
+happened. The interface is the factory's to change and the body never is, so an
+existing file is only ever overwritten when this release changes the arguments
+themselves, and then the change is named in the body as a breaking one.
+
 **`.claude/settings.json` belongs to the project.** It is where permissions, env,
 and the project's own hooks live, and overwriting it destroys configuration
 nobody asked you to touch. So make a **bounded edit**:

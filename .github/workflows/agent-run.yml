@@ -741,7 +741,16 @@ jobs:
               tools="$tools,$authoring_pr"
               ;;
             designer)
-              tools="$common,Write,Edit,WebFetch"
+              # WebSearch for the same reason the researcher has it, arrived at
+              # the same way. A designer with WebFetch can open a page it
+              # already knows the address of and nothing else, so a role told to
+              # push past what is already here had no way to see what "already
+              # here" is being measured against. It chose from memory instead,
+              # which averages several years of training data and reads as
+              # bland - and, like the researcher's case, the failure was silent,
+              # because a role with no way to look still writes a confident
+              # paragraph about a direction.
+              tools="$common,Write,Edit,WebFetch,WebSearch"
               tools="$tools,$authoring_pr"
               # A visual spec is settled by looking, and until this the designer
               # had nothing it could look at. It specified a refresh of a page it
@@ -759,6 +768,18 @@ jobs:
               # a project that exposes none leaves the designer to name what
               # refused in the pull request, which is what its role tells it to
               # do, and a reviewer supplies the eyes instead.
+              #
+              # That command now has a fixed name - `./scripts/design-render`,
+              # shipped in the project template - because the open-ended version
+              # of this grant was dormant for every run that held it. The grant
+              # was here, no project exposed anything to call, no role knew what
+              # to reach for, and nothing said so: the design that resulted was
+              # specified, reviewed and merged without one eye on a rendered
+              # page. A capability nobody is told the name of is not a
+              # capability. The name is in the role file and the contract is in
+              # the script's own header; what it shells out to is the project's
+              # decision and never the plugin's, which is how a vendor tool gets
+              # in here at all without a vendor's name entering the plugin.
               tools="$tools,Bash(npm ci:*),Bash(npm install:*),Bash(npm run:*),Bash(make:*)"
               tools="$tools,Bash(bash scripts/*),Bash(sh scripts/*),Bash(./scripts/*)"
               ;;

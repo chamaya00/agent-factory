@@ -176,6 +176,14 @@ What goes in:
 - `.claude/agent-factory.json` - the record of which release this repository
   took, with the version filled in
 - `docs/research/`, `docs/design/`, `docs/decisions/` with the ADR template
+- `scripts/design-render` - from the template, and **executable**, for the same
+  reason the hook is: without the bit it is present, silent, and refuses. This
+  is the one command the design role is told the name of, and the contract it
+  has to honour is in its own header. The default drives a headless browser
+  already on most images and adds no dependency; if this repository's image has
+  none, say so in the pull request body rather than leaving it to be discovered
+  by the first design run, and treat replacing it as this repository's decision
+  to record - what renders a mock is a project's choice and never the plugin's.
 
 Then the roles and the commands themselves, copied rather than referenced:
 
