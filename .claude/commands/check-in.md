@@ -26,8 +26,10 @@ after this step outranks a blocker that has been sitting unread.
 
 ## 2. Read the state of every child, and subscribe
 
-What is `agent:review`, `agent:blocked`, `agent:running`, merged, or still
-queued. A child at `agent:review` with an open pull request is work waiting on
+Read the orchestrator's brief on the parent, not the run logs - **What to
+read, and what not to** in the skill says when a run log is earned, and a
+check-in is not one of the three cases. What is `agent:review`,
+`agent:blocked`, `agent:running`, merged, or still queued. A child at `agent:review` with an open pull request is work waiting on
 the merge policy, not on the person, unless the policy is `ask`.
 
 Subscribe to every open pull request among these children - see **How to
@@ -42,6 +44,17 @@ in the `house-rules` skill's **Who merges** section exactly as `/ship` does:
 judge it, merge what passes, and leave open with a comment what does not.
 Where the policy is `ask`, or absent, the gate still runs and what passes it
 is reported rather than merged.
+
+Then read the diff a second time against **The merge gate is necessary and
+not sufficient** in the skill, which asks a different question and does not
+happen by itself. A pull request that clears the first gate and fails the
+second is rejected, not merged, whatever the policy says - and the rejection
+names what would change your mind, on the pull request, per **Rejecting
+well**.
+
+If anything in this check-in made you reach for a run log, say so on the
+parent issue. That is a defect in the brief and it is the only way it gets
+fixed.
 
 ## 4. Report, then say what happens next
 

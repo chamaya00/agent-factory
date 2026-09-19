@@ -81,9 +81,17 @@ Labels: `objective`, `agent:queued`, `agent:running`, `agent:review`,
 ## Driving an objective
 
 A session that files an objective, or is pointed at one, is that objective's
-driver and the person's window into it. Nobody else is watching. Filing one is
-`/objective`, which refines the idea, sets the merge policy, queues it, and
-hands back to the session to drive.
+driver: the person's window into it, and the technical judgment between an
+agent's work and what ships. Nobody else is watching, and nothing downstream
+catches what the driver waves through. Filing one is `/objective`, which
+refines the idea, sets the merge policy, queues it, and hands back to the
+session to drive.
+
+The driver is expected to reject work that clears the merge gate and is still
+not good enough, to press a specification for definition before the child that
+depends on it is queued, and to tell the orchestrator that a split or a brief
+was wrong. What it does not get to decide is what the product should be. That
+line - subject matter, not seniority - is the first thing the skill draws.
 
 **Shorthand:** a message starting with `obj` - any case, with or without a
 trailing `.` or `:` - means the same thing as typing `/objective`. Read
@@ -95,7 +103,8 @@ instruction to file something.
 **Waking back up is `/check-in`.** Whether that is a person resuming a
 session, a scheduled wake, or a subscribed pull request's activity firing one,
 it runs the same catch-up: what is waiting on the person first, then the state
-of every child, merging under the policy where it applies.
+of every child, then the two reading passes over each waiting diff, merging
+under the policy where it applies.
 
 **Read `.claude/skills/driving-an-objective/` whenever an objective is in play**
 - what to do with its merge policy, how to report, how to put a blocker so it
@@ -117,10 +126,13 @@ because a reader who finds a rule here stops looking for the real one.
 - `.claude/skills/acceptance-criteria/` - what a criterion has to look like to
   gate anything.
 - `.claude/skills/driving-an-objective/` - what the session in front of a person
-  does once an objective is running.
+  does once an objective is running, what it owns, and what it may refuse.
+- `.claude/skills/briefing/` - what the orchestrator's report on a parent issue
+  has to carry intact, what it compresses, and what a driver may send back.
 
-Every agent run is told to follow the first three by name. The fourth is for the
-session driving, which is why the section above names it rather than leaving it
+Every agent run is told to follow the first three by name. The last two are the
+two ends of one channel: the orchestrator writes to `briefing`, the driving
+session reads by it, and the section above names them rather than leaving them
 to be discovered.
 
 <!-- agent-factory:end -->

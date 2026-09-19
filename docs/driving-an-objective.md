@@ -372,3 +372,82 @@ delegated the gate; this is what they kept. A driver relays it and waits, and
 must not answer it on their behalf - a driver holding someone's credentials can
 always produce an answer that sounds like theirs, which is exactly why it may
 not.
+
+## Addendum: the driver is a role, and the brief is a contract (1.30.0)
+
+Everything above designs the driver as a *window*. Re-read the verbs in the
+original skill and they are all transmission: report, surface, relay it and
+wait. The only judgment the driver exercised was the merge gate in
+`house-rules`, and every item on that gate is a fact about process - criteria
+covered by a check that ran, required checks green, an ADR where one is owed,
+the diff scoped to its issue. There was nowhere in the system to say *this
+passes the gate and I am still not taking it*.
+
+That was fine while the driver and the roles were the same kind of reader. It
+stopped being fine once the driver became the most capable reader in the loop
+and the only one that sees across children. A window does not need judgment.
+A person relying on one session for whether the work is any good does.
+
+So two changes, and they are the two ends of one channel.
+
+**The driver owns technical judgment.** The skill now draws the line by
+subject matter rather than seniority: what the product does, who it is for and
+what it is called are the person's; whether what came back will hold is the
+driver's. It runs the merge gate and then reads the same diff a second time
+asking a different question, because a diff can satisfy every process fact and
+still be work nobody should keep - criteria that were satisfied and were the
+wrong criteria, a test that would also pass if the behaviour regressed, a
+number asserted rather than computed, a specification the next role will have
+to guess at. The discipline that keeps this from becoming churn is one rule: a
+rejection names what would change your mind. The failure in the other
+direction is the quiet one - a driver that has never rejected anything is not
+a driver with a good team, it is a gate nobody has tested.
+
+It also gets a reading budget, because reading everything is how a driver
+arrives at the diff with no attention left. Brief and diff always; issue and
+document when those do not add up; the run log rarely, in three named cases,
+and say why.
+
+**The orchestrator owes a brief, not a status.** A supervision run on an
+objective in a downstream repository produced three comments, opened with a
+checklist of the skills it had read, and put the single most important
+sentence it had - that a designer had hand-computed some contrast ratios and
+flagged them as unverified - in the fourth clause of the third paragraph of
+the second comment, below a note about a refused command. Nothing was lost.
+It was de-ranked into invisibility, which from the driver's side is the same
+thing.
+
+The fix is not "be concise", because a brief fails in two ways that look like
+opposites - a finding does not survive it, or nobody finishes reading it - and
+treating those as a length dial is what produces a report that is both long
+and missing things. They happen to different material, so the rule is:
+
+> **Compress the state. Quote the caveats.**
+
+State is which child is doing what. It is repetitive and compresses
+losslessly. A caveat is a sentence where somebody qualified their own work,
+and the hedge is the entire content, so summarising one deletes exactly the
+part worth having - "the designer hand-computed these and flagged it" becomes
+"contrast verified" in a single well-meaning pass, and nothing in that chain
+is false. The new `briefing` skill carries that rule, a six-class ranking with
+a role's caveat about its own deliverable at the top, a fixed `### For the
+driver` section, and a do-not-report list whose first entry is process
+narration.
+
+**And the channel runs both ways.** The orchestrator's supervision section
+read the children's labels and nothing else, so a driver's correction written
+on the parent issue was never read - the one reader allowed to correct a split
+had no way to. It now reads new parent comments on every wake, and the driver
+is told the three moments worth spending pushback on: the decomposition before
+the first child is queued, a child's criteria before it is queued, and a brief
+that sent it looking. All three are cheaper than the diff they prevent.
+
+What this does **not** add is a way to send a rejected diff back for revision.
+A child at `agent:review` whose pull request is refused still has only two
+paths - re-queue it, which spends one of its three attempts and hands the
+fresh run nothing but the issue, or block it, which rewrites the issue rather
+than the code. The driver can now reject with authority and say exactly what
+would change its mind; the mechanism that carries that back into a run is not
+built. That is the next piece, and it wants a label of its own, a revision cap
+separate from the three-strike rule, and a line in every role file telling a
+run to read the review on its own open pull request first.
