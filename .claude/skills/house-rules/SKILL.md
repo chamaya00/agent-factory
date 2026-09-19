@@ -103,6 +103,44 @@ Ask about these in the owner's language, not the diff's. "This adds a request to
 
 Any change to a schema, a data shape, or a dependency gets an ADR in `docs/decisions/`, in the same diff that makes the change. Four sections: context, decision, consequences, alternatives rejected. A dependency added without an ADR is a dependency nobody can remove later, because nobody knows why it is there.
 
+## Work that comes back
+
+A pull request can be refused by the person who reads it, and that is a normal
+outcome rather than a failure. The issue is labelled `agent:revise`, which
+starts a run the way `agent:queued` does and differs in what the run is holding:
+a review, on a pull request that already exists, saying what to change.
+
+For the role that receives one:
+
+1. **Read the review first, and the comments since the pull request opened.**
+   That is the whole of what changed. The issue has not moved, and re-deriving
+   the work from it is how a revision turns into a second first attempt.
+2. **Work the branch and the pull request that already exist.** A second pull
+   request for one issue loses the thread the review is on, and the reviewer
+   has to find the new one to see whether they were answered.
+3. **Address what was asked and nothing else.** A revision that widens the diff
+   is a new issue wearing an old one, and it arrives unreviewed because the
+   reviewer is reading for what they asked about.
+4. **Reply on the review**, saying what you changed and what you did not and
+   why. A revision that lands silently makes the reviewer diff it themselves,
+   which is the work they delegated by writing the review.
+5. **Disagreeing is allowed and does not stop you.** Say so on the pull request
+   with your reasoning, then do it their way - unless doing it would break one
+   of these rules, and then name which one and stop. That is the one case where
+   a reviewer does not get the last word, and it is narrow on purpose.
+
+Two rounds, counted separately from attempts, and neither budget spends the
+other. The separation is the point: counted as attempts, rejecting a diff cost
+exactly what failing to write one costs, so a reviewer who sent work back twice
+left a nearly-right issue at `needs-decomposition` with nothing left. Nobody
+does that twice, which is how "reject it" became advice with no mechanism under
+it.
+
+A third round is refused and goes to a person, and it means something specific.
+A run that cannot satisfy a written review after two goes is not short of
+ideas: the review is asking for something the issue does not cover, or it is
+not specific enough to act on. Both are the reviewer's to fix.
+
 ## The three-strike rule
 
 Three attempts on one issue means the issue was scoped wrong. It does not mean try harder. Stop, comment what was tried and how each attempt failed, label the issue `needs-decomposition`, and wait for a human.
@@ -110,6 +148,8 @@ Three attempts on one issue means the issue was scoped wrong. It does not mean t
 The budget counts runs, not outcomes. A run that starts and then refuses - because a dependency is not merged, or because a command it needs is refused - has spent an attempt as surely as one that wrote the wrong code. It says "attempts" rather than "failures" for that reason, and the reason is not pedantry: an issue queued before its dependencies were merged arrives at the human with a third of its budget already gone and nothing to show for it. Check that the issues an issue depends on are merged, not merely labelled done, before applying the run label.
 
 The same applies to a check that fails three times for three different reasons: the problem is the scope, not the fix.
+
+Revision rounds are not attempts and do not count here. An attempt is a run at work that has not been delivered; a revision starts from delivered work that somebody read, and the scope is the one thing it is not evidence against. They have their own budget, above.
 
 ## What agents never touch
 

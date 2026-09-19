@@ -443,11 +443,76 @@ the first child is queued, a child's criteria before it is queued, and a brief
 that sent it looking. All three are cheaper than the diff they prevent.
 
 What this does **not** add is a way to send a rejected diff back for revision.
-A child at `agent:review` whose pull request is refused still has only two
-paths - re-queue it, which spends one of its three attempts and hands the
-fresh run nothing but the issue, or block it, which rewrites the issue rather
-than the code. The driver can now reject with authority and say exactly what
-would change its mind; the mechanism that carries that back into a run is not
-built. That is the next piece, and it wants a label of its own, a revision cap
-separate from the three-strike rule, and a line in every role file telling a
-run to read the review on its own open pull request first.
+That arrived in 1.31.0, below.
+
+
+## Addendum: work that comes back (1.31.0)
+
+1.30.0 gave the driver the authority to refuse a diff and left it with nowhere
+to put the refusal. A child at `agent:review` whose pull request was rejected
+had two exits and both were wrong:
+
+- **`agent:queued`** spends one of three attempts and starts a run holding
+  nothing but the issue it already satisfied once. The review - the one
+  artifact that says exactly what to change - is not in the issue, and nothing
+  tells the run to go and read it.
+- **`agent:blocked`** sends the orchestrator to do a corrective pass, which
+  rewrites the *issue*. The issue was not the problem. The diff was.
+
+The cost landed on the budget, and that is what made it decisive rather than
+merely awkward. Rejecting a diff cost exactly what failing to write one costs,
+so a driver that sent work back twice left a nearly-right issue at
+`needs-decomposition` with nothing left to spend. The rational move was to
+merge something mediocre, which is the opposite of what 1.30.0 was for. An
+authority with a punitive mechanism under it is not an authority.
+
+So `agent:revise`, and the shape of it follows the two budgets that already
+existed. The preflight has always counted runs by marker comment, against
+`max-attempts` for a child and `max-supervisions` for an objective, because
+those two measure different things. A revision round measures a third thing -
+work that was delivered, read, and sent back with a review attached - so it
+gets a third marker and a third budget, and neither of the other two spends it.
+
+**Two rounds, not three**, and the asymmetry with the three-strike rule is
+deliberate. Three attempts means the issue was scoped wrong. A run that cannot
+satisfy a *written review* after two goes is not short of ideas: either the
+review asks for something the issue does not cover, or it is not specific
+enough to act on. Both of those are the reviewer's to fix, so the third round
+goes to a person rather than to the role - and the refusal says so in those
+terms, rather than reciting a three-strike rule that never applied.
+
+**It is a second way into a run, not a new kind of run.** The revise label
+starts a run through the same preflight as the run label, with the same gating,
+the same concurrency, and the same hand-back. What differs is the budget it
+spends and what the prompt tells the run it is doing: read the review on your
+own open pull request first, work the branch that exists, address what was
+asked and nothing else, reply saying what you changed and what you did not.
+Disagreement is allowed and does not stop the work - say so on the pull
+request, then do it their way, unless it would break a house rule, and then
+name the rule and stop.
+
+Two consequences worth stating, because they are the ones that will bite:
+
+- **The review is now the run's entire brief**, which makes its quality
+  load-bearing in a way a comment on a pull request never was. A review naming
+  the file and what about it is a specification. One naming an impression is a
+  revision round spent on nothing, and the budget it spends is the reviewer's
+  doing rather than the role's.
+- **A label the preflight matches on and the repository does not have is a
+  mechanism that fails silently.** The same trap `agent:needs-input` hit one
+  release earlier: a repository provisioned before the label existed drops the
+  work on the floor. `bootstrap` is idempotent, and re-running it from the
+  Actions tab after `/update-agents` is the whole fix.
+
+The watchdog covers both labels now, for the reason it exists at all: every
+fault this system has had presented as a correctly labelled issue with no run
+behind it, and a second way in that nothing watched would have reintroduced
+that on the new label while the old one stayed covered.
+
+What is still not built is any way for the orchestrator to send work back. That
+is deliberate rather than pending. `agent:revise` carries a person's reader's
+judgment about a diff, and the orchestrator does not read diffs - it reads
+labels, criteria, and what a child reported about itself. Giving it the label
+would close the loop the house rules keep open on purpose: the factory
+splitting an objective, building it, judging it, and re-running itself with no
+decision from a person anywhere in the chain.

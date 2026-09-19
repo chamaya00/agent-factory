@@ -74,9 +74,24 @@ run. The orchestrator carries it onto the parent issue verbatim, so the parent
 stays the only page a human has to read. It blocks the merge and nothing else,
 and no merge policy covers it - that one is always the person's.
 
+**Work that is refused comes back rather than stopping.** A driver that reads a
+pull request and will not take it writes the review, drops `agent:review`, and
+adds `agent:revise`. That starts a run on the branch and pull request that
+already exist, holding the review as its brief. It spends a budget of two
+revision rounds rather than one of the three attempts, which is what makes
+rejecting a nearly-right diff affordable instead of a way to strand an issue at
+`needs-decomposition`. A third round is refused and comes to a person, and it
+is a finding about the review rather than about the role. The `house-rules`
+skill carries both halves.
+
 Labels: `objective`, `agent:queued`, `agent:running`, `agent:review`,
-`agent:blocked`, `agent:needs-input`, `needs-decomposition`, `needs-human`,
-`role:researcher`, `role:analyst`, `role:designer`, `role:engineer`.
+`agent:blocked`, `agent:needs-input`, `agent:revise`, `needs-decomposition`,
+`needs-human`, `role:researcher`, `role:analyst`, `role:designer`,
+`role:engineer`.
+
+A label the preflight matches on and the repository does not have is a
+mechanism that fails silently. Re-run `bootstrap` from the Actions tab after
+picking up a release that adds one; it is idempotent.
 
 ## Driving an objective
 
@@ -88,7 +103,8 @@ refines the idea, sets the merge policy, queues it, and hands back to the
 session to drive.
 
 The driver is expected to reject work that clears the merge gate and is still
-not good enough, to press a specification for definition before the child that
+not good enough - and to send it back with `agent:revise` rather than merely
+saying so - to press a specification for definition before the child that
 depends on it is queued, and to tell the orchestrator that a split or a brief
 was wrong. What it does not get to decide is what the product should be. That
 line - subject matter, not seniority - is the first thing the skill draws.

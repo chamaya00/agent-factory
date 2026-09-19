@@ -83,10 +83,50 @@ on:
           raising the number.
         type: number
         default: 20
+      max-revisions:
+        description: >-
+          Revision rounds allowed on one issue before the run is refused.
+
+          A third budget, counted with a third marker, for the same reason
+          there are already two: it measures something different again. An
+          attempt is a run at work that has not been delivered yet, and three
+          of them means the issue was scoped wrong. A revision round starts
+          from delivered work that somebody read and sent back with a review
+          attached - the scope was right, the diff was not, and the run is
+          being handed the most useful input this system ever produces.
+
+          Counting that against max-attempts made rejecting a diff cost the
+          same as failing to write one, which is why nothing was ever sent
+          back: a driver that rejected twice left the issue at
+          needs-decomposition with a third of its budget spent on work that
+          was nearly right. The two counts are now separate and neither
+          spends the other.
+
+          Two, not three, because the failure mode here is different. A run
+          that cannot satisfy a specific written review after two goes is not
+          running out of ideas - the review is not actionable, or it is asking
+          for work the issue does not cover. Both of those are the reviewer's
+          to fix, so the third round goes to a person rather than to the role.
+        type: number
+        default: 2
       run-label:
         description: Label on an issue that means "run the agent now".
         type: string
         default: 'agent:queued'
+      revise-label:
+        description: >-
+          Label on an issue that means "this was delivered, somebody read it,
+          and it is coming back with a review on it".
+
+          A second way in, deliberately. Before it, a rejected pull request
+          had two exits and both were wrong: re-queue under the run label,
+          which spends an attempt and starts a run that is handed nothing but
+          the issue it already satisfied once, or agent:blocked, which sends
+          the orchestrator to rewrite an issue whose text was never the
+          problem. The review itself - the one artifact that says exactly what
+          to change - reached neither.
+        type: string
+        default: 'agent:revise'
       trigger-phrase:
         description: Phrase in a comment that starts a run.
         type: string
@@ -175,6 +215,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
           GH_REPO: ${{ github.repository }}
           RUN_LABEL: ${{ inputs.run-label }}
+          REVISE_LABEL: ${{ inputs.revise-label }}
           MARKER: '<!-- agent-factory:stalled -->'
         run: |
           # Best effort, like every other hand-back path here: a watchdog that
@@ -239,8 +280,15 @@ jobs:
             fi
           fi
 
+          # Both run labels, because this job exists for exactly one fault -
+          # a correctly labelled issue with no run behind it - and a second way
+          # in that this did not watch would reintroduce it on the new label
+          # while the old one stayed covered.
           issues="$(gh issue list --label "$RUN_LABEL" --state open \
             --json number --jq '.[].number' 2>/dev/null || true)"
+          revising="$(gh issue list --label "$REVISE_LABEL" --state open \
+            --json number --jq '.[].number' 2>/dev/null || true)"
+          issues="$(printf '%s\n%s' "$issues" "$revising" | sort -u | sed '/^$/d')"
           if [ -z "$issues" ]; then
             echo "Nothing is queued."
           fi
@@ -276,10 +324,13 @@ jobs:
               *"agent-factory:stalled"*) echo "#$n already reported."; continue ;;
             esac
 
+            carried="$RUN_LABEL"
+            echo "$labels" | grep -qx "$REVISE_LABEL" && carried="$REVISE_LABEL"
+
             echo "Reporting #$n as queued but idle."
             gh issue comment "$n" --body "$(printf '%s %s\n\n%s\n\n%s' \
               "$MARKER" "**Queued, but nothing is running it.**" \
-              "This issue carries \`$RUN_LABEL\` and has no \`agent:running\`, so a run should have started and did not. Every fault this system has had looks exactly like this - a correctly labelled issue with nothing behind it - and the state is usually recoverable the moment somebody looks." \
+              "This issue carries \`$carried\` and has no \`agent:running\`, so a run should have started and did not. Every fault this system has had looks exactly like this - a correctly labelled issue with nothing behind it - and the state is usually recoverable the moment somebody looks." \
               "Nothing has been re-queued automatically: that would be a second way to spend the subscription. Remove and re-add the label to start a run, or read the recent workflow runs if this repeats.")" || true
           done
 
@@ -392,6 +443,8 @@ jobs:
       attempt: ${{ steps.decide.outputs.attempt }}
       budget: ${{ steps.decide.outputs.budget }}
       marker: ${{ steps.decide.outputs.marker }}
+      revision: ${{ steps.decide.outputs.revision }}
+      clear-label: ${{ steps.decide.outputs['clear-label'] }}
     steps:
       - name: Resolve role, gate, and attempt count
         id: decide
@@ -403,14 +456,17 @@ jobs:
           NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || inputs.issue-number }}
           KIND: ${{ (github.event.issue.pull_request != null || github.event.pull_request != null) && 'pr' || 'issue' }}
           RUN_LABEL: ${{ inputs.run-label }}
+          REVISE_LABEL: ${{ inputs.revise-label }}
           TRIGGER_PHRASE: ${{ inputs.trigger-phrase }}
           MAX_ATTEMPTS: ${{ inputs.max-attempts }}
           MAX_SUPERVISIONS: ${{ inputs.max-supervisions }}
+          MAX_REVISIONS: ${{ inputs.max-revisions }}
           COMMENT_BODY: ${{ github.event.comment.body }}
           LABEL_NAME: ${{ github.event.label.name }}
           SKIP_PATTERNS: ${{ inputs.skip-path-patterns }}
           MARKER: '<!-- agent-factory:attempt -->'
           SUPERVISION_MARKER: '<!-- agent-factory:supervision -->'
+          REVISION_MARKER: '<!-- agent-factory:revision -->'
         run: |
           set -euo pipefail
 
@@ -434,9 +490,13 @@ jobs:
               ;;
           esac
 
-          # A label event only counts when it is the run label.
-          if [ "$EVENT_NAME" = "issues" ] && [ "$EVENT_ACTION" = "labeled" ] && [ "$LABEL_NAME" != "$RUN_LABEL" ]; then
-            skip "Label '$LABEL_NAME' is not the run label."
+          # A label event only counts when it is one of the two run labels.
+          # The revise label starts a run the same way the run label does; what
+          # differs is which budget it spends and what the run is told it is
+          # doing.
+          if [ "$EVENT_NAME" = "issues" ] && [ "$EVENT_ACTION" = "labeled" ] \
+            && [ "$LABEL_NAME" != "$RUN_LABEL" ] && [ "$LABEL_NAME" != "$REVISE_LABEL" ]; then
+            skip "Label '$LABEL_NAME' is not a run label."
           fi
 
           labels="$(view --json labels --jq '.labels[].name' || true)"
@@ -509,9 +569,29 @@ jobs:
           # Counted against three, every objective with more than two children
           # would be refused halfway through the work it was still doing
           # correctly.
+          # A third budget joined these for the same reason the second did.
+          # A revision round starts from work that was delivered and read, and
+          # carries a review saying what to change. Counted as an attempt, a
+          # rejected diff cost exactly what a failed run costs, so nothing was
+          # ever sent back - which made "reject it" advice with no mechanism
+          # under it. Two rounds, because a run that cannot satisfy a written
+          # review twice is not short of ideas: the review is not actionable,
+          # and that is the reviewer's to fix rather than the role's.
+          revision=0
+          if has_label "$REVISE_LABEL"; then
+            revision=1
+          fi
+
           if [ "$role" = "orchestrator" ]; then
+            if [ "$revision" -eq 1 ]; then
+              edit --remove-label "$REVISE_LABEL" || true
+              skip "An objective carries $REVISE_LABEL, and the orchestrator opens no pull request - there is no diff here to revise. A split or a child's criteria is corrected by saying so in a comment on this objective, which supervision reads on every wake."
+            fi
             marker="$SUPERVISION_MARKER"
             budget="$MAX_SUPERVISIONS"
+          elif [ "$revision" -eq 1 ]; then
+            marker="$REVISION_MARKER"
+            budget="$MAX_REVISIONS"
           else
             marker="$MARKER"
             budget="$MAX_ATTEMPTS"
@@ -519,7 +599,9 @@ jobs:
 
           attempts="$(view --json comments --jq "[.comments[] | select(.body | contains(\"$marker\"))] | length" || echo 0)"
           if [ "$attempts" -ge "$budget" ]; then
-            if [ "$role" = "orchestrator" ]; then
+            if [ "$revision" -eq 1 ]; then
+              reason="This issue has already had $attempts revision rounds. A run that cannot satisfy a written review after two goes is not out of ideas - either the review is asking for something the issue does not cover, or it is not specific enough to act on. Both are the reviewer's to fix, so this one goes to a person. Labelled \`agent:blocked\`. The attempt budget is untouched: this spent revisions, not attempts."
+            elif [ "$role" = "orchestrator" ]; then
               reason="This objective has already had $attempts orchestrator runs, which is the supervision budget. That is a stop on a loop, not the three-strike rule: something is waking the orchestrator more often than the work justifies. Read this issue's history before raising \`max-supervisions\` - a child that keeps flipping between queued and blocked is the usual cause, and raising the number spends more of the subscription on it."
             else
               reason="Three attempts on one issue means the issue was scoped wrong, not that it needs a fourth. The count is of runs, not failures. Labelled \`agent:blocked\`. Decompose it or rewrite the acceptance criteria, then clear the label."
@@ -533,7 +615,13 @@ jobs:
             exit 1
           fi
 
-          echo "Running $role on #$NUMBER (attempt $((attempts + 1)))."
+          if [ "$revision" -eq 1 ]; then
+            clear="$REVISE_LABEL"
+          else
+            clear="$RUN_LABEL"
+          fi
+
+          echo "Running $role on #$NUMBER (run $((attempts + 1)) of $budget)."
           {
             echo "should-run=true"
             echo "role=$role"
@@ -542,6 +630,8 @@ jobs:
             echo "attempt=$((attempts + 1))"
             echo "budget=$budget"
             echo "marker=$marker"
+            echo "revision=$revision"
+            echo "clear-label=$clear"
           } >> "$GITHUB_OUTPUT"
 
   agent:
@@ -610,16 +700,29 @@ jobs:
           ROLE: ${{ needs.preflight.outputs.role }}
           BUDGET: ${{ needs.preflight.outputs.budget }}
           MARKER: ${{ needs.preflight.outputs.marker }}
+          REVISION: ${{ needs.preflight.outputs.revision }}
+          CLEAR_LABEL: ${{ needs.preflight.outputs['clear-label'] }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           # The marker decides which budget this run is counted against, so it
-          # comes from preflight rather than being written twice.
+          # comes from preflight rather than being written twice. So does the
+          # label to clear: whichever of the two run labels started this run is
+          # the one that has now been consumed.
           if [ "$ROLE" = "orchestrator" ]; then
             what="supervision run $ATTEMPT of $BUDGET"
+          elif [ "$REVISION" = "1" ]; then
+            what="revision round $ATTEMPT of $BUDGET"
           else
             what="attempt $ATTEMPT of $BUDGET"
           fi
-          gh "$KIND" edit "$ISSUE" --add-label 'agent:running' --remove-label "${{ inputs.run-label }}" || true
+          gh "$KIND" edit "$ISSUE" --add-label 'agent:running' --remove-label "$CLEAR_LABEL" || true
+          # A revision starts from work that was already at review, and it is
+          # no longer waiting on a reader - it is in flight. Leaving the label
+          # on makes the child read as finished to everything that counts
+          # labels, the orchestrator's status picture first among them.
+          if [ "$REVISION" = "1" ]; then
+            gh "$KIND" edit "$ISSUE" --remove-label 'agent:review' || true
+          fi
           gh "$KIND" comment "$ISSUE" --body "$(printf '%s\n\n%s' \
             "$MARKER Starting **$ROLE**, $what." \
             "[Run log]($RUN_URL)")" || true
@@ -907,6 +1010,8 @@ jobs:
             Read the earlier attempts on the issue before repeating one of them.
             If this attempt fails the same way an earlier one did, stop and say
             so rather than trying a variation.
+
+            ${{ needs.preflight.outputs.revision == '1' && 'This is a revision round, not a fresh attempt. Your work was delivered, somebody read it, and it came back with a review attached - so before anything else, read the review on your own open pull request and every comment on this issue since that pull request was opened. That review is the whole of what changed, and it is the most specific input you will ever get on this issue. Work on the branch and the pull request that already exist rather than opening new ones. Address what the review asked for and nothing else - a revision that widens the diff is a new issue wearing an old one. When you are done, reply on the review saying what you changed, and what you did not change and why. If the review asks for something you believe is wrong, say so on the pull request with your reasoning and then do it their way anyway, unless doing it would break a house rule - and if it would, name which rule and stop. Revision rounds are counted separately from attempts, so this one has not spent an attempt at the work.' || '' }}
 
             ${{ needs.preflight.outputs.role == 'orchestrator' && 'You own this objective, not just its split. If it has no children yet, decompose it and queue the first wave. If it has children, you were woken because one of them reached agent:review or agent:blocked: read the state of all of them, deal with anything blocked, queue whatever has just become ready, and replace the status picture on this issue with a current one. That budget above is supervision runs on this objective, not attempts at a piece of work - being woken a dozen times over a four-child objective is normal, and getting near the end of it is worth saying out loud rather than spending quietly.' || '' }}
 

@@ -69,7 +69,10 @@ have nothing in the first four, and that is a good brief, not an empty one.
    hear of the finding.
 5. **What is waiting on somebody.** A merge, an answer, a step only a person
    can take. Say which of those it is.
-6. **State.** Everything else.
+6. **State.** Everything else - including a child sent back for revision, which
+   belongs here and not higher. Say whose review sent it back and what it asked
+   for. Without that, review-revise-review reads as a child thrashing, and the
+   one thing it actually is evidence of is the gate working.
 
 The rule underneath the ordering is worth holding on its own, because it
 decides the cases the list does not name: **what a role said about its own work
