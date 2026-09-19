@@ -13,6 +13,20 @@ Every child issue has acceptance criteria before anyone opens an editor. No crit
 
 Every issue names one role. Work that needs two roles is two issues.
 
+## Asking a question you cannot answer yourself
+
+Some decisions are not yours at any level of effort: which of two credible directions a product takes, a trade-off with no right answer, a name that will outlive the issue, anything the issue simply did not settle. Guessing at one of these is the most expensive thing a run can do, because a guess arrives looking exactly like a decision and nobody downstream knows to question it.
+
+Say so, and say it where it will still be there tomorrow:
+
+1. Comment on your issue with the question. One question, not a list of five - if you have five, the issue was scoped wrong and that is itself the finding. Enough context to answer without opening anything else, in the owner's language rather than the diff's. Give your recommendation and say what you will do if nobody answers, because a question with no default attached stalls the work while one with a default only improves it.
+2. Put `<!-- agent-factory:needs-input -->` in that comment. The run's handback reads the marker and labels the issue `agent:needs-input`, which is how the question outlives every later rewrite of every status comment. You do not apply the label yourself and you do not need permission to; writing the marker is the whole of your part.
+3. Then **finish the work anyway**, under the answer you recommended, and say in the pull request which way you went and what changes if the answer is the other one.
+
+That last step is the one that makes this worth having. `agent:needs-input` is not a way to stop: it rides alongside `agent:review`, costs no attempt, and blocks nothing except the merge. A run that asks and delivers gives a person a real thing to respond to, which is a far better question than the same words with nothing attached.
+
+Do not use it for something you could have found out. A question whose answer is in the repository, in the issue, or one command away is not a decision only the owner can make, and asking it spends their attention on work that was yours.
+
 ## Before merge
 
 Tests before merge. Every acceptance criterion has a test that would fail if the criterion were violated. A criterion covered only by a manual check is not covered.
@@ -62,6 +76,7 @@ Before merging on someone's behalf, all of these hold. Any one failing is a reas
 - **An ADR is present** if a schema, a data shape, or a dependency changed.
 - **Anything the research or design named as a consequence** is handled or explicitly deferred in writing.
 - **Nothing in the diff needs a decision only the owner can make.** Product behaviour, naming that will outlive the issue, a trade-off with no obviously right answer: those get asked, not merged.
+- **No issue in front of this pull request carries `agent:needs-input`.** That label means a role asked a question and shipped its recommendation rather than stalling on it, so the work is genuinely ready and the decision genuinely is not. A standing `green` policy does not cover it: the person delegated the *gate*, and this is the one thing they kept. Answer it and clear the label, or say on the pull request that it is still open. Merging past it converts a question into a decision nobody made, silently, which is the exact failure the label was added to stop.
 
 Say which of these you checked. "Merged, green" is not a review; it is a status.
 

@@ -104,6 +104,16 @@ than a convention:
   `guard.yml` and named in both `CLAUDE.md` and this file. A script nobody runs
   proves nothing, and an inventory that omits one sends a reader looking for a
   check that is there.
+- **A command a role is told to run is a command the template ships.** Where a
+  role file names `./scripts/<thing>`, `templates/project/scripts/<thing>` must
+  exist and be executable. This one is a graduated lesson. The designer held a
+  shell grant for rendering mocks through a whole objective and never rendered
+  one: the grant was real, the role was told to render, no project shipped
+  anything to call, and the role had no name to reach for. Nothing went red,
+  because the failure mode of a missing capability is silence - the design was
+  specified, built, and merged with no eye on a rendered page. Role files and
+  the template ship in the same release, so a disagreement here is a
+  disagreement in every repository provisioned afterwards.
 - No emoji in any `.md`, `.json`, `.yml`, or `.py` file in the repository.
 
 ### validate_workflows.py

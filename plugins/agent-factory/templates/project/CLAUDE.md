@@ -66,9 +66,17 @@ The human still decides what merges. The orchestrator queues work and reports on
 it; it does not merge a pull request, and it cannot break a child down further -
 that comes back as `needs-decomposition` and a comment on the parent.
 
+A role that hits a decision it cannot make asks it on its own issue and keeps
+working under the answer it recommends. That question comes back labelled
+`agent:needs-input`, which rides alongside `agent:review` rather than replacing
+it: the work shipped and is reviewable, and what is waiting is an answer, not a
+run. The orchestrator carries it onto the parent issue verbatim, so the parent
+stays the only page a human has to read. It blocks the merge and nothing else,
+and no merge policy covers it - that one is always the person's.
+
 Labels: `objective`, `agent:queued`, `agent:running`, `agent:review`,
-`agent:blocked`, `needs-decomposition`, `needs-human`, `role:researcher`,
-`role:analyst`, `role:designer`, `role:engineer`.
+`agent:blocked`, `agent:needs-input`, `needs-decomposition`, `needs-human`,
+`role:researcher`, `role:analyst`, `role:designer`, `role:engineer`.
 
 ## Driving an objective
 
@@ -108,15 +116,11 @@ because a reader who finds a rule here stops looking for the real one.
   capped, proposed, and retired.
 - `.claude/skills/acceptance-criteria/` - what a criterion has to look like to
   gate anything.
-- `.claude/skills/instrumentation/` - what earns an event, how a logged
-  event or an exposure point is proved, and what a store has to satisfy.
 - `.claude/skills/driving-an-objective/` - what the session in front of a person
   does once an objective is running.
 
-Every agent run is told to follow house-rules, memory-protocol, and
-acceptance-criteria by name. Instrumentation is named by the roles that need it
-rather than forced on every run, because most issues do not log anything.
-Driving-an-objective is for the session in front of a person, which is why the
-section above names it rather than leaving it to be discovered.
+Every agent run is told to follow the first three by name. The fourth is for the
+session driving, which is why the section above names it rather than leaving it
+to be discovered.
 
 <!-- agent-factory:end -->

@@ -151,7 +151,7 @@ and will hit the cap after two real ones.
 `researcher` and `orchestrator` are both proven under `v1.4.0`, on runs
 33792437707 and 33843275814 respectively.
 
-`analyst` has not run at all: it was added in `v1.28.0` and no objective has
+`analyst` has not run at all: it was added in `v1.29.0` and no objective has
 yet been split in a way that queues one, so every claim its role file makes
 about what a run produces is untested.
 

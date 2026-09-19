@@ -177,6 +177,14 @@ What goes in:
   took, with the version filled in
 - `docs/research/`, `docs/measurement/`, `docs/design/`, `docs/decisions/`
   with the ADR template
+- `scripts/design-render` - from the template, and **executable**, for the same
+  reason the hook is: without the bit it is present, silent, and refuses. This
+  is the one command the design role is told the name of, and the contract it
+  has to honour is in its own header. The default drives a headless browser
+  already on most images and adds no dependency; if this repository's image has
+  none, say so in the pull request body rather than leaving it to be discovered
+  by the first design run, and treat replacing it as this repository's decision
+  to record - what renders a mock is a project's choice and never the plugin's.
 
 Then the roles and the commands themselves, copied rather than referenced:
 
@@ -231,8 +239,8 @@ the pull request path the human merges step 3 first. Then:
 > 2. Tap **Run workflow**, then **Run workflow** again to confirm
 > 3. When it finishes, open the run and read its summary
 
-The summary lists every label it created and, more usefully, the check names
-as they were actually reported. Step 5 needs those.
+The summary lists the labels and, more usefully, the check names as they
+were actually reported. Step 5 needs those.
 
 Verify a sample rather than trusting the run: `mcp__github__get_label` for
 `agent:queued` and `role:engineer`. If either is missing the run did not do what
