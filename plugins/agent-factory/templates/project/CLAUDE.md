@@ -1,6 +1,14 @@
 # Project context
 
-<!-- Replace the bracketed lines. Everything else is the standing arrangement. -->
+<!-- One bracketed line is left below, under "What this is", and provisioning
+     fills it in. The two sections after it are read out of this repository
+     rather than asked about, and when it does not answer them yet they stay
+     exactly as they stand: "not chosen yet" is a real answer here, not a gap
+     somebody forgot. Everything from the marker onward is the standing
+     arrangement.
+
+     A bracketed line that survives into a provisioned repository fails
+     project-guard, on purpose - see the check named after this file there. -->
 
 ## What this is
 
@@ -8,17 +16,32 @@
 
 ## Stack
 
-[Language, framework, data store, hosting. Name the versions that matter.]
+Not chosen yet. Provisioning fills this in when the repository already answers
+it - a manifest, a lockfile, code that is already here - and leaves this
+sentence standing when it does not. A greenfield repository is asked for its
+stack before anybody could know it, and a guess written here reads exactly like
+a decision somebody made.
+
+Choosing it changes a category, so it arrives as an ADR under
+`docs/decisions/`, and this section is rewritten in the same pull request.
+
+Nothing publishes this repository yet either. When something does, the question
+that matters is whether the gate runs what publishes it - the comment at the
+top of `.github/workflows/ci.yml` asks it at the moment it becomes answerable,
+which is the moment somebody replaces the gate.
 
 ## Commands
 
-- Install: [command]
-- Dev: [command]
-- Checks CI runs: [one line per check, naming the command. On a Node project
-  that is `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build`.
-  On a project with no package manager it might be a single `bash
-  tests/check.sh`, and one check is a complete answer - name what this project
-  has rather than the four a Node project would have.]
+- Install: none yet - nothing to install until the stack is chosen.
+- Dev: none yet, for the same reason.
+- Checks CI runs: none of this project's own yet. The gate runs the scaffolding
+  checks written out in `.github/workflows/ci.yml` and nothing else.
+
+Replace all three the moment there is something to name. On a Node project that
+is `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build`. On a
+project with no package manager it might be a single `bash tests/check.sh`, and
+one check is a complete answer - name what this project has rather than the
+four a Node project would have.
 
 The checks above are what CI runs once the gate is real. Until then it is
 not: `.github/workflows/ci.yml` ships a placeholder that checks the scaffolding

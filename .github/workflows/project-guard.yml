@@ -133,6 +133,41 @@ jobs:
 
           echo "CLAUDE.md's managed block is intact (lines $begin_line-$end_line)."
 
+      - name: CLAUDE.md carries no unfilled placeholder
+        run: |
+          set -euo pipefail
+
+          # Provisioning fills one bracketed line in from the template: the
+          # sentence saying what this product is and for whom. A bracket that
+          # survives is the failure this whole file is against - a file that
+          # reads as configured and says nothing. It is worse here than
+          # anywhere else, because every agent run loads CLAUDE.md before it
+          # loads anything, so an unfilled line is not a gap in the docs, it is
+          # an instruction addressed to a session that left months ago.
+          #
+          # Whole-line brackets only, and that is the design rather than a
+          # limitation. A link, a task list item and a reference definition all
+          # carry brackets and none of them is ever the entire line, so this
+          # cannot fail a repository for writing ordinary prose.
+          # validate_plugin.py holds the template to that same shape, which is
+          # what makes the pair work: a placeholder this cannot see is one the
+          # template is not allowed to ship.
+          #
+          # No CLAUDE.md is fine, like the marker check above. A repository
+          # that has not migrated is degraded rather than broken, and failing
+          # every merge over a chore it never agreed to is the wrong trade.
+
+          [ -f CLAUDE.md ] || { echo "No CLAUDE.md; nothing to check."; exit 0; }
+
+          if grep -q '^\[.*\]$' CLAUDE.md; then
+            grep -n '^\[.*\]$' CLAUDE.md | while IFS= read -r hit; do
+              echo "::error file=CLAUDE.md,line=${hit%%:*}::${hit#*:} is still the template's placeholder. Replace it with what this repository actually is - every agent run reads this file first, and this line is what it reads instead."
+            done
+            exit 1
+          fi
+
+          echo "CLAUDE.md carries no unfilled placeholder."
+
       - name: Nothing that gates this repo was edited
         if: github.event_name == 'pull_request'
         env:

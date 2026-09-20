@@ -270,33 +270,51 @@ What goes in:
   leave it alone and say in the pull request body that the gate is a placeholder,
   what it does check, and that it fails the moment product code lands.
 
-  **Then ask what publishes this repository, and whether the gate runs it.**
-  A gate runs the commands the project chose; production runs whatever the
-  hosting platform chose. Those are two programs, and nothing measures the
-  distance between them unless somebody looks now. A repository once had a gate
-  that was green on every pull request for nineteen hours while the thing that
-  publishes it failed on all eight merges, because the two builds did not agree
-  on what the site even consisted of.
+  **Do not ask what publishes this repository.** It used to be asked here, and
+  the question is a good one - a gate runs the commands the project chose while
+  production runs whatever the hosting platform chose, and nothing measures the
+  distance between them unless somebody looks. A repository once had a gate that
+  was green on every pull request for nineteen hours while the thing that
+  publishes it failed on all eight merges.
 
-  Three honest answers, in order of preference. The gate already runs what
-  publishes it - say so in the pull request body, and it is settled. It does
-  not, but it can - change the `commands` so it does. It cannot, because the
-  platform builds somewhere this gate cannot reach - then say so in an ADR:
-  what publishes it, how that differs from the gate, and what covers the gap.
-  The scheduled sweep reports a red default branch, so the gap is bounded in
-  time rather than unbounded, and the ADR is what tells the next reader that
-  bound is the whole of the protection.
+  But it cannot be answered here. A repository being provisioned has no stack,
+  so it has no deploy target either, and the answer at this moment is reliably
+  "not sure yet" - which trains everyone to skip the question the next time it
+  is asked, including the time it would have mattered. It now lives in the
+  header comment of the `ci.yml` the project receives, addressed to whoever
+  replaces the placeholder gate, which is both the first person who knows the
+  answer and the one person who has to read that comment to do their job.
 
-  What is not acceptable is not answering. An unstated assumption here is
-  invisible until it has been wrong for a day.
+  If the repository being provisioned *does* already publish somewhere - it has
+  a stack, so you are on the Node path anyway - then say in the pull request
+  body whether the gate runs that build. There the question is answerable, so
+  ask it.
 - `.github/CODEOWNERS` - replace every `__PROJECT_OWNER__` with the handle that
   owns the repository. It is a placeholder for the same reason the pin is: a
   literal handle in the template is one a session can forget to change, and
   what lands then is a gate file naming an account with no relationship to the
   repository - which reviews nothing and looks exactly like a configured one
-- `CLAUDE.md` - fill in the product sentence, the stack, and the commands from
-  what is actually in the repository. Do not leave a bracketed placeholder
-  behind; if you cannot tell what belongs in one, ask rather than guess.
+- `CLAUDE.md` - one line to fill in, and two sections to leave alone unless the
+  repository answers them.
+
+  The bracketed line under "What this is" is the one question worth asking a
+  person: only they know it, it is one sentence, and every objective filed here
+  afterwards is read against it. Ask it.
+
+  The stack and the commands are **read, not asked**. A manifest, a lockfile,
+  or code already in the tree answers them - and if you are reading those to
+  choose the gate path above, you have the answer already. When nothing answers
+  them, the template's "not chosen yet" text is the answer: leave it standing.
+  Do not ask a greenfield repository for its stack. It does not have one, the
+  reply is reliably "the first objective decides", and the question spends a
+  turn of somebody's attention to learn nothing - while the flow this command
+  sits in has already promised them that the manual steps come back as a
+  checklist at the end rather than as blockers now.
+
+  What must not survive is the bracket. A bracketed line left in a provisioned
+  `CLAUDE.md` fails `project-guard`, deliberately: it reads as prose, it is the
+  first thing every agent run loads, and unfilled it is an instruction
+  addressed to a session that is no longer in the room.
 - `docs/memory/orchestrator.md`, `researcher.md`, `analyst.md`,
   `designer.md`, `engineer.md` - empty, with their headers. Under `docs/` and
   not under `.claude/`: a run cannot write a file under `.claude/` at all, so

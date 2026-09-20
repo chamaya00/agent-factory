@@ -60,6 +60,27 @@ def run_block_case(claude_md: str | None) -> int:
         return done.returncode
 
 
+PLACEHOLDER_STEP = "CLAUDE.md carries no unfilled placeholder"
+
+
+def run_placeholder_case(claude_md: str | None) -> int:
+    """Run the placeholder check against a tree, returning its exit code.
+
+    Same shape as the marker runner above, and for the same reason: the step
+    comes out of the workflow rather than being retyped here, so a check that
+    stops shipping cannot keep passing its own tests.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp)
+        if claude_md is not None:
+            (repo / "CLAUDE.md").write_text(claude_md)
+        done = subprocess.run(
+            ["bash", "-e", "-c", step_script(PLACEHOLDER_STEP)], cwd=repo, text=True,
+            capture_output=True, env={"PATH": "/usr/bin:/bin"},
+        )
+        return done.returncode
+
+
 BEGIN = "<!-- agent-factory:begin -->"
 END = "<!-- agent-factory:end -->"
 PROSE = "# Project context\n\n## Stack\n\nSomething.\n\n"
@@ -441,6 +462,44 @@ def _():
 @case("end before begin is stopped")
 def _():
     return run_block_case(PROSE + END + "\nProse.\n" + BEGIN + "\n") == 1
+
+
+@case("a filled-in CLAUDE.md passes")
+def _():
+    return run_placeholder_case(
+        "# Project context\n\n## What this is\n\nA tool for doing one thing.\n"
+    ) == 0
+
+
+@case("the template's unfilled product sentence is stopped")
+def _():
+    return run_placeholder_case(
+        "# Project context\n\n## What this is\n\n"
+        "[One sentence: what this product does and for whom.]\n"
+    ) == 1
+
+
+@case("no CLAUDE.md at all passes the placeholder check")
+def _():
+    return run_placeholder_case(None) == 0
+
+
+@case("a markdown link is not a placeholder")
+def _():
+    # The false positive that would make this check unshippable: a project
+    # writing ordinary prose about its own repository. A link, a reference
+    # definition and a task list item all carry brackets, and a check that
+    # failed any of them would be removed within a week and rightly.
+    return run_placeholder_case(
+        "# Project context\n\nSee [the runbook](docs/run.md).\n\n"
+        "- [ ] not done yet\n\n[ref]: https://example.com\n"
+    ) == 0
+
+
+@case("a reference-style link closing a line is not a placeholder")
+def _():
+    return run_placeholder_case("# Project context\n\nRead [the notes][ref]\n") == 0
+
 
 
 def main() -> int:
