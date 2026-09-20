@@ -1,6 +1,6 @@
 ---
 name: house-rules
-description: The non-negotiable process rules for any repo built by the factory - acceptance criteria before work, tests before merge, an ADR for schema and dependency changes, and the three-strike rule. Use at the start of any agent run and whenever deciding whether a piece of work is ready to start or ready to merge.
+description: The non-negotiable process rules for any repo built by the factory - acceptance criteria before work, tests before merge, an ADR when a decision changes a category, and the three-strike rule. Use at the start of any agent run and whenever deciding whether a piece of work is ready to start or ready to merge.
 ---
 
 # House rules
@@ -73,7 +73,7 @@ Before merging on someone's behalf, all of these hold. Any one failing is a reas
 - **Every acceptance criterion is covered by a check that actually ran.** A criterion marked verified by a check that never executed is the worst case here, because it ends the review - a reader who sees it ticked does not check it again.
 - **The required checks are green**, and there are some. A pull request with no checks is not green; it is unmeasured. Know what green covers, too: structural checks say the shape is right, never that the behaviour is correct.
 - **The diff is the issue's worth of work** and no more. Something noticed on the way out is a new issue. Read the diff, not the description of the diff - they are different acts, and only one of them catches a change nobody wrote down.
-- **An ADR is present** if a schema, a data shape, or a dependency changed.
+- **An ADR is present** if the diff changes a category: a schema or data shape, a first dependency from a new ecosystem, a new service. A version bump inside something already chosen needs its reasoning in the body, not an ADR.
 - **Anything the research or design named as a consequence** is handled or explicitly deferred in writing.
 - **Nothing in the diff needs a decision only the owner can make.** Product behaviour, naming that will outlive the issue, a trade-off with no obviously right answer: those get asked, not merged.
 - **No issue in front of this pull request carries `agent:needs-input`.** That label means a role asked a question and shipped its recommendation rather than stalling on it, so the work is genuinely ready and the decision genuinely is not. A standing `green` policy does not cover it: the person delegated the *gate*, and this is the one thing they kept. Answer it and clear the label, or say on the pull request that it is still open. Merging past it converts a question into a decision nobody made, silently, which is the exact failure the label was added to stop.
@@ -101,7 +101,11 @@ Ask about these in the owner's language, not the diff's. "This adds a request to
 
 ## Decisions
 
-Any change to a schema, a data shape, or a dependency gets an ADR in `docs/decisions/`, in the same diff that makes the change. Four sections: context, decision, consequences, alternatives rejected. A dependency added without an ADR is a dependency nobody can remove later, because nobody knows why it is there.
+A decision gets an ADR in `docs/decisions/`, in the same diff that makes it. Four sections: context, decision, consequences, alternatives rejected. A dependency added without an ADR is a dependency nobody can remove later, because nobody knows why it is there.
+
+What counts is a change of category, not a change of number: a schema or data shape, the first dependency from an ecosystem this project does not already use, a new service or platform, or swapping one of those for another. Moving a version within something already chosen is not a decision - it is maintenance, and its reasoning belongs in the commit or the pull request body where the diff is.
+
+This line used to read "any change to a dependency", and the effect was not more ADRs. Routine upgrades were shipped with their reasoning in the commit message and the rule was quietly not followed, which costs more than a narrower rule does: a requirement honoured in the breach teaches that the list is aspirational, and the next thing skipped is one that mattered. Ask which this is - would somebody reversing this need to know why, or only that it happened?
 
 ## Work that comes back
 
