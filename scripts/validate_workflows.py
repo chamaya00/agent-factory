@@ -642,6 +642,18 @@ def check_privilege_cannot_arrive_undeclared() -> None:
                         f"project-guard.yml: the {PRIVILEGE_STEP!r} step no "
                         f"longer looks for {why}."
                     )
+            # Reading the body out of the event payload alone makes the
+            # check unfixable under a re-run: the payload is replayed frozen,
+            # so a corrected declaration is invisible to every attempt after
+            # the first. Observed twice on one pull request before anybody
+            # worked out that clicking re-run could not possibly help.
+            if "gh pr view" not in script or "--json body" not in script:
+                errors.append(
+                    f"project-guard.yml: the {PRIVILEGE_STEP!r} step does not "
+                    "read the pull request body live, so a re-run replays the "
+                    "body the pull request opened with and a corrected "
+                    "declaration can never clear it."
+                )
             if "^Privilege change:" not in script:
                 errors.append(
                     f"project-guard.yml: the {PRIVILEGE_STEP!r} step does not "

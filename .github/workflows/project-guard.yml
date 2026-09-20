@@ -157,8 +157,36 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+
+          # The body is read live, and that is the difference between this
+          # check being fixable and not.
+          #
+          # A re-run replays the event that started the run, so
+          # github.event.pull_request.body is the body as it was when the pull
+          # request opened. An author whose declaration this step rejected then
+          # corrects the body, re-runs the job, and the job reads the old text
+          # again - and no number of re-runs can ever read anything else. That
+          # is not hypothetical: a declaration written wrapped in backticks did
+          # not start its line, this step failed it correctly, and fixing the
+          # body changed nothing twice in a row. The exits left were an empty
+          # commit or a close and reopen, and the house rules forbid both by
+          # name, for reasons that have nothing to do with this.
+          #
+          # The payload stays as a fallback so a failed read is never worse
+          # than the old behaviour, and the log says which was used rather than
+          # leaving somebody to wonder why a corrected body still failed.
+          live="$(gh pr view "$PR_NUMBER" --json body --jq '.body' 2>/dev/null || true)"
+          if [ -n "$live" ]; then
+            BODY="$live"
+            echo "Read the pull request body live, not from the event payload."
+          else
+            echo "::warning::Could not read the body from the API, so this used the event payload - which a re-run replays unchanged. If a corrected body keeps failing, that is why."
+          fi
 
           # Deliberately no maintainer exemption, unlike the protected-paths
           # check above. That one asks who is editing a gate, and trusts the

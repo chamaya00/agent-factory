@@ -74,12 +74,18 @@ def git(repo: Path, *args: str) -> None:
     )
 
 
-def run_case(before, after, body: str = "") -> int:
+def run_case(before, after, body: str = "", live_body: str | None = None) -> int:
     """Build a real two-commit repo, diff it, and return the step's exit code.
 
     `before` and `after` are either a string, meaning one file called
     `file.yml`, or a {filename: content} mapping when a case needs to say
     which file a change landed in.
+
+    `body` is the body as the event payload carries it - frozen at the moment
+    the pull request opened, and replayed unchanged by every re-run. Pass
+    `live_body` to put a *different* body behind a fake `gh`, which is how a
+    case says "the author edited it afterwards". The step is supposed to read
+    the second one; the whole point of reading live is that the first is stale.
     """
     if isinstance(before, str):
         before = {"file.yml": before}
@@ -104,16 +110,32 @@ def run_case(before, after, body: str = "") -> int:
         head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo,
                               capture_output=True, text=True).stdout.strip()
 
+        path = "/usr/bin:/bin"
+        if live_body is not None:
+            fake = repo / "fakebin"
+            fake.mkdir()
+            gh = fake / "gh"
+            gh.write_text(
+                "#!/usr/bin/env python3\n"
+                "import os, sys\n"
+                "sys.stdout.write(os.environ['FAKE_LIVE_BODY'])\n"
+            )
+            gh.chmod(0o755)
+            path = f"{fake}:{path}"
+
         done = subprocess.run(
             ["bash", "-e", "-c", step_script()], cwd=repo, text=True,
             capture_output=True,
-            env={"PATH": "/usr/bin:/bin", "BASE_SHA": base, "HEAD_SHA": head,
-                 "BODY": body},
+            env={"PATH": path, "BASE_SHA": base, "HEAD_SHA": head,
+                 "BODY": body, "PR_NUMBER": "1", "GH_TOKEN": "fake",
+                 "GH_REPO": "owner/repo",
+                 "FAKE_LIVE_BODY": live_body or ""},
         )
         return done.returncode
 
 
 CASES = []
+
 
 
 def case(name):
@@ -156,6 +178,43 @@ def _():
 @case("a newly added action is stopped")
 def _():
     return run_case(PLAIN, PLAIN + "      - uses: some-org/some-action@v1\n") == 1
+
+
+@case("a body corrected after the pull request opened is read")
+def _():
+    # The case this whole mechanism was missing. The payload body carries the
+    # declaration wrapped in backticks, exactly as it was really written once,
+    # so it does not start the line and would be rejected. The author then
+    # fixes it. Reading the payload, no re-run can ever see that fix; reading
+    # live, the next run passes.
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    return run_case(
+        PLAIN, after,
+        body="`Privilege change:` pins moved\n",
+        live_body="Privilege change: pins moved, and why\n",
+    ) == 0
+
+
+@case("a declaration deleted after the fact stops passing")
+def _():
+    # The same mechanism in the direction that matters for safety: if live is
+    # read, removing the declaration has to start failing again. A step that
+    # preferred whichever body said yes would be no check at all.
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    return run_case(
+        PLAIN, after,
+        body="Privilege change: pins moved\n",
+        live_body="No declaration here any more.\n",
+    ) == 1
+
+
+@case("an unreadable body falls back to the payload rather than passing")
+def _():
+    # `gh` absent is the fallback path. It must be no weaker than the old
+    # behaviour: an undeclared widening still fails rather than sailing
+    # through on an empty read.
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    return run_case(PLAIN, after, body="Nothing declared.\n") == 1
 
 
 @case("declaring it in the body lets it through")
