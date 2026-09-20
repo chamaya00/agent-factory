@@ -327,6 +327,34 @@ jobs:
             exit 0
           fi
 
+          # Two situations reach this line, and one message for both once sent
+          # an hour at the wrong problem. A body that never mentions the phrase
+          # is a missing declaration, and the generic error below is right. A
+          # body carrying the phrase behind backticks, a list marker or a quote
+          # has already declared it, and telling that author to "add a line" is
+          # advice about a file they are not looking at - the fix is deleting
+          # two characters from the one they are. They read the generic text,
+          # looked at a body that plainly contained the declaration, and
+          # concluded the check was reading stale text.
+          #
+          # What separates the two is whatever sits before the phrase on its
+          # line. Punctuation is markup, and the declaration is really there. A
+          # word is prose, and the phrase is being mentioned rather than used -
+          # which is the case the anchor exists to reject, so that one keeps
+          # the generic message. Hence at least one non-alphanumeric character
+          # before it and none of the line's own words.
+          #
+          # It asks for something after the colon for the same reason the
+          # accepting pattern does. An empty declaration is not a formatting
+          # problem, and saying "remove the backticks" to somebody who wrote
+          # nothing after the colon would be this same bug pointing the other
+          # way.
+          if printf '%s' "$BODY" | grep -qE '^[[:space:]]*[^[:alnum:][:space:]]+[[:space:]]*Privilege change:[[:space:]]*[^[:space:]]'; then
+            echo
+            echo "::error::The body declares this, but no line begins with it - something before the phrase on the line, usually backticks or a list marker, stops it matching. Do not add a second declaration: remove the formatting around the one already there and leave the line starting with the bare phrase. A heading or a bold lead-in is fine, and so is anything after the colon."
+            exit 1
+          fi
+
           echo
           echo "::error::This diff changes what the automation may do, and the pull request does not say so. Reverting a merge does not take back a permission that ran, a secret that was read, or an action that executed. Add a line to the body starting 'Privilege change:' saying what widened and why, so the person merging is deciding rather than discovering. The check does not forbid the change - it forbids doing it silently."
           exit 1

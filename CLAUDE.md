@@ -103,6 +103,9 @@ Do not read all of `docs/`. Read the one that matches what you are doing:
   touching anything in `scripts/`
 - `docs/versioning.md` - the pin and release model, before touching a template
   or the manifest
+- `docs/decisions/` - the ADRs, when a change alters a category rather than an
+  implementation. `0001` records why the factory's own `owner/repo` is declared
+  in the manifest rather than inferred from a remote
 - `docs/checkpoint.md` - the steps only a human with account access can do
 - `docs/open-questions.md` - what is still undecided, and where an answer has
   to land before an entry may be deleted

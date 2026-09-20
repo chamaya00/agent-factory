@@ -84,9 +84,20 @@ five. The ones with a reason behind them rather than a convention:
 - **No marketplace declaration.** Nothing may declare `extraKnownMarketplaces`
   or `enabledPlugins` to load these commands. It reads like it works and does
   nothing in an untrusted folder, which is how it survived two releases.
-- **Templates pin the placeholder.** A caller template must address the factory
-  at `__FACTORY_VERSION__`, never a literal ref. A hardcoded ref ships to every
-  repository provisioned afterwards.
+- **Templates name the factory by placeholder, twice.** A caller template
+  addresses the factory as `__FACTORY_REPO__` at `__FACTORY_VERSION__`, never a
+  literal owner and never a literal ref. A hardcoded ref ships to every
+  repository provisioned afterwards; a hardcoded owner means a fork provisions
+  repositories that call upstream's workflows, green and silent. The check used
+  to hold the owner inside its own pattern, so in a fork it matched nothing and
+  went quiet rather than failing - it is now anchored on the shape of a reusable
+  workflow reference and reads every owner.
+- **The factory declares which repository it is.** `plugin.json`'s `repository`
+  is what provisioning substitutes for `__FACTORY_REPO__`, and it is
+  cross-checked against the checkout's `origin` where one is readable. The
+  remote is a witness, not the source, so a fork that forgets to edit the field
+  hears about it at its own first build instead of from a provisioned
+  repository running somebody else's code. ADR 0001 has the reasoning.
 - **The CODEOWNERS template names no handle.** Same reasoning one step further:
   it carries `__PROJECT_OWNER__` and no literal account. It used to ship a real
   handle with prose telling the session to replace it, and a skipped

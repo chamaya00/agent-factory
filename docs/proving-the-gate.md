@@ -51,9 +51,13 @@ Then confirm by hand:
 
 - The Actions settings above are actually ticked. Look, do not remember.
 - The repo has all nine labels.
-- No file under `.github/workflows/` still contains `__FACTORY_VERSION__`. The
-  placeholder is substituted at provision time; one that survived means the
-  callers address a ref that does not exist.
+- No file under `.github/workflows/` still contains `__FACTORY_VERSION__` or
+  `__FACTORY_REPO__`. Both are substituted at provision time; a surviving one
+  means the callers address a ref or a repository that does not exist.
+- The owner in each `uses:` line is the factory you provisioned from. It is
+  written from that factory's declared `repository`, so this only ever differs
+  in a fork whose manifest still names upstream - in which case the project is
+  running upstream's workflows rather than the ones you can edit.
 - `.claude/agents/` has a file for every role. The agent job refuses to start
   without them, which is the correct behaviour and a confusing first failure
   if you were not expecting it.
