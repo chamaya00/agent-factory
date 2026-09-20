@@ -597,6 +597,66 @@ def check_template_owner_placeholder() -> None:
             )
 
 
+PLACEHOLDER_STEP = "CLAUDE.md carries no unfilled placeholder"
+WHOLE_LINE_BRACKET = re.compile(r"^\[.*\]$")
+ANY_BRACKET = re.compile(r"\[[^\[\]]*\]")
+
+
+def check_template_placeholders_are_visible() -> None:
+    """Every placeholder the template ships has to be one the guard can see.
+
+    `project-guard.yml` fails a provisioned repository whose `CLAUDE.md` still
+    carries a bracketed line, which is what stops a skipped substitution being
+    invisible - and invisible is what it is otherwise, because a placeholder
+    reads as prose and the file it sits in is the first thing every agent run
+    loads.
+
+    It matches a bracket that is the whole line, and only that, because that is
+    the one shape ordinary markdown never takes: a link, a reference definition
+    and a task list item all carry brackets mid-line, and a check that failed
+    those would fail projects for writing sentences and be deleted within the
+    week.
+
+    Which puts one obligation on this side. A placeholder tucked into a line
+    with anything else on it - `- Install: [command]`, as this template shipped
+    for a year - would provision, read as configured, and walk straight past
+    the guard that exists to catch exactly it. So the template may only place a
+    placeholder on a line of its own, and that is what this checks.
+    """
+    template = PLUGIN_DIR / "templates" / "project" / "CLAUDE.md"
+    guard = ROOT / ".github" / "workflows" / "project-guard.yml"
+
+    if not template.is_file():
+        errors.append(
+            f"{template.relative_to(ROOT)}: missing, but projects are provisioned with it"
+        )
+        return
+
+    if guard.is_file() and PLACEHOLDER_STEP not in guard.read_text():
+        fail(
+            guard,
+            f"has no {PLACEHOLDER_STEP!r} step, so nothing stops a provisioned "
+            "CLAUDE.md keeping the template's placeholder. Either restore the "
+            "step or stop shipping placeholders in the template",
+        )
+
+    for number, line in enumerate(template.read_text().splitlines(), start=1):
+        if WHOLE_LINE_BRACKET.match(line.strip()):
+            continue
+        for found in ANY_BRACKET.finditer(line):
+            # A markdown link and a reference definition are what the guard
+            # deliberately ignores, so they are not placeholders here either.
+            if line[found.end():found.end() + 1] in ("(", ":"):
+                continue
+            fail(
+                template,
+                f"line {number} puts {found.group()!r} on a line with other "
+                "text. project-guard only sees a bracket that is the whole "
+                "line, so this one provisions and is never caught - give it a "
+                "line of its own, or write the guidance as prose",
+            )
+
+
 def check_vendored_roles() -> None:
     """The roles get copied into each project, so they have to be copyable.
 
@@ -1088,6 +1148,7 @@ def main() -> int:
     check_commands()
     check_template_pins()
     check_template_owner_placeholder()
+    check_template_placeholders_are_visible()
     check_runbooks_name_every_project_command()
     check_label_vocabulary_is_declared()
     check_vendored_roles()

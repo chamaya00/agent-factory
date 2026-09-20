@@ -244,13 +244,24 @@ does not exist fails the run rather than being skipped, which is the whole
 difference between a gate and a decoration. Projects that are not Node pass a
 `commands` input instead, and that path is what `test_ci.py` covers.
 
-**`project-guard.yml`** enforces the two things an agent could otherwise undo
-quietly. Memory files stay inside a 40 non-blank-line cap, so a retro rewrites
-rather than appends. And a pull request from a non-maintainer touching
+**`project-guard.yml`** enforces what an agent could otherwise undo quietly.
+Memory files stay inside a 40 non-blank-line cap, so a retro rewrites rather
+than appends. A pull request from a non-maintainer touching
 `.github/workflows/`, `CODEOWNERS`, `.claude/agents/`, `.claude/skills/`,
 `.claude/commands/`, or `agent-factory.json` fails. It reads the pull request
 author, which is why a maintainer's pull request passes it and an agent's would
-not.
+not. A diff that widens what the automation may do has to say so in the body.
+
+Two things it checks about the project's own `CLAUDE.md`, both for the same
+reason - that file is the first thing every agent run loads, so a defect in it
+is read by every role before it reads anything else. The managed block's
+markers have to be present exactly once each or absent entirely, because
+`/update-agents` cannot replace a block it cannot locate. And no line may be a
+bracketed placeholder left over from the template: provisioning fills one in,
+and one that survives reads as configured while saying nothing. Only a bracket
+that is the whole line counts, so ordinary prose with links in it passes;
+`validate_plugin.py` holds the template to that same shape, which is what keeps
+the pair honest in both directions.
 
 **`bootstrap.yml`** is one-shot and manual. It creates the nine labels - whose
 names are load-bearing, since the preflight matches them exactly - and reads
