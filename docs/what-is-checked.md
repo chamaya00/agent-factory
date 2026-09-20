@@ -59,8 +59,8 @@ that the table, `CLAUDE.md`, and `guard.yml` name the same scripts.
 | `test_release.py` | a release tag cannot move or disagree with the manifest |
 
 Most of the `test_` scripts do not read the workflows as data. They lift the
-`run:` block straight out of the YAML and execute it, substituting only the
-`${{ }}` expressions the runner would. So a test cannot drift away from what
+`run:` block straight out of the YAML and execute it, substituting only
+the workflow expressions the runner would. So a test cannot drift away from what
 ships: change the shell and the tests run the change.
 
 ### validate_plugin.py
@@ -141,6 +141,13 @@ five. The ones with a reason behind them rather than a convention:
 - **The template ships one memory file per role.** A missing one reads exactly
   like an empty one, which is how the analyst went without for several
   releases.
+- **The docs folder carries no Liquid.** `docs/` is a Pages site, built by
+  Jekyll on every push to the default branch by a program this gate does not
+  run. Jekyll renders Liquid before Markdown, so backticks protect nothing: a
+  workflow expression written into a page collapses to a bare dollar sign, and
+  an unclosed tag fails the build. The first had already happened and was green
+  for as long as the sentence existed. A raw tag is the escape hatch, and ADR
+  0002 records what this covers of that gap and what it leaves.
 - **The gate names itself consistently.** Every `scripts/*.py` must be run by
   `guard.yml` and named in both `CLAUDE.md` and this file. A script nobody runs
   proves nothing, and an inventory that omits one sends a reader looking for a
@@ -350,6 +357,13 @@ That leaves real gaps, and they are worth naming.
   failure the check above now catches. Until an engineer run lands a pull
   request that passes CI, treat step 3 of the smoke test as untested rather
   than passing.
+- **Nothing builds the docs site, and nothing would report it failing.** The
+  check above reads the source for the one hazard that has actually bitten;
+  the build itself - theme, the three Pages plugins, link rewriting between
+  `.md` files - is verified by a person opening the page and by nothing else.
+  A project gets a bound here that this repository does not: the scheduled
+  sweep in `agent-run.yml` names a red default branch and says so on the open
+  objective, and no agents run here. ADR 0002.
 - **Nothing confirms branch protection still matches the job names.**
   `bootstrap` reports the names; keeping the rule pointed at them is manual,
   and the drift reads as green.

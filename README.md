@@ -193,3 +193,5 @@ In order, and the order is the point:
 `docs/` is a GitHub Pages site as well as a folder, served from `main` at the `/docs` source with `docs/_config.yml` and `docs/index.md` as its entry point. Nothing built it: the source is a repository setting under Settings, Pages, and there is no deploy workflow on purpose. Building from a branch needs nothing added to `.github/workflows/`, and a system whose agents must never touch those files should not grow a workflow it does not need.
 
 Every page renders as plain Markdown with no front matter, and links between `.md` files work in both places, so a document is edited once and reads correctly on github.com and on the site.
+
+That build is the one thing here the gate does not run, so `docs/` is held to one rule the rest of the repository is not: no Liquid syntax, because Jekyll renders it before Markdown and backticks do not protect it. `validate_plugin.py` refuses it, and ADR 0002 records what that covers of the gap and what it leaves to somebody opening the page.
