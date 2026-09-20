@@ -20,40 +20,81 @@ unrelated.
 Two settings cannot be read from here at all. Those are marked, and they are
 reported as taken on trust rather than confirmed.
 
-## The fast path
+## Handing over: the list first, then the offer
 
-`scripts/setup-project.sh` in the factory does every handoff below in one run:
-the Actions permission, the token secret, the labels, and branch protection,
-reading each back after setting it. Offer it once, here.
+Reach this point once step 3 has pushed the files. Before offering anything,
+**write out every remaining step, in the order the dependencies force, each
+with its URL and what to click on that page.**
 
-It works because the reason those steps are handed over is narrower than it
-looks - they are not inherently manual, only unavailable to *this* session. A
-session token is a GitHub App installation holding nothing at the account
-level, so changing a repository setting is `403 Resource not accessible by
-integration` however it is asked for. `gh` in a Codespace is the person.
+This page used to lead with the script instead, and that was wrong twice over.
+A person cannot weigh an offer of help against an alternative nobody has shown
+them, so leading with it reads as "the rest is too tedious to describe" - and
+it is not even true, because the script does not cover all of it.
 
-Offer it after step 3, once the workflows are pushed, since it runs bootstrap
-and reads check names that do not exist before then. Substitute this factory's
-own `owner/repo` into the URL, read from `git config --get remote.origin.url`
-in the checkout you are running in rather than assumed - a fork that sends
-people to the upstream Codespace has them run somebody else's scripts against
-their repository:
+**Rank the list rather than merely enumerating it.** A wall of settings steps
+is where attention dies, and the `briefing` skill states the failure exactly:
+the reader acts on the first three and the fourth was the one that mattered.
+Say which step gates the others, and say which can wait - an agent identity App
+that does not exist yet costs an approval tap per pull request and nothing else,
+which is a thing somebody may reasonably choose to live with for a week.
 
-> The rest is one paste instead of four trips through settings pages:
->
+**Keep the dependency order, and say that it is one.** Branch protection is
+last because it needs check names that do not exist until `ci` and `guard` have
+each reported once, and a rule requiring a check that never reports blocks every
+merge including the one that would remove the rule. Bootstrap comes before it
+for the same reason. A flat checklist invites working through it in the order it
+happens to be written.
+
+Then make two offers, separately, and let them take either, both, or neither:
+
+- **Going deeper on any one step.** Some are a single tick and some are not, and
+  nobody can tell which from a URL.
+- **The script, for the specific steps it covers.** Name them:
+  `scripts/setup-project.sh` does the Actions permission, the
+  `CLAUDE_CODE_OAUTH_TOKEN` secret, the labels by running bootstrap, and branch
+  protection - reading each one back after setting it. It does not do the agent
+  identity App, because creating a GitHub App has no API, so the id, the private
+  key and the installation stay with the person whatever they choose here.
+
+**Offer it per step, never as all or nothing.** Presented whole it reads as
+though taking it finishes the job, and a person who runs it and stops has a
+repository where every agent pull request needs an approval tap and nothing
+tells them why.
+
+Running it is a Codespace on this factory and one paste. Substitute this
+factory's own `owner/repo` into the URL, read from `git config --get
+remote.origin.url` in the checkout you are running in rather than assumed - a
+fork that sends people to the upstream Codespace has them run somebody else's
+scripts against their repository:
+
 > 1. Open `github.com/codespaces/new?repo=<this factory's owner/repo>`
 > 2. In its terminal: `bash scripts/setup-project.sh $1`
->
-> Or we can do it by hand - say which and I'll follow along.
 
-**Make the offer before you start handing steps over, not after.** It is easy
-to skip - the manual path works, so nothing goes wrong, and the cost is only
-visible as four settings pages the person did not have to open. A run that
-reaches the report having never mentioned the script has spent their attention
-on the one part of this that was already automated.
+**Default to the manual path, and price both rather than recommending one.**
+Manual is the more transparent: the person watches each setting land, which is
+worth something on the steps that decide what automation may do in their
+repository. What it costs is verification. The Actions permission and branch
+protection sit behind the same administration permission that stops this session
+writing them, so it cannot read them back either - done by hand they stay taken
+on trust in the report at step 6 and nothing ever checks them, and done by the
+script they are confirmed. Seeing it happen and having it proved are different
+goods, and which one matters more is the person's call, not this page's.
 
-If they take it, steps 4 and 5 are done and the report says what it confirmed.
-If not, every step below stands on its own.
+Any of it is available at all because the reason these steps are handed over is
+narrower than it looks: they are not inherently manual, only unavailable to
+*this* session. A session token is a GitHub App installation holding nothing at
+the account level, so changing a repository setting is `403 Resource not
+accessible by integration` however it is asked for. `gh` in a Codespace is the
+person.
+
+One symptom worth recognising while the Actions permission is still unset: a
+`guard` run that comes back `startup_failure` on the provisioning push, with no
+jobs and no log. The likeliest cause is that same setting - `project-guard.yml`
+declares `pull-requests: read` and a restricted default token cannot grant it,
+so the run refuses to start rather than failing inside a job. That has not been
+confirmed from a log, because a startup failure produces none, so treat it as
+the first thing to check rather than as settled. `ci` is unaffected, which is
+why the two can disagree on an otherwise correct repository.
 
 ## How to do the work
 
@@ -359,9 +400,10 @@ was.
 > 1. Open `github.com/$1/actions/workflows/bootstrap.yml`
 > 2. Tap **Run workflow**, then **Run workflow** again to confirm
 
-The fast-path script does not have this problem. It runs `gh` as the person, so
-`gh workflow run bootstrap.yml` works there - one more reason to offer it
-first, which is what "The fast path" section above is for.
+The script does not have this problem. It runs `gh` as the person, so
+`gh workflow run bootstrap.yml` works there - which is worth saying when this
+step is the one they are deciding about, per "Handing over: the list first,
+then the offer" above.
 
 **Read its summary yourself, whoever started it.** This is the part that must
 not go with the dispatch, and on the run above it did: the handoff went out
