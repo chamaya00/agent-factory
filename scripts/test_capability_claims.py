@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Prove the capability-claim checks fire on drift and stay quiet on prose.
+"""Prove the capability checks fire on drift and stay quiet on prose.
 
-These two checks read English rather than structure, which makes them the only
-part of the guard that can be wrong in both directions. A missed claim ships a
+Three checks now: the two that read a role's prose against its frontmatter, and
+the one that reads the same prose against the allowlist a run is actually given.
+The first two read English rather than structure, which makes them the only part
+of the guard that can be wrong in both directions. A missed claim ships a
 false statement to every provisioned repository; a false positive fails pull
 requests that changed nothing about capability, and the cure for that is
 usually to delete the check. So both directions are pinned here.
@@ -14,6 +16,7 @@ repository that an earlier, looser version of the pattern fired on.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -128,6 +131,37 @@ INSTRUCTION_CASES = [
     ),
 ]
 
+# Each case: a description, the runtime allowlist a role would hold, the body it
+# is given, and whether the runtime check should fire. The allowlists are cut
+# down to the entries the case is about - the real ones are read from the
+# workflow in the last block below.
+RUNTIME_CASES = [
+    (
+        "the gap that was reachable with the gate green",
+        "Push the document and open a pull request for it.",
+        {"Bash(gh issue view:*)", "Bash(git push:*)", "Write"},
+        True,
+    ),
+    (
+        "the same instruction with the run-time grant present",
+        "Push the document and open a pull request for it.",
+        {"Bash(gh pr create:*)", "Write"},
+        False,
+    ),
+    (
+        "scoped shell entries on both sides still do not grant the thing",
+        "Search the web for how this kind of surface is being made now.",
+        {"Bash(gh pr create:*)", "Bash(git diff:*)", "WebFetch"},
+        True,
+    ),
+    (
+        "a body that asks for none of it stays quiet on any allowlist",
+        "Read the issue and its acceptance criteria before anything else.",
+        set(),
+        False,
+    ),
+]
+
 failures: list[str] = []
 
 
@@ -155,11 +189,47 @@ def main() -> int:
         fired = bool(guard.instruction_violations(body, tools))
         report(fired == should_fire, description)
 
+    print("\nRuntime: a role told to do something must be granted it in the run\n")
+    for description, body, allowlist, should_fire in RUNTIME_CASES:
+        fired = any(
+            re.search(capability["instruction"], body, re.I)
+            and not allowlist & capability["runtime"]
+            for capability in guard.CAPABILITIES
+        )
+        report(fired == should_fire, description)
+
+    # Pinned against the real workflow, because the parser is the part that can
+    # go quiet: a step renamed or reshaped would leave every case above passing
+    # against nothing. These are grants the workflow argues for at length, so a
+    # change to one is a change somebody meant to make.
+    print("\nThe allowlist as agent-run.yml actually builds it\n")
+    guard.errors.clear()
+    runtime = guard.runtime_allowlist()
+    report(not guard.errors, "the role allowlist parses")
+    for error in guard.errors:
+        print(f"       {error}")
+    report(sorted(runtime) == sorted(guard.ROLES), "every role has a branch")
+    report(
+        "Bash(gh pr create:*)" in runtime.get("designer", set()),
+        "the designer can open its own pull request in a run",
+    )
+    report(
+        "Bash(gh pr create:*)" not in runtime.get("orchestrator", set()),
+        "the orchestrator still cannot, which is the arrangement on purpose",
+    )
+    report(
+        guard.RUNTIME_SCRIPTS_GRANT in runtime.get("engineer", set())
+        and guard.RUNTIME_SCRIPTS_GRANT in runtime.get("designer", set()),
+        "both roles told to run ./scripts/ entry points are granted them",
+    )
+
     print("\nThe repository itself\n")
     guard.errors.clear()
     guard.check_capability_claims()
     guard.check_roles_can_do_what_they_are_told()
-    report(not guard.errors, "no capability claim drifts from frontmatter")
+    guard.check_roles_can_run_what_they_are_told()
+    guard.check_named_project_commands()
+    report(not guard.errors, "no capability claim drifts from frontmatter or the allowlist")
     for error in guard.errors:
         print(f"       {error}")
 
@@ -175,7 +245,7 @@ def main() -> int:
     if failures:
         print(f"\ncapability: {len(failures)} case(s) failed")
         return 1
-    total = len(DENIAL_CASES) + len(INSTRUCTION_CASES) + 2
+    total = len(DENIAL_CASES) + len(INSTRUCTION_CASES) + len(RUNTIME_CASES) + 7
     print(f"\ncapability: {total} cases passed")
     return 0
 

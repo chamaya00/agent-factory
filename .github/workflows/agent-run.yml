@@ -1003,7 +1003,7 @@ jobs:
             `.claude/agents/` in this repository.
 
             Read that agent's definition and follow it exactly, including the
-            clause at the end about `.claude/memory/`. Follow the house-rules,
+            clause at the end about `docs/memory/`. Follow the house-rules,
             memory-protocol, and acceptance-criteria skills in `.claude/skills/`.
 
             This is run ${{ needs.preflight.outputs.attempt }} of ${{ needs.preflight.outputs.budget }} on this issue.

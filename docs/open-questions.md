@@ -266,3 +266,34 @@ What is genuinely still open is whether that is enough. If the report turns out
 to fire often, the answer is to loosen the group - per-issue rather than
 per-repo, with the budget protected some other way - rather than to let a
 watchdog start spending. If it never fires, this entry can go.
+
+---
+
+## 8. Do `app-render` and `contrast` work inside a run?
+
+**What is known.** Both ship in the project template, both are named in the
+role files, and both were exercised by hand before they shipped: `contrast`
+against six known pairs including the WCAG boundary cases, `app-render` against
+a built page whose stylesheet and script load from root-absolute paths - the
+exact case that made `design-render` useless for a built page, photographed
+correctly over a served origin and incorrectly over `file://`.
+
+**What is not known.** Whether a role can run them. Nothing in this repository
+runs an agent, so the allowlist entry that grants them - `Bash(./scripts/*)`,
+which both roles already held - has never been exercised against these two
+names, and `app-render` additionally runs whatever `BUILD_CMD` a project puts
+in it. That inner command is checked against the role's allowlist rather than
+the script's grant, and a project that fills it in with something no role may
+run has a script that works by hand and refuses in a run. The script's own
+header says so; nothing enforces it.
+
+**How to answer it.** Provision or update a repository, fill in `BUILD_CMD` and
+`SERVE_DIR`, and give the designer a visual issue. One run answers both: the
+pull request either carries pictures of the built page or names the refusal.
+
+**What changes.** Either this entry is deleted and the fact goes into the
+smoke-test runbook as a step that has been seen to pass, or the allowlist gains
+whatever the inner build command needs and the script's header stops being the
+only thing saying so.
+
+---

@@ -120,7 +120,7 @@ is where the last person's mistake is written down.
 
 ## Lessons
 
-Repository-specific lessons live here rather than in `.claude/memory/<role>.md`,
+Repository-specific lessons live here rather than in `docs/memory/<role>.md`,
 because no role runs in this repository and the memory protocol already sends a
 lesson every role needs to `CLAUDE.md`. Same rules as a memory file: one line,
 stated as a rule with the reason attached, proposed in a pull request, and this

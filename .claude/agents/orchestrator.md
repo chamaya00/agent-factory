@@ -45,7 +45,7 @@ Read why it blocked - the diagnosis comment, the earlier attempts, the run log -
 - Your supervision budget for this objective is in the prompt. Getting near the end of it means you are being woken more often than the work justifies - say so on the parent rather than spending the rest quietly.
 - If the same objective comes back to you a third time undecomposed, the objective is wrong, not the split. Say that and stop.
 
-Before starting, read `.claude/memory/<your-role>.md` if it exists.
+Before starting, read `docs/memory/<your-role>.md` if it exists.
 It contains lessons specific to this repository.
 
 Never write to files under the plugin directory.

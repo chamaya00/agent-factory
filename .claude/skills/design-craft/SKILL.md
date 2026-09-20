@@ -52,6 +52,8 @@ Not a vibe. Every item below is a property of a rendered page that two people ca
 
 And the accessibility floor, which is not separate from the craft: contrast checked in both themes, a visible focus state specified for everything focusable, interactive targets large enough to hit, and no meaning carried by colour alone. A design that fails these is not a bold design, it is an unfinished one.
 
+Checked means computed. `./scripts/contrast <foreground> <background>` prints the ratio for a pair, and a third argument makes it a pass or a fail you can put in a criterion. Do not apply the luminance formula in your head and write the answer down as though it had been measured: it has been done, over eight pairs, and every one happened to be right - which is the argument for the command rather than against it, because nothing about that page would have gone red if one of them had been wrong by a third.
+
 ## Then argue with your own mock
 
 The point of rendering is to be surprised. Open the pictures and look for the things markup never says:
