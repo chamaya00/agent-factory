@@ -157,6 +157,7 @@ CLAIM_FIXTURES = {
 
 # What a template writes instead of a release tag. Provisioning substitutes it.
 PIN_PLACEHOLDER = "__FACTORY_VERSION__"
+OWNER_PLACEHOLDER = "__PROJECT_OWNER__"
 ROLES = ["orchestrator", "researcher", "analyst", "designer", "engineer"]
 
 # The commands a provisioned project receives. `new-project` is deliberately not
@@ -524,6 +525,76 @@ def check_template_pins() -> None:
                     f"templates must use {PIN_PLACEHOLDER} so provisioning "
                     "substitutes the installed release",
                 )
+
+
+def check_runbooks_name_every_project_command() -> None:
+    """The two runbooks that copy commands must name the set actually copied.
+
+    `PROJECT_COMMANDS` is the real list - the template manifest is checked
+    against it and every name in it must have a file - but the prose that does
+    the copying was checked by nothing, and both copies had drifted.
+    `new-project.md` named five and `update-agents.md` named three. The one
+    missing from both was `check-in`, which `templates/project/CLAUDE.md` tells
+    every provisioned repository to run by name, so a session following either
+    runbook literally shipped a repository whose own instructions point at a
+    command that is not there.
+
+    Checked as prose rather than generated from the list, because the sentences
+    around these names carry the reasons - which command stays in the factory,
+    and why - that a generated list would drop.
+    """
+    for name in ("new-project.md", "update-agents.md"):
+        path = PLUGIN_DIR / "commands" / name
+        if not path.is_file():
+            continue
+        text = path.read_text()
+        missing = [command for command in PROJECT_COMMANDS if f"{command}.md" not in text]
+        if missing:
+            fail(
+                path,
+                f"tells a session which commands a project receives but never "
+                f"names {sorted(missing)}. A command left out here is one that "
+                "does not get copied, while the project's own CLAUDE.md may "
+                "still call it",
+            )
+
+
+def check_template_owner_placeholder() -> None:
+    """The CODEOWNERS a project receives names its owner, never this one.
+
+    It used to ship a literal handle with a line of prose telling the session
+    to change it, which works until the once it does not - and a skipped
+    substitution is invisible, because what lands is a syntactically perfect
+    gate file naming an account that owns nothing here. It reviews nothing and
+    reads as though somebody configured it.
+
+    Same reasoning as the version pin, same fix: a placeholder cannot be
+    forgotten quietly, because the string is still sitting there to be found.
+    """
+    codeowners = PLUGIN_DIR / "templates" / "project" / ".github" / "CODEOWNERS"
+    if not codeowners.is_file():
+        errors.append(
+            f"{codeowners.relative_to(ROOT)}: missing, but projects are provisioned with it"
+        )
+        return
+    text = codeowners.read_text()
+    if OWNER_PLACEHOLDER not in text:
+        fail(
+            codeowners,
+            f"carries no {OWNER_PLACEHOLDER}, so provisioning has nothing to "
+            "substitute the repository's own owner into",
+        )
+    # A handle starts with an alphanumeric, so the placeholder's leading
+    # underscore keeps it out of this on purpose.
+    for number, line in enumerate(text.splitlines(), start=1):
+        found = re.search(r"@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?", line)
+        if found:
+            fail(
+                codeowners,
+                f"line {number} names {found.group()!r}; use {OWNER_PLACEHOLDER} "
+                "so provisioning substitutes the owner of the repository being "
+                "provisioned",
+            )
 
 
 def check_vendored_roles() -> None:
@@ -1016,6 +1087,8 @@ def main() -> int:
     check_skills()
     check_commands()
     check_template_pins()
+    check_template_owner_placeholder()
+    check_runbooks_name_every_project_command()
     check_label_vocabulary_is_declared()
     check_vendored_roles()
     check_self_vendored()
