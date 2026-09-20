@@ -58,14 +58,11 @@ a later "hi" is small talk, not a re-trigger.
    one line, that these come back as a checklist at the end rather than as
    blockers now.
 
-   **Then offer the fast path, in the same breath.** Those handed-over steps
-   are not inherently manual, only unavailable to a cloud session, and
-   `scripts/setup-project.sh` does all of them from a Codespace terminal where
-   `gh` is the person rather than an App installation. One paste instead of
-   five trips through settings pages is the difference between a walkthrough
-   somebody finishes and one they abandon halfway, so offer it before the
-   first handoff rather than after the last. `/new-project` has the exact
-   wording under "The fast path" - do not invent a second version of it here.
+   **Mention the fast path in the same breath**, so the checklist does not
+   read as five trips through settings pages: `scripts/setup-project.sh` does
+   those steps in one run from a Codespace terminal, and `/new-project` offers
+   it at the right point. Say it exists; let the command do the offering
+   rather than writing a second version of it here.
 
 4. **Run `/new-project <owner/repo>`** once they confirm the target, and let
    the command's own steps narrate themselves - it already says which path it

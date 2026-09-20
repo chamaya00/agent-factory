@@ -10,58 +10,40 @@ If `$1` is empty, ask which repository before doing anything.
 
 ## Verify, do not take "done" for an answer
 
-Most of what goes wrong here is a step somebody believes is finished. The
-Actions permission is the expensive one - with it off, every agent run appears
-to work and then silently fails to open a pull request - but every handoff
-below has the same shape: you cannot do it, a person can, and afterwards
-nothing tells you which way it went unless you look.
+Most of what goes wrong here is a step somebody believes is finished. So every
+handoff below gives the link, says what to do on that page, and names a check
+to run afterwards. Run it. A person's "done" and the repository's actual state
+disagree often enough to be worth one call, and when they disagree, say so and
+hand the link back rather than letting it surface three steps later somewhere
+unrelated.
 
-So each handoff in this command comes in three parts, and the third is not
-optional:
+Two settings cannot be read from here at all. Those are marked, and they are
+reported as taken on trust rather than confirmed.
 
-1. **The link**, already substituted, so nothing has to be assembled by hand.
-2. **What to do on that page**, short enough to follow without scrolling.
-3. **The check you run afterwards** - named in the step - before you move on.
+## The fast path
 
-Ask a person to confirm only when there is genuinely nothing readable. When
-there is, read it: their "done" and the repository's actual state disagree
-often enough that the difference is worth one call. If a check says the step
-did not land, say so plainly and hand the link back rather than continuing and
-letting it surface three steps later, somewhere unrelated.
+`scripts/setup-project.sh` in the factory does every handoff below in one run:
+the Actions permission, the token secret, the labels, and branch protection,
+reading each back after setting it. Offer it once, here.
 
-## The fast path, and when to offer it
+It works because the reason those steps are handed over is narrower than it
+looks - they are not inherently manual, only unavailable to *this* session. A
+session token is a GitHub App installation holding nothing at the account
+level, so changing a repository setting is `403 Resource not accessible by
+integration` however it is asked for. `gh` in a Codespace is the person.
 
-`scripts/setup-project.sh` in the factory does every step below that a session
-cannot: it creates the repository, sets the Actions permission, sets the
-secrets, runs bootstrap, reads the check names back as they actually reported,
-and sets branch protection to require them. It is one paste in a terminal.
+Offer it after step 3, once the workflows are pushed, since it runs bootstrap
+and reads check names that do not exist before then:
 
-That is worth offering first, because the reason those steps are handed over is
-narrower than it looks. They are not inherently manual - they are unavailable
-to *this* session. A session token is a GitHub App installation: it holds
-nothing at the account level, so creating a repository and changing a
-repository setting both come back `403 Resource not accessible by integration`
-no matter how they are asked for. `gh` in a Codespace is authenticated as the
-person, with their scopes, and every one of those steps is one API call there.
-
-Offer it like this, before step 1, and let them choose:
-
-> The setup steps I can't do myself can run as one script in a Codespace on
-> this repository, instead of five trips through GitHub's settings pages:
+> The rest is one paste instead of four trips through settings pages:
 >
 > 1. Open `github.com/codespaces/new?repo=chamaya00/agent-factory`
 > 2. In its terminal: `bash scripts/setup-project.sh $1`
 >
-> It pauses partway and waits for me to push the files, then finishes on its
-> own. Or we can do it by hand - say which and I'll follow along.
+> Or we can do it by hand - say which and I'll follow along.
 
-If they take it, the script covers steps 1, 2, 4, and 5, and this command's job
-narrows to step 3 and the report. Still run each step's check afterwards: the
-script reports its own results, but this session confirming them against the
-API is what makes the report at the end true rather than repeated.
-
-If they would rather do it by hand, or the script fails, every step below
-stands on its own. Nothing in it depends on the script having run.
+If they take it, steps 4 and 5 are done and the report says what it confirmed.
+If not, every step below stands on its own.
 
 ## How to do the work
 
@@ -108,21 +90,13 @@ Give them exactly this:
 > 4. Tick **Allow GitHub Actions to create and approve pull requests**
 > 5. **Save**
 
-**The check.** This is the one handoff on the list that this session cannot
-read back - the setting lives behind the same repository-administration
-permission that stops you writing it, so `403` is the answer either way. Say
-that rather than implying you confirmed it. Two things do confirm it, and
-naming them is what keeps this from being a step everyone assumes:
-
-- `scripts/setup-project.sh` reads the value back after setting it and prints
-  `can_approve_pull_request_reviews: true`. If they took the fast path, that
-  line is the confirmation and there is nothing to ask.
-- Otherwise it surfaces on the first agent run: the run goes green and no pull
-  request appears. That is the failure this step exists to prevent, so if a
-  first run ever ends that way, come back here before debugging anything else.
-
-Take their confirmation and continue, but record in the step 6 report that this
-one was confirmed by a person rather than read.
+**The check.** There is none from here: the setting sits behind the same
+administration permission that stops you writing it, so `403` is the answer
+either way. Say that rather than implying you confirmed it, and record it in
+the report as taken on trust. The fast-path script does read it back. Failing
+that it surfaces on the first agent run, as a green run that opens no pull
+request - so if that ever happens, come back here before debugging anything
+else.
 
 ## 2. Make sure the repository exists and has a commit
 
@@ -369,25 +343,20 @@ First, plainly: what was created, whether it went to the default branch or to a
 pull request, what already existed, and anything that failed - with the exact
 call that failed.
 
-Then **what you actually verified, separated from what you were told**. Each
-step above names a check; this is where their results go, and the separation is
-the point. A report that lists eight finished steps, three of which are
-finished only because somebody said so, is how a repository arrives at its
-first agent run with the Actions permission still off. Two short lists beat a
-paragraph:
+Then **what you verified, separated from what you were told**. A report listing
+eight finished steps, three of them finished only because somebody said so, is
+how a repository reaches its first agent run with the Actions permission still
+off. Two lines:
 
-> Read back and confirmed: the files on `<branch>`, the labels (sampled
-> `agent:queued`, `role:engineer`), the bootstrap run and its check names.
+> Confirmed: the files on `<branch>`, the labels, the bootstrap run and its
+> check names.
 >
-> Taken on your word, because this session cannot read them: the Actions
-> permission, branch protection. Both are repository-administration settings,
-> and the same permission that stops me setting them stops me reading them.
-> The first agent pull request confirms both at once - it appears at all only
-> if the permission is on, and its merge box lists the required checks.
+> Taken on your word, because I cannot read them: the Actions permission and
+> branch protection. The first agent pull request confirms both - it appears
+> at all only if the permission is on, and its merge box lists the required
+> checks.
 
-If the fast-path script ran, move what it verified into the first list and say
-so - it reads its own settings back, which is exactly the evidence this session
-cannot gather.
+If the fast-path script ran, move what it read back into the first line.
 
 Then everything still waiting on the human, in the order it has to happen, each
 one as the URL that does it. Substitute `$1` and the default branch name. A
@@ -407,12 +376,6 @@ where the item that actually blocks them usually is.
 >    orchestrator cannot queue its own children at all.
 > 3. **Branch protection** - `github.com/$1/settings/branches`
 >    Requiring the check names quoted in step 5, not guessed ones.
-
-All three are one paste if they would rather not click through:
-`bash scripts/setup-project.sh $1 --stage post` in a Codespace on the factory
-does the secrets and the protection rule, and says whether the App is
-installed. Offer it once, here, and do not insist - somebody who has already
-done four of these by hand may prefer the fifth the same way.
 
 Say why the ones that are blocked are blocked, rather than leaving them looking
 like things you forgot: the secrets because secrets are per repository and
