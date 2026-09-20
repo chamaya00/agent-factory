@@ -686,6 +686,60 @@ def check_privilege_cannot_arrive_undeclared() -> None:
     )
 
 
+def check_the_guard_reruns_when_the_body_changes() -> None:
+    """A check that reads a pull request body has to re-run when it changes.
+
+    project-guard refuses a widening diff whose body carries no line starting
+    `Privilege change:`. The body is the thing under test, and a body is edited
+    far more often than it is pushed to - so a caller listening only for the
+    default pull_request types (opened, synchronize, reopened) can reject a
+    missing declaration and then have no way to observe one being added. The
+    author's exits are a manual re-run or an empty commit, and the house rules
+    forbid the second by name.
+
+    Found by writing the declaration inside backticks, where it no longer
+    starts a line. The check was right, the fix was one character, and applying
+    it needed a click nothing in the repository told anybody to make.
+    """
+    template = TEMPLATES / "project" / ".github" / "workflows" / "guard.yml"
+    if not template.exists():
+        return
+    data = yaml.safe_load(template.read_text())
+    triggers = (data or {}).get("on", (data or {}).get(True)) or {}
+    if "pull_request" not in triggers:
+        errors.append(
+            f"{template.relative_to(ROOT)}: no pull_request trigger, so "
+            "nothing guards a pull request at all."
+        )
+        return
+    types = (triggers.get("pull_request") or {}).get("types")
+    if not types:
+        errors.append(
+            f"{template.relative_to(ROOT)}: the pull_request trigger names no "
+            "`types`, so it takes the default set, which has no `edited` - "
+            "correcting a body this guard rejected cannot re-run the guard "
+            "that reads it."
+        )
+        return
+    if "edited" not in types:
+        errors.append(
+            f"{template.relative_to(ROOT)}: the pull_request trigger does not "
+            "list `edited`, so correcting a body this guard rejected cannot "
+            "re-run the guard that reads it."
+        )
+    # Only once `types` is named, because naming it replaces the default set
+    # rather than extending it: the three that were free by default now have
+    # to be written out, and dropping one would not fail anything visibly - it
+    # would just quietly stop guarding those pull requests.
+    for required in ("opened", "synchronize", "reopened"):
+        if required not in types:
+            errors.append(
+                f"{template.relative_to(ROOT)}: `types` is named, which "
+                f"replaces the default set, and `{required}` is not in it - "
+                "those pull requests would go unguarded."
+            )
+
+
 def check_the_sweep_looks_past_the_queue() -> None:
     """Whether the default branch shipped is asked before the queue is read.
 
@@ -745,6 +799,7 @@ def main() -> int:
     check_something_notices_the_silence()
     check_a_delivered_run_is_a_review()
     check_privilege_cannot_arrive_undeclared()
+    check_the_guard_reruns_when_the_body_changes()
     check_the_sweep_looks_past_the_queue()
     if errors:
         print(f"guard: {len(errors)} problem(s)\n")
