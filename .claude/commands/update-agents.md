@@ -118,9 +118,11 @@ What goes in the commit:
 
 Leave alone, always:
 
-- Everything under `.claude/memory/`. Those are this repository's lessons, and
+- Everything under `docs/memory/`. Those are this repository's lessons, and
   they are the reason the roles are copied in rather than shared live. Nothing
-  in an update reads them, writes them, or carries them anywhere.
+  in an update reads them, writes them, or carries them anywhere. The one
+  exception is the move described below, which changes where they sit and never
+  a word inside them.
 - `.claude/settings.json`, apart from the one `SessionStart` entry named in
   step 3c. Permissions, env, and the project's own hooks are the project's.
 - The part of `CLAUDE.md` outside the managed block. That half describes this
@@ -194,15 +196,28 @@ Actions tab, run `bootstrap`, and it creates whatever is absent. It is
 idempotent, so running it is never the wrong call. Do not try to create labels
 from here - this command writes files, and the vocabulary has one source.
 
-**`scripts/design-render` is the factory's interface and the project's body.**
-If the repository does not have it, copy it in from this release's
-`templates/project/scripts/` and make it executable: the design role is told to
-call it by name, and a project without it has a role reaching for a command
-that is not there. If it is already present, **leave it alone** - a project that
-has replaced the default has replaced it on purpose, because what renders a
-mock is a choice with a dependency and sometimes a credential behind it, and
-that choice is recorded there rather than here. Say in the body which of the two
-happened. The interface is the factory's to change and the body never is, so an
+**Memory moved out of `.claude/`.** A repository provisioned before it did has
+its lessons at `.claude/memory/<role>.md`, and the roles in this release read
+`docs/memory/<role>.md`. So move the files in this pull request, content
+unchanged, one `git mv` per file, and delete the empty directory. Leaving them
+behind is the failure this is for: every role reads an empty path, the lessons
+are still on disk, and nothing anywhere says they stopped being read. If both
+paths already hold a file for the same role, stop and say so rather than
+picking - two sets of lessons is a question for the person, not a merge for
+this command. The reason for the move is in the memory-protocol skill: a file
+under `.claude/` cannot be written by a run at all, so the protocol that asks a
+run to propose a lesson was asking for something impossible.
+
+**The entry points under `scripts/` are the factory's interface and the
+project's body.** `design-render`, `app-render`, and `contrast`. If the
+repository does not have one, copy it in from this release's
+`templates/project/scripts/` and make it executable: the roles are told to call
+these by name, and a project without one has a role reaching for a command
+that is not there. If one is already present, **leave it alone** - a project that
+has replaced a default has replaced it on purpose, because what renders a mock
+or builds and serves the app is a choice with a dependency and sometimes a
+credential behind it, and that choice is recorded there rather than here. Say in
+the body which of the two happened, per script. The interface is the factory's to change and the body never is, so an
 existing file is only ever overwritten when this release changes the arguments
 themselves, and then the change is named in the body as a breaking one.
 

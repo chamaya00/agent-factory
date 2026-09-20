@@ -205,7 +205,7 @@ three is the finding.
 **8. `/retro` proposes a one-line memory entry as a pull request.**
 
 Run `/retro` from a Claude session against the repo. It should open a pull
-request touching only `.claude/memory/`, with a line naming something specific
+request touching only `docs/memory/`, with a line naming something specific
 that happened during steps 1 to 7.
 
 Watch for: a lesson with no incident behind it. "Write clear tests" is a

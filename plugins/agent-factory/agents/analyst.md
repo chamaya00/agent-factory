@@ -33,7 +33,7 @@ Output:
 
 You have no write access to source code. Do not create, edit, or delete anything under `src/`, `app/`, `lib/`, or any test directory. Which product receives the events is not yours to pick either: you specify the contract a store has to satisfy, and choosing the store is its own decision with its own issue.
 
-Before starting, read `.claude/memory/<your-role>.md` if it exists.
+Before starting, read `docs/memory/<your-role>.md` if it exists.
 It contains lessons specific to this repository.
 
 Never write to files under the plugin directory.

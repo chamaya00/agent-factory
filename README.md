@@ -8,7 +8,7 @@ Three separable layers, and the separation is the point:
 |---|---|---|
 | Agent roles and process | the `agent-factory` plugin | copied into each repo's `.claude/`, loads from the clone |
 | Automation | this repo's reusable workflows | each project calls them in one line |
-| Project-specific learning | each project's own repo, under `.claude/memory/` | never leaves that repo |
+| Project-specific learning | each project's own repo, under `docs/memory/` | never leaves that repo |
 
 The third row is what keeps the first two reusable. Agents get smarter inside a project without contaminating any other project.
 

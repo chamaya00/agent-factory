@@ -1,6 +1,6 @@
 ---
 name: memory-protocol
-description: How repository-specific lessons are stored, proposed, capped, and retired in .claude/memory/<role>.md. Use when writing a retro, proposing a lesson learned, reading prior lessons at the start of a run, or deciding whether a lesson still earns its place.
+description: How repository-specific lessons are stored, proposed, capped, and retired in docs/memory/<role>.md. Use when writing a retro, proposing a lesson learned, reading prior lessons at the start of a run, or deciding whether a lesson still earns its place.
 ---
 
 # Memory protocol
@@ -9,13 +9,21 @@ Learning belongs to the repository that produced it. A lesson about one project'
 
 ## Where memory lives
 
-Repository learning lives at `.claude/memory/<role>.md`, one file per role: `orchestrator.md`, `researcher.md`, `analyst.md`, `designer.md`, `engineer.md`.
+Repository learning lives at `docs/memory/<role>.md`, one file per role: `orchestrator.md`, `researcher.md`, `analyst.md`, `designer.md`, `engineer.md`.
 
 Every agent reads its own file at the start of a run. An agent does not read another role's file.
 
-`CLAUDE.md` is the other half of memory, and it covers exactly two cases. A lesson every role needs goes there rather than into four files, because four copies of one rule is four places to update it and three chances to miss one. And a repository with no `.claude/memory/` directory is one where no agent ever runs - the factory itself is that case - so the Lessons section of its `CLAUDE.md` is the whole of its memory, under every rule below.
+`CLAUDE.md` is the other half of memory, and it covers exactly two cases. A lesson every role needs goes there rather than into four files, because four copies of one rule is four places to update it and three chances to miss one. And a repository with no `docs/memory/` directory is one where no agent ever runs - the factory itself is that case - so the Lessons section of its `CLAUDE.md` is the whole of its memory, under every rule below.
 
 Nothing else is memory. Not the README, not a comment thread, not an agent definition.
+
+## Why not under `.claude/`
+
+These files used to live at `.claude/memory/<role>.md`, and for two roles that made the protocol below impossible to follow. A file under `.claude/` is classified as sensitive by the tool that runs an agent, and that classification is consulted before any permission rule, so the refusal cannot be lifted by granting anything: an interactive session is asked to approve the edit, and a run inside a workflow has nobody to ask.
+
+Two runs on one objective were refused the edit this protocol asks them for. Both reported the refusal in their pull requests rather than working around it, which is what their role files ask for, and both spent an attempt on it. The lessons they were trying to record exist only in that prose, where no later run will read them, so the next repository rediscovers them at the same price.
+
+So the location is part of the protocol rather than an arrangement of files: memory sits beside the other things a role writes and a person reads - the design documents, the decision records, the research - and a role can actually write it. Do not move it back under `.claude/` without a run proving the refusal is gone, because the roles, the retro, and the cap all read the path from here.
 
 ## What agents may not do
 

@@ -27,7 +27,7 @@ Output:
 
 You have no write access to source code. Do not create, edit, or delete anything under `src/`, `app/`, `lib/`, or any test directory. If the research needs a spike to answer, say so and let an engineer do it behind its own issue.
 
-Before starting, read `.claude/memory/<your-role>.md` if it exists.
+Before starting, read `docs/memory/<your-role>.md` if it exists.
 It contains lessons specific to this repository.
 
 Never write to files under the plugin directory.

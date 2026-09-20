@@ -19,7 +19,14 @@ MARKETPLACE = ROOT / ".claude-plugin" / "marketplace.json"
 
 # The clause every role definition has to end with, verbatim. Agents that do not
 # carry it can read the wrong memory file or write where they must not.
-REQUIRED_CLAUSE = """Before starting, read `.claude/memory/<your-role>.md` if it exists.
+#
+# The path is `docs/memory/` and not `.claude/memory/` for a reason a run found
+# the hard way: a file under `.claude/` is classified sensitive upstream, and
+# that classification is consulted before any permission setting, so no
+# allowlist this repository writes can lift it. Two runs were refused the edit
+# the memory protocol asks them for, said so honestly in their pull requests,
+# and spent an attempt each. See the memory-protocol skill for the whole of it.
+REQUIRED_CLAUSE = """Before starting, read `docs/memory/<your-role>.md` if it exists.
 It contains lessons specific to this repository.
 
 Never write to files under the plugin directory.
@@ -57,6 +64,19 @@ MAX_AGENT_BODY_LINES = 45
 # must not be added to it, and neither may anything else a role is granted and
 # then told not to use. The test for a new entry is whether "granted, but
 # forbidden to use it" would be an incoherent arrangement for that capability.
+#
+# `runtime` is the second half of the same story, and it is the half that used
+# to be missing. Frontmatter is not what gates a command inside a workflow run:
+# `.github/workflows/agent-run.yml` builds a separate per-role allowlist, and
+# that is what the action enforces. The two lists were maintained independently
+# and nothing compared them, so a role could be told to do something, hold the
+# frontmatter tool for it, and be refused at run time with every check green -
+# which is the exact failure the instruction check exists to prevent, one layer
+# down. Each entry therefore also names the allowlist entries that satisfy it in
+# a run. They are matched verbatim, as strings: this check never reimplements
+# the action's own prefix matcher, because a second implementation of a matcher
+# is a second thing to be wrong, and the table is small enough to name entries
+# exactly.
 CAPABILITIES = [
     {
         "name": "open a pull request",
@@ -68,6 +88,7 @@ CAPABILITIES = [
         # description of what went wrong, not an instruction to open one.
         "instruction": r"(?:\bopen(?:ing)?\s+(?:a|an|its\s+own|their\s+own|the|one)"
                        r"(?:\s+\w+){0,2}\s+pull\s+request|\bgh\s+pr\s+create\b)",
+        "runtime": {"Bash(gh pr create:*)"},
     },
     {
         "name": "file an issue",
@@ -82,6 +103,7 @@ CAPABILITIES = [
                  r"creating|write|writes|writing|label|labels|labelling|labeling)",
         "instruction": r"\b(?:file|open|create)\s+(?:a|an|the|each|its\s+own)"
                        r"(?:\s+\w+){0,2}\s+issues?\b",
+        "runtime": {"Bash(gh issue create:*)"},
     },
     {
         "name": "search the web",
@@ -90,6 +112,9 @@ CAPABILITIES = [
         "verbs": r"(?:search|searches|searching|query|queries|querying|browse|"
                  r"browses|browsing|look|looks|looking)",
         "instruction": r"\bsearch\s+the\s+web\b",
+        # The action lists WebSearch in its own disallowed set, so naming it in
+        # the allowlist is what makes it reachable. Frontmatter alone does not.
+        "runtime": {"WebSearch"},
     },
 ]
 
@@ -319,9 +344,34 @@ def check_named_project_commands() -> None:
     refuse before it is cut rather than after.
     """
     named: dict[str, list[str]] = {}
+    granted = role_tools()
+    runtime = runtime_allowlist()
     for path in sorted((PLUGIN_DIR / "agents").glob("*.md")):
-        for match in re.finditer(r"`\./scripts/([A-Za-z0-9_.-]+)", path.read_text()):
+        role = path.stem
+        text = path.read_text()
+        matches = list(re.finditer(r"`\./scripts/([A-Za-z0-9_.-]+)", text))
+        for match in matches:
             named.setdefault(match.group(1), []).append(path.name)
+        if not matches:
+            continue
+        # Naming the command is half of it. A role that cannot run anything is
+        # told a name it will be refused, which is the same spent attempt the
+        # unnamed version cost - and the two grants live in two different files,
+        # so neither one of them can be read as covering the other.
+        if "Bash" not in granted.get(role, set()):
+            fail(
+                path,
+                f"tells the {role} to run './scripts/...' and its frontmatter "
+                "grants no Bash. Add it, or stop naming the command",
+            )
+        if runtime and RUNTIME_SCRIPTS_GRANT not in runtime.get(role, set()):
+            fail(
+                path,
+                f"tells the {role} to run './scripts/...' and "
+                f".github/workflows/agent-run.yml does not grant "
+                f"{RUNTIME_SCRIPTS_GRANT} in the {role} branch, so a run is "
+                "refused the command this file names",
+            )
 
     template_scripts = PLUGIN_DIR / "templates" / "project" / "scripts"
     for name, roles in sorted(named.items()):
@@ -342,6 +392,34 @@ def check_named_project_commands() -> None:
                 f"which refuses without the execute bit - present, silent, and "
                 f"indistinguishable from having run",
             )
+
+
+def check_template_memory_files() -> None:
+    """The template ships one memory file per role, and none for a role that is gone.
+
+    A graduated lesson rather than a convention. The template shipped four of
+    the five for as long as there have been five roles, so every repository
+    provisioned in that time had an analyst reading a path that was not there -
+    silently, because a missing memory file reads exactly like an empty one, and
+    the role's own clause says "if it exists". The cap in `project-guard.yml`
+    could not catch it either: a file that is absent is inside any cap.
+    """
+    memory = PLUGIN_DIR / "templates" / "project" / "docs" / "memory"
+    if not memory.is_dir():
+        fail(memory, "does not exist; provisioning would leave every role reading nothing")
+        return
+    for role in ROLES:
+        path = memory / f"{role}.md"
+        if not path.is_file():
+            fail(
+                path,
+                f"is missing, so a provisioned repository gives the {role} no "
+                "memory file. An absent file reads as an empty one, which is "
+                "how this went unnoticed through several releases",
+            )
+    for path in sorted(memory.glob("*.md")):
+        if path.stem not in ROLES:
+            fail(path, f"is a memory file for '{path.stem}', which is not a role")
 
 
 def check_portability() -> None:
@@ -513,6 +591,98 @@ def role_tools() -> dict[str, set[str]]:
     return granted
 
 
+ALLOWLIST_STEP = "Resolve the tool allowlist for this role"
+RUNTIME_SCRIPTS_GRANT = "Bash(./scripts/*)"
+
+
+def runtime_allowlist() -> dict[str, set[str]]:
+    """What each role is granted inside a run, read off `agent-run.yml`.
+
+    The workflow builds the allowlist in shell, from a `common` prefix, an
+    `authoring_pr` fragment, and one `case` branch per role. This reads that
+    shell rather than a copy of it, because a copy is the thing that drifts -
+    and it reads it as text rather than through a YAML parser so the guard's
+    first script keeps needing nothing installed.
+
+    A shape it cannot read is a failure and not a skip. This check exists
+    because two lists disagreed silently; a parser that silently returns
+    nothing would be the same bug wearing the check's own clothes.
+    """
+    workflow = ROOT / ".github" / "workflows" / "agent-run.yml"
+    if not workflow.exists():
+        fail(workflow, "does not exist, so no role's runtime grants can be read")
+        return {}
+
+    lines = workflow.read_text().splitlines()
+    try:
+        start = next(i for i, line in enumerate(lines) if ALLOWLIST_STEP in line)
+    except StopIteration:
+        fail(
+            workflow,
+            f"has no step named {ALLOWLIST_STEP!r}. The capability check reads "
+            "that step to learn what each role may run; rename it here and in "
+            "scripts/validate_plugin.py together, or the check goes quiet "
+            "while still reporting",
+        )
+        return {}
+
+    variables: dict[str, str] = {}
+    grants: dict[str, set[str]] = {}
+    role: str | None = None
+    in_case = False
+
+    def expand(value: str) -> str:
+        def one(match: re.Match[str]) -> str:
+            name = match.group(1) or match.group(2)
+            if name not in variables:
+                fail(
+                    workflow,
+                    f"builds the allowlist from ${name}, which this check "
+                    "cannot resolve. Keep the assignment in the same step, or "
+                    "teach scripts/validate_plugin.py the new shape",
+                )
+                return ""
+            return variables[name]
+
+        return re.sub(r"\$\{(\w+)\}|\$(\w+)", one, value)
+
+    for line in lines[start:]:
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        if stripped.startswith("esac"):
+            break
+        if stripped.startswith('case "$ROLE" in'):
+            in_case = True
+            continue
+        if in_case:
+            branch = re.match(r"^([a-z*|]+)\)$", stripped)
+            if branch:
+                role = branch.group(1)
+                # Cleared per branch: every branch opens by assigning `tools`
+                # from `$common`, and a branch that started from `$tools`
+                # instead would otherwise inherit the role above it.
+                variables.pop("tools", None)
+                if role != "*":
+                    grants.setdefault(role, set())
+                continue
+            if stripped.startswith(";;"):
+                role = None
+                continue
+        assignment = re.match(r"""^(\w+)=(['"])(.*)\2$""", stripped)
+        if not assignment:
+            continue
+        name, _, raw = assignment.groups()
+        value = expand(raw)
+        variables[name] = value
+        if name == "tools" and role and role != "*":
+            grants[role] = {entry for entry in value.split(",") if entry}
+
+    if not grants:
+        fail(workflow, "the role allowlist case block read as empty; the check cannot run")
+    return grants
+
+
 def prose_sentences(text: str):
     """Yield the text one flattened sentence at a time."""
     for chunk in SENTENCE_SPLIT.split(COMMENT_PREFIX.sub("", text)):
@@ -661,6 +831,69 @@ def check_roles_can_do_what_they_are_told() -> None:
             )
 
 
+def check_roles_can_run_what_they_are_told() -> None:
+    """The same drift one layer down: frontmatter says yes, the run says no.
+
+    `check_roles_can_do_what_they_are_told` reads the `tools:` line in a role
+    file. That line is what an interactive session honours and not what gates a
+    command inside a workflow run, where `agent-run.yml`'s per-role allowlist
+    is what the action enforces. Both lists are hand-maintained and nothing
+    compared them until this.
+
+    The gap was reachable with the gate green, and nearly shipped: the designer
+    was given `Bash` in frontmatter and four method steps telling it to build a
+    page and open it, while its runtime allowlist held `gh` and `git` and
+    nothing that runs anything. Every check passed. A run would have read those
+    steps, been refused, and - following its role correctly - stopped and
+    reported the refusal, having spent one of the issue's three attempts.
+
+    The cheap version of this check does not work, which is why it is written
+    against the capability table rather than against the two lists: the
+    designer already held scoped `Bash(gh ...)` entries, so "frontmatter says
+    Bash, the allowlist has Bash entries" agreed with itself while granting
+    nothing that could build anything. The lists are not 1:1 by design -
+    frontmatter names tool classes, the allowlist names scoped commands - and
+    the table is where the two are allowed to meet, one capability at a time.
+
+    What this deliberately does not do is read a role's prose for loose
+    instructions like "run the repo's own checks". Matching English against
+    command prefixes is inference, a check that fires on prose it should not is
+    worse than no check, and the cure for one is usually deleting it. The
+    entries here are matched by literal allowlist string, and the loose end of
+    the same problem is handled by naming commands instead: a role told to run
+    `./scripts/<thing>` is checked by `check_named_project_commands`, because a
+    fixed name is a fact rather than a reading.
+    """
+    granted = role_tools()
+    runtime = runtime_allowlist()
+    if not runtime:
+        return
+    for path in sorted((PLUGIN_DIR / "agents").glob("*.md")):
+        role = path.stem
+        if role not in runtime:
+            fail(
+                path,
+                "has no branch in agent-run.yml's role allowlist, so a run of "
+                "it is refused before it starts. Add the branch, or drop the "
+                "role",
+            )
+            continue
+        _, body = split_frontmatter(path.read_text(), path)
+        for capability in CAPABILITIES:
+            if not re.search(capability["instruction"], body, re.I):
+                continue
+            if runtime[role] & capability["runtime"]:
+                continue
+            wanted = " or ".join(sorted(capability["runtime"]))
+            fail(
+                path,
+                f"tells the {role} to {capability['name']}, and "
+                f".github/workflows/agent-run.yml grants it nothing that can at "
+                f"run time: add {wanted} to the {role} branch of the allowlist, "
+                f"or stop asking. Frontmatter is not what gates a run",
+            )
+
+
 def check_gate_inventory() -> None:
     """Every check script is run by the gate and named in both inventories.
 
@@ -743,7 +976,9 @@ def main() -> int:
     check_gate_inventory()
     check_capability_claims()
     check_roles_can_do_what_they_are_told()
+    check_roles_can_run_what_they_are_told()
     check_named_project_commands()
+    check_template_memory_files()
     check_portability()
     check_no_emoji()
     if errors:

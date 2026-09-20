@@ -65,7 +65,7 @@ ships: change the shell and the tests run the change.
 
 ### validate_plugin.py
 
-Eleven groups of structural checks. The ones with a reason behind them rather
+Thirteen groups of structural checks. The ones with a reason behind them rather
 than a convention:
 
 - **Roles carry the containment clause.** Every role file the manifest lists must exist, have
@@ -100,13 +100,33 @@ than a convention:
   catches the assertion, not the insinuation: prose that merely implies the
   limit matches nothing, and separating that from true prose needs judgment.
   `test_capability_claims.py` pins both directions.
+- **Prose agrees with what a run is actually granted.** The second half of the
+  same check, and the half that was missing until a near miss. Frontmatter is
+  not what gates a command inside a workflow run: `agent-run.yml` builds a
+  separate per-role allowlist and the action enforces that one. The designer
+  was given `Bash` in frontmatter and four steps telling it to build a page and
+  open it, while its runtime allowlist held `gh` and `git` and nothing that
+  runs anything - every check passed, and a run would have been refused and
+  spent an attempt reporting it. So the capability table now also names, per
+  capability, the allowlist entries that satisfy it in a run, matched as exact
+  strings rather than by reimplementing the action's prefix matcher. What it
+  deliberately does not do is read loose prose like "run the repo's own checks"
+  against command prefixes: that is inference, and a check that fires on prose
+  it should not is worse than no check. The loose end is handled by naming
+  commands instead - see the entry-point check below.
+- **The template ships one memory file per role.** A missing one reads exactly
+  like an empty one, which is how the analyst went without for several
+  releases.
 - **The gate names itself consistently.** Every `scripts/*.py` must be run by
   `guard.yml` and named in both `CLAUDE.md` and this file. A script nobody runs
   proves nothing, and an inventory that omits one sends a reader looking for a
   check that is there.
-- **A command a role is told to run is a command the template ships.** Where a
-  role file names `./scripts/<thing>`, `templates/project/scripts/<thing>` must
-  exist and be executable. This one is a graduated lesson. The designer held a
+- **A command a role is told to run is a command the template ships, and one
+  the role may run.** Where a role file names `./scripts/<thing>`,
+  `templates/project/scripts/<thing>` must exist and be executable, the role's
+  frontmatter must grant `Bash`, and the role's branch of the runtime allowlist
+  must grant `Bash(./scripts/*)`. Three files have to agree, and until the last
+  two were checked, two of them could disagree quietly. This one is a graduated lesson. The designer held a
   shell grant for rendering mocks through a whole objective and never rendered
   one: the grant was real, the role was told to render, no project shipped
   anything to call, and the role had no name to reach for. Nothing went red,
