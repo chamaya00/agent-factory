@@ -372,3 +372,147 @@ delegated the gate; this is what they kept. A driver relays it and waits, and
 must not answer it on their behalf - a driver holding someone's credentials can
 always produce an answer that sounds like theirs, which is exactly why it may
 not.
+
+## Addendum: the driver is a role, and the brief is a contract (1.30.0)
+
+Everything above designs the driver as a *window*. Re-read the verbs in the
+original skill and they are all transmission: report, surface, relay it and
+wait. The only judgment the driver exercised was the merge gate in
+`house-rules`, and every item on that gate is a fact about process - criteria
+covered by a check that ran, required checks green, an ADR where one is owed,
+the diff scoped to its issue. There was nowhere in the system to say *this
+passes the gate and I am still not taking it*.
+
+That was fine while the driver and the roles were the same kind of reader. It
+stopped being fine once the driver became the most capable reader in the loop
+and the only one that sees across children. A window does not need judgment.
+A person relying on one session for whether the work is any good does.
+
+So two changes, and they are the two ends of one channel.
+
+**The driver owns technical judgment.** The skill now draws the line by
+subject matter rather than seniority: what the product does, who it is for and
+what it is called are the person's; whether what came back will hold is the
+driver's. It runs the merge gate and then reads the same diff a second time
+asking a different question, because a diff can satisfy every process fact and
+still be work nobody should keep - criteria that were satisfied and were the
+wrong criteria, a test that would also pass if the behaviour regressed, a
+number asserted rather than computed, a specification the next role will have
+to guess at. The discipline that keeps this from becoming churn is one rule: a
+rejection names what would change your mind. The failure in the other
+direction is the quiet one - a driver that has never rejected anything is not
+a driver with a good team, it is a gate nobody has tested.
+
+It also gets a reading budget, because reading everything is how a driver
+arrives at the diff with no attention left. Brief and diff always; issue and
+document when those do not add up; the run log rarely, in three named cases,
+and say why.
+
+**The orchestrator owes a brief, not a status.** A supervision run on an
+objective in a downstream repository produced three comments, opened with a
+checklist of the skills it had read, and put the single most important
+sentence it had - that a designer had hand-computed some contrast ratios and
+flagged them as unverified - in the fourth clause of the third paragraph of
+the second comment, below a note about a refused command. Nothing was lost.
+It was de-ranked into invisibility, which from the driver's side is the same
+thing.
+
+The fix is not "be concise", because a brief fails in two ways that look like
+opposites - a finding does not survive it, or nobody finishes reading it - and
+treating those as a length dial is what produces a report that is both long
+and missing things. They happen to different material, so the rule is:
+
+> **Compress the state. Quote the caveats.**
+
+State is which child is doing what. It is repetitive and compresses
+losslessly. A caveat is a sentence where somebody qualified their own work,
+and the hedge is the entire content, so summarising one deletes exactly the
+part worth having - "the designer hand-computed these and flagged it" becomes
+"contrast verified" in a single well-meaning pass, and nothing in that chain
+is false. The new `briefing` skill carries that rule, a six-class ranking with
+a role's caveat about its own deliverable at the top, a fixed `### For the
+driver` section, and a do-not-report list whose first entry is process
+narration.
+
+**And the channel runs both ways.** The orchestrator's supervision section
+read the children's labels and nothing else, so a driver's correction written
+on the parent issue was never read - the one reader allowed to correct a split
+had no way to. It now reads new parent comments on every wake, and the driver
+is told the three moments worth spending pushback on: the decomposition before
+the first child is queued, a child's criteria before it is queued, and a brief
+that sent it looking. All three are cheaper than the diff they prevent.
+
+What this does **not** add is a way to send a rejected diff back for revision.
+That arrived in 1.31.0, below.
+
+
+## Addendum: work that comes back (1.31.0)
+
+1.30.0 gave the driver the authority to refuse a diff and left it with nowhere
+to put the refusal. A child at `agent:review` whose pull request was rejected
+had two exits and both were wrong:
+
+- **`agent:queued`** spends one of three attempts and starts a run holding
+  nothing but the issue it already satisfied once. The review - the one
+  artifact that says exactly what to change - is not in the issue, and nothing
+  tells the run to go and read it.
+- **`agent:blocked`** sends the orchestrator to do a corrective pass, which
+  rewrites the *issue*. The issue was not the problem. The diff was.
+
+The cost landed on the budget, and that is what made it decisive rather than
+merely awkward. Rejecting a diff cost exactly what failing to write one costs,
+so a driver that sent work back twice left a nearly-right issue at
+`needs-decomposition` with nothing left to spend. The rational move was to
+merge something mediocre, which is the opposite of what 1.30.0 was for. An
+authority with a punitive mechanism under it is not an authority.
+
+So `agent:revise`, and the shape of it follows the two budgets that already
+existed. The preflight has always counted runs by marker comment, against
+`max-attempts` for a child and `max-supervisions` for an objective, because
+those two measure different things. A revision round measures a third thing -
+work that was delivered, read, and sent back with a review attached - so it
+gets a third marker and a third budget, and neither of the other two spends it.
+
+**Two rounds, not three**, and the asymmetry with the three-strike rule is
+deliberate. Three attempts means the issue was scoped wrong. A run that cannot
+satisfy a *written review* after two goes is not short of ideas: either the
+review asks for something the issue does not cover, or it is not specific
+enough to act on. Both of those are the reviewer's to fix, so the third round
+goes to a person rather than to the role - and the refusal says so in those
+terms, rather than reciting a three-strike rule that never applied.
+
+**It is a second way into a run, not a new kind of run.** The revise label
+starts a run through the same preflight as the run label, with the same gating,
+the same concurrency, and the same hand-back. What differs is the budget it
+spends and what the prompt tells the run it is doing: read the review on your
+own open pull request first, work the branch that exists, address what was
+asked and nothing else, reply saying what you changed and what you did not.
+Disagreement is allowed and does not stop the work - say so on the pull
+request, then do it their way, unless it would break a house rule, and then
+name the rule and stop.
+
+Two consequences worth stating, because they are the ones that will bite:
+
+- **The review is now the run's entire brief**, which makes its quality
+  load-bearing in a way a comment on a pull request never was. A review naming
+  the file and what about it is a specification. One naming an impression is a
+  revision round spent on nothing, and the budget it spends is the reviewer's
+  doing rather than the role's.
+- **A label the preflight matches on and the repository does not have is a
+  mechanism that fails silently.** The same trap `agent:needs-input` hit one
+  release earlier: a repository provisioned before the label existed drops the
+  work on the floor. `bootstrap` is idempotent, and re-running it from the
+  Actions tab after `/update-agents` is the whole fix.
+
+The watchdog covers both labels now, for the reason it exists at all: every
+fault this system has had presented as a correctly labelled issue with no run
+behind it, and a second way in that nothing watched would have reintroduced
+that on the new label while the old one stayed covered.
+
+What is still not built is any way for the orchestrator to send work back. That
+is deliberate rather than pending. `agent:revise` carries a person's reader's
+judgment about a diff, and the orchestrator does not read diffs - it reads
+labels, criteria, and what a child reported about itself. Giving it the label
+would close the loop the house rules keep open on purpose: the factory
+splitting an objective, building it, judging it, and re-running itself with no
+decision from a person anywhere in the chain.

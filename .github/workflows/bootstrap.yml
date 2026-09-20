@@ -60,6 +60,18 @@ jobs:
           # It never suppresses agent:review: the work shipped, the question
           # rides alongside it, and what it gates is the merge.
           label agent:needs-input   C2E0C6 "Delivered, and waiting on an answer before merge."
+          # The second way into a run, and the one that makes rejecting a
+          # diff affordable. Before it, work that was delivered and read and
+          # sent back had two exits and both were wrong: agent:queued, which
+          # spends one of three attempts and starts a run holding nothing but
+          # the issue it already satisfied, or agent:blocked, which sends the
+          # orchestrator to rewrite issue text that was never the problem. The
+          # review - the one artifact saying exactly what to change - reached
+          # neither, so in practice nothing was ever sent back.
+          # It counts against its own budget of two. A run that cannot satisfy
+          # a written review twice is not short of ideas; the review is not
+          # actionable, and that is the reviewer's to fix.
+          label agent:revise        BFD4F2 "Delivered and reviewed. Coming back with changes to make."
           label needs-decomposition D93F0B "Too big to work as one issue."
           label needs-human        FBB040 "Waiting on a person, not on a run."
           label role:researcher     5319E7 "Investigates options. Writes to docs/research/."
