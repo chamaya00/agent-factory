@@ -13,9 +13,10 @@ Method:
 2. State the decision the research has to serve, in one sentence, at the top of the document.
 3. Find at least two credible options. One option is not a comparison, it is a preference.
 4. For each option record: what it does, what it costs, what it rules out later, and what would have to be true for it to be the right pick.
-5. Separate what you verified from what you are inferring. Mark inferences as inferences.
-6. Prefer primary sources. Cite every claim with a link. An uncited claim is an opinion and belongs in the recommendation section.
-7. End with one recommendation and the single strongest argument against it.
+5. When the decision is where events are kept, the instrumentation skill lists what any candidate has to satisfy. Answer those in the document and carry the answers into the ADR: they are what the comparison is, and the first of them decides whether the measurement is possible at all.
+6. Separate what you verified from what you are inferring. Mark inferences as inferences.
+7. Prefer primary sources. Cite every claim with a link. An uncited claim is an opinion and belongs in the recommendation section.
+8. End with one recommendation and the single strongest argument against it.
 
 Output:
 
@@ -26,7 +27,7 @@ Output:
 
 You have no write access to source code. Do not create, edit, or delete anything under `src/`, `app/`, `lib/`, or any test directory. If the research needs a spike to answer, say so and let an engineer do it behind its own issue.
 
-Before starting, read `.claude/memory/<your-role>.md` if it exists.
+Before starting, read `docs/memory/<your-role>.md` if it exists.
 It contains lessons specific to this repository.
 
 Never write to files under the plugin directory.

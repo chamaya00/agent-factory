@@ -39,7 +39,16 @@ if verb == "view":
     if "--json" in args and "labels" in args:
         print("\\n".join(state["labels"]))
     elif "--json" in args and "comments" in args:
-        print(state["attempts"])
+        # The preflight greps comments for one marker at a time, and which
+        # marker it picked is the whole of the budget decision. A fake that
+        # answers every question with one number cannot tell an attempt from a
+        # revision, so read the marker back out of the --jq expression.
+        jq = args[args.index("--jq") + 1] if "--jq" in args else ""
+        counts = state.get("counts") or {}
+        if counts:
+            print(next((v for m, v in counts.items() if m in jq), 0))
+        else:
+            print(state["attempts"])
     sys.exit(0)
 if verb == "diff":
     print("\\n".join(state.get("changed", [])))
@@ -130,6 +139,8 @@ DEFAULT_INPUTS = {
     "trigger-phrase": "@claude",
     "max-attempts": 3,
     "max-supervisions": 20,
+    "max-revisions": 2,
+    "revise-label": "agent:revise",
     "skip-path-patterns": "docs/**\n*.md\n**/*.md\npackage-lock.json\n**/package-lock.json\npnpm-lock.yaml\n**/pnpm-lock.yaml\nyarn.lock\n**/yarn.lock\nLICENSE\n",
 }
 
@@ -148,8 +159,19 @@ def event(**overrides) -> dict:
     return base
 
 
-def state(labels, attempts=0, changed=None) -> dict:
-    return {"labels": labels, "attempts": attempts, "changed": changed or []}
+def state(labels, attempts=0, changed=None, counts=None) -> dict:
+    """`counts` maps a marker substring to the number of comments carrying it.
+
+    Use it for any case that turns on which budget the preflight picked. Plain
+    `attempts` answers every marker with the same number, which is fine while
+    only one budget is in play and useless once two are.
+    """
+    return {
+        "labels": labels,
+        "attempts": attempts,
+        "changed": changed or [],
+        "counts": counts or {},
+    }
 
 
 CASES = [
@@ -164,6 +186,12 @@ CASES = [
         event(),
         state(["role:engineer", "agent:queued"]),
         ("true", "engineer", 0),
+    ),
+    (
+        "analyst role label runs the analyst",
+        event(),
+        state(["role:analyst", "agent:queued"]),
+        ("true", "analyst", 0),
     ),
     (
         "no role label does not run",
@@ -181,6 +209,47 @@ CASES = [
         "needs-decomposition is a human's call",
         event(),
         state(["role:engineer", "needs-decomposition"]),
+        ("false", "", 0),
+    ),
+    (
+        "the revise label starts a run",
+        event(label="agent:revise"),
+        state(["role:engineer", "agent:revise"]),
+        ("true", "engineer", 0),
+    ),
+    (
+        "a revision spends revisions, not attempts",
+        # Two attempts already spent. Against max-attempts this is the third
+        # and last run; against max-revisions it is the first of two. That it
+        # is the latter is the entire reason the third budget exists.
+        event(label="agent:revise"),
+        state(
+            ["role:engineer", "agent:revise"],
+            counts={"attempt": 2, "revision": 0},
+        ),
+        ("true", "engineer", 0),
+    ),
+    (
+        "a third revision round is refused",
+        event(label="agent:revise"),
+        state(
+            ["role:engineer", "agent:revise"],
+            counts={"attempt": 0, "revision": 2},
+        ),
+        ("false", "", 1),
+    ),
+    (
+        "a blocked issue is not unblocked by relabelling it for revision",
+        event(label="agent:revise"),
+        state(["role:engineer", "agent:revise", "agent:blocked"]),
+        ("false", "", 0),
+    ),
+    (
+        "an objective cannot be revised",
+        # The orchestrator opens no pull request, so there is no diff to send
+        # back. A split is corrected in a comment, which supervision reads.
+        event(label="agent:revise"),
+        state(["objective", "agent:revise"]),
         ("false", "", 0),
     ),
     (
@@ -297,6 +366,24 @@ def main() -> int:
     else:
         print("  ok   refusing a fourth attempt labels agent:blocked and says why")
 
+    # A revision refusal that recites the three-strike rule sends a person off
+    # to decompose an issue whose scope was never in question, and reads as
+    # though the work is out of attempts when it has not spent one.
+    (_, _, _, calls), _ = run_case(
+        "revision cap",
+        event(label="agent:revise"),
+        state(["role:engineer", "agent:revise"], counts={"attempt": 0, "revision": 2}),
+    )
+    said = " ".join(calls)
+    if "revision rounds" not in said or "three attempts on one issue" in said.lower():
+        failures += 1
+        print("  FAIL refusing a revision must name the revision budget, not the three-strike rule")
+    elif "attempt budget is untouched" not in said:
+        failures += 1
+        print("  FAIL a revision refusal must say the attempt budget was not spent")
+    else:
+        print("  ok   refusing a revision names its own budget and spares the attempts")
+
     # A supervision refusal that recites the three-strike rule sends the reader
     # off to rewrite acceptance criteria that were never the problem.
     (_, _, _, calls), _ = run_case("supervision cap", event(), state(["objective", "agent:queued"], attempts=20))
@@ -311,7 +398,7 @@ def main() -> int:
     if failures:
         print(f"preflight: {failures} failing case(s)")
         return 1
-    print(f"preflight: {len(CASES) + 3} cases passed")
+    print(f"preflight: {len(CASES) + 4} cases passed")
     return 0
 
 

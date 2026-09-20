@@ -24,17 +24,14 @@ name: ci
 # the failure mode this exists to stop is a placeholder nobody remembered to
 # replace, passing every pull request on its way to a release.
 #
-# ---------------------------------------------------------------------------
-# Replacing it
-#
-# `check-name` stays `checks` through the swap, and that is deliberate. The job
-# name is the string branch protection matches on, so a gate that renames
-# itself when it grows up forces the protection rule to be re-pointed in the
-# same sitting - and until somebody does, the required check no longer reports
-# and every merge is blocked, including the pull request that would fix it.
-# Keeping one stable name means protection is set once, when the repository is
-# provisioned, and is never touched again. What the gate actually runs is in
-# the run summary, where it can change as often as it likes.
+# Replace it as soon as the stack is chosen. `check-name` stays `checks`
+# through the swap and that is deliberate: the job name is the string branch
+# protection matches on, so a gate that renames itself when it grows up forces
+# the rule to be re-pointed - and until somebody does, the required check no
+# longer reports and every merge is blocked, including the pull request that
+# would fix it. One stable name means protection is set once, at provisioning,
+# and never touched again. What the gate runs is in the run summary, where it
+# can change as often as it likes.
 #
 # So the swap is only ever about what runs. For a Node project, delete
 # `commands` and restore:
@@ -44,22 +41,30 @@ name: ci
 #       node-version: '20'
 #       checks: 'typecheck,lint,test,build'
 #
-# Provisioning onto a repository that already has those four scripts starts on
-# the Node path and skips all of this.
+# Provisioning onto a repository that already has those four scripts skips all
+# of this and starts on the Node path.
 #
-# If the project has no package manager - a static site, a Python or Go or Rust
-# repository, a shell tool - then the commands path is the destination rather
-# than a waypoint. Keep `commands` and replace the scaffolding checks in it
-# with the project's real ones.
+# `scripts/` is listed among the provisioned paths because provisioning puts the
+# role entry points there - `design-render`, `app-render`, `contrast`. It was
+# not, and that is a bug this gate had from the day the first of them shipped:
+# every repository provisioned since carried a file the tripwire read as product
+# code, so the placeholder gate failed on the provisioning pull request itself.
+# The execute bits are checked here for the same reason the gate exists: a role
+# is told these names, and a script without the bit is present, silent, and
+# indistinguishable from one that ran.
 #
-# Where to make the swap: on the engineer pull request that trips the tripwire,
-# not on the default branch. On the Node path the first step is to find a
-# lockfile, and the lockfile is in that pull request rather than on the default
-# branch yet - so making the change on the default branch fails on a repository
-# that is otherwise fine. Pushed onto the pull request branch, the new
-# commands run against the code that needs them and the default branch stays
-# green from the first commit. An agent may not edit this file, so a human
-# makes the change either way.
+# Where that swap is made still matters. What trips the tripwire is the first
+# engineer pull request, and an agent may not edit this file, so a human makes
+# the change. Making it on the default branch fails on the Node path, whose
+# first step is to find a lockfile that is in that pull request rather than on
+# the default branch yet. Push the replacement onto the engineer's pull request
+# branch instead: the commands run against the code that needs them, and the
+# default branch stays green from the first commit.
+#
+# If the project has no package manager - a static site, a shell tool, anything
+# the commands path exists for - then this path is the destination rather than a
+# waypoint. Keep `commands` and replace the scaffolding checks in it with the
+# project's real ones, leaving `check-name` alone.
 # ---------------------------------------------------------------------------
 
 on:
@@ -77,4 +82,6 @@ jobs:
         test -f .claude/agent-factory.json
         test -d .claude/agents && test -d .claude/skills && test -d .claude/commands
         test -d docs/research && test -d docs/design && test -d docs/decisions
-        unexpected="$(git ls-files | grep -Ev '^(README\.md|CLAUDE\.md|\.github/|\.claude/|docs/)' || true)"; if [ -n "$unexpected" ]; then echo "::error::Product code has landed and this placeholder gate does not test it: $unexpected. Replace the commands below with the project's real checks - see the comment at the top of this file. Branch protection does not need re-pointing; the check name does not change."; exit 1; fi
+        test -d docs/memory
+        test -x scripts/design-render && test -x scripts/app-render && test -x scripts/contrast
+        unexpected="$(git ls-files | grep -Ev '^(README\.md|CLAUDE\.md|\.github/|\.claude/|docs/|scripts/)' || true)"; if [ -n "$unexpected" ]; then echo "::error::Product code has landed and this placeholder gate does not test it: $unexpected. Replace the commands below with the project's real checks - see the comment at the top of this file. Branch protection does not need re-pointing; the check name does not change."; exit 1; fi

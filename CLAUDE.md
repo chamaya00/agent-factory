@@ -111,7 +111,7 @@ Do not read all of `docs/`. Read the one that matches what you are doing:
   template's CLAUDE.md
 - `docs/getting-started.md` - the onboarding walkthrough script, before
   changing the trigger phrases above or how a session opens `/new-project`
-- `docs/proving-the-gate.md` - the runbook for proving a red check blocks a merge
+- `docs/proving-the-gate.md` and `docs/smoke-test.md` - the two runbooks
 - `README.md` - the tour, if none of the above is the thing
 
 The workflows under `.github/workflows/` carry their reasoning in comments, at
@@ -120,7 +120,7 @@ is where the last person's mistake is written down.
 
 ## Lessons
 
-Repository-specific lessons live here rather than in `.claude/memory/<role>.md`,
+Repository-specific lessons live here rather than in `docs/memory/<role>.md`,
 because no role runs in this repository and the memory protocol already sends a
 lesson every role needs to `CLAUDE.md`. Same rules as a memory file: one line,
 stated as a rule with the reason attached, proposed in a pull request, and this

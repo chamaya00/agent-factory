@@ -1,4 +1,4 @@
-# Prove the gate before wiring agents
+# Phase 7: prove the gate before wiring agents
 
 ## Why this ordering
 
@@ -10,8 +10,8 @@ does, most of them are a glance at the checks and then at the published page.
 So the gate gets proven by hand, on a repo you can throw away, before
 `agent-run.yml` is enabled anywhere.
 
-Do not skip this because it is boring. Boring is the result you are looking
-for.
+Do not skip to phase 8 because phase 7 is boring. Boring is the result you are
+looking for.
 
 ## 1. Create the throwaway repo
 
@@ -54,7 +54,7 @@ Then confirm by hand:
 - No file under `.github/workflows/` still contains `__FACTORY_VERSION__`. The
   placeholder is substituted at provision time; one that survived means the
   callers address a ref that does not exist.
-- `.claude/agents/` has four role files. The agent job refuses to start
+- `.claude/agents/` has a file for every role. The agent job refuses to start
   without them, which is the correct behaviour and a confusing first failure
   if you were not expecting it.
 
@@ -82,11 +82,8 @@ the whole loop from a phone.
 
 Confirm four things, in this order:
 
-1. **Checks run.** `ci / checks` and `guard / memory cap and protected paths`
-   both appear on the pull request and both go green. Those two names are
-   fixed: `ci`'s job is named `checks` whether it is running the placeholder
-   commands or a project's real ones, so what protection requires never has to
-   change when the gate grows up.
+1. **Checks run.** `ci / typecheck, lint, test, build` and `guard / memory cap
+   and protected paths` both appear on the pull request and both go green.
 2. **Publishing is on and its URL resolves.** Set from `docs/checkpoint.md`
    step 5, serving the default branch from its root. Until something lands at
    that root the URL 404s, which is the expected answer here and not a broken
@@ -124,14 +121,11 @@ One more, because this rule is the one an agent is most likely to trip.
 
 Open a pull request that adds a line to `.github/workflows/ci.yml`. Since you
 are the repository owner, `project-guard` will pass it - that is correct
-behaviour. The check clears on either the pull request's author or the account
-that pushed, so a maintainer repairing a gate on an agent's branch is allowed
-too, and the fix does not have to be moved to the default branch where this
-check does not run at all.
+behaviour, and it is why the check reads the pull request author.
 
-To see it fail you need both to be something other than a maintainer, which in
-practice means an agent pull request. So do not force this one now: note it,
-and confirm it when the engineer opens its first pull request. If an agent ever
+To see it fail you need an author who is not a maintainer, which in practice
+means an agent pull request. So do not force this one now: note it, and confirm
+it in phase 8, when the engineer opens its first pull request. If an agent ever
 does touch a workflow file, this check is what catches it.
 
 ## 6. Only now enable agent-run
@@ -141,9 +135,7 @@ When steps 1 to 4 are boring and repeatable, add `CLAUDE_CODE_OAUTH_TOKEN` to
 the repo from `/new-project`, and it does nothing until an issue carries the
 right labels.
 
-Then point a real objective at it. The loop has run end to end on real
-projects, so there is no separate rehearsal to do first - the first objective
-is ordinary work.
+Then go to phase 8.
 
 ## What to report back
 

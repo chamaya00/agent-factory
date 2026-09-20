@@ -13,6 +13,20 @@ Every child issue has acceptance criteria before anyone opens an editor. No crit
 
 Every issue names one role. Work that needs two roles is two issues.
 
+## Asking a question you cannot answer yourself
+
+Some decisions are not yours at any level of effort: which of two credible directions a product takes, a trade-off with no right answer, a name that will outlive the issue, anything the issue simply did not settle. Guessing at one of these is the most expensive thing a run can do, because a guess arrives looking exactly like a decision and nobody downstream knows to question it.
+
+Say so, and say it where it will still be there tomorrow:
+
+1. Comment on your issue with the question. One question, not a list of five - if you have five, the issue was scoped wrong and that is itself the finding. Enough context to answer without opening anything else, in the owner's language rather than the diff's. Give your recommendation and say what you will do if nobody answers, because a question with no default attached stalls the work while one with a default only improves it.
+2. Put `<!-- agent-factory:needs-input -->` in that comment. The run's handback reads the marker and labels the issue `agent:needs-input`, which is how the question outlives every later rewrite of every status comment. You do not apply the label yourself and you do not need permission to; writing the marker is the whole of your part.
+3. Then **finish the work anyway**, under the answer you recommended, and say in the pull request which way you went and what changes if the answer is the other one.
+
+That last step is the one that makes this worth having. `agent:needs-input` is not a way to stop: it rides alongside `agent:review`, costs no attempt, and blocks nothing except the merge. A run that asks and delivers gives a person a real thing to respond to, which is a far better question than the same words with nothing attached.
+
+Do not use it for something you could have found out. A question whose answer is in the repository, in the issue, or one command away is not a decision only the owner can make, and asking it spends their attention on work that was yours.
+
 ## Before merge
 
 Tests before merge. Every acceptance criterion has a test that would fail if the criterion were violated. A criterion covered only by a manual check is not covered.
@@ -62,6 +76,7 @@ Before merging on someone's behalf, all of these hold. Any one failing is a reas
 - **An ADR is present** if the diff changes a category: a schema or data shape, a first dependency from a new ecosystem, a new service. A version bump inside something already chosen needs its reasoning in the body, not an ADR.
 - **Anything the research or design named as a consequence** is handled or explicitly deferred in writing.
 - **Nothing in the diff needs a decision only the owner can make.** Product behaviour, naming that will outlive the issue, a trade-off with no obviously right answer: those get asked, not merged.
+- **No issue in front of this pull request carries `agent:needs-input`.** That label means a role asked a question and shipped its recommendation rather than stalling on it, so the work is genuinely ready and the decision genuinely is not. A standing `green` policy does not cover it: the person delegated the *gate*, and this is the one thing they kept. Answer it and clear the label, or say on the pull request that it is still open. Merging past it converts a question into a decision nobody made, silently, which is the exact failure the label was added to stop.
 
 Say which of these you checked. "Merged, green" is not a review; it is a status.
 
@@ -92,6 +107,44 @@ What counts is a change of category, not a change of number: a schema or data sh
 
 This line used to read "any change to a dependency", and the effect was not more ADRs. Routine upgrades were shipped with their reasoning in the commit message and the rule was quietly not followed, which costs more than a narrower rule does: a requirement honoured in the breach teaches that the list is aspirational, and the next thing skipped is one that mattered. Ask which this is - would somebody reversing this need to know why, or only that it happened?
 
+## Work that comes back
+
+A pull request can be refused by the person who reads it, and that is a normal
+outcome rather than a failure. The issue is labelled `agent:revise`, which
+starts a run the way `agent:queued` does and differs in what the run is holding:
+a review, on a pull request that already exists, saying what to change.
+
+For the role that receives one:
+
+1. **Read the review first, and the comments since the pull request opened.**
+   That is the whole of what changed. The issue has not moved, and re-deriving
+   the work from it is how a revision turns into a second first attempt.
+2. **Work the branch and the pull request that already exist.** A second pull
+   request for one issue loses the thread the review is on, and the reviewer
+   has to find the new one to see whether they were answered.
+3. **Address what was asked and nothing else.** A revision that widens the diff
+   is a new issue wearing an old one, and it arrives unreviewed because the
+   reviewer is reading for what they asked about.
+4. **Reply on the review**, saying what you changed and what you did not and
+   why. A revision that lands silently makes the reviewer diff it themselves,
+   which is the work they delegated by writing the review.
+5. **Disagreeing is allowed and does not stop you.** Say so on the pull request
+   with your reasoning, then do it their way - unless doing it would break one
+   of these rules, and then name which one and stop. That is the one case where
+   a reviewer does not get the last word, and it is narrow on purpose.
+
+Two rounds, counted separately from attempts, and neither budget spends the
+other. The separation is the point: counted as attempts, rejecting a diff cost
+exactly what failing to write one costs, so a reviewer who sent work back twice
+left a nearly-right issue at `needs-decomposition` with nothing left. Nobody
+does that twice, which is how "reject it" became advice with no mechanism under
+it.
+
+A third round is refused and goes to a person, and it means something specific.
+A run that cannot satisfy a written review after two goes is not short of
+ideas: the review is asking for something the issue does not cover, or it is
+not specific enough to act on. Both are the reviewer's to fix.
+
 ## The three-strike rule
 
 Three attempts on one issue means the issue was scoped wrong. It does not mean try harder. Stop, comment what was tried and how each attempt failed, label the issue `needs-decomposition`, and wait for a human.
@@ -99,6 +152,8 @@ Three attempts on one issue means the issue was scoped wrong. It does not mean t
 The budget counts runs, not outcomes. A run that starts and then refuses - because a dependency is not merged, or because a command it needs is refused - has spent an attempt as surely as one that wrote the wrong code. It says "attempts" rather than "failures" for that reason, and the reason is not pedantry: an issue queued before its dependencies were merged arrives at the human with a third of its budget already gone and nothing to show for it. Check that the issues an issue depends on are merged, not merely labelled done, before applying the run label.
 
 The same applies to a check that fails three times for three different reasons: the problem is the scope, not the fix.
+
+Revision rounds are not attempts and do not count here. An attempt is a run at work that has not been delivered; a revision starts from delivered work that somebody read, and the scope is the one thing it is not evidence against. They have their own budget, above.
 
 ## What agents never touch
 

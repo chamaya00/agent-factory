@@ -50,8 +50,14 @@ is worth looking for specifically. That is the failure mode that ships: every
 criterion satisfied and the hole still there, because the criteria were written
 before the consequence was known.
 
-Then read the same diff again against **What a revert does not undo**, which is
-a different question and needs a second pass. The gate asks whether the work is
+Then read the same diff again against **The merge gate is necessary and not
+sufficient** in the `driving-an-objective` skill: satisfied criteria that were
+the wrong criteria, a test that would also pass if the behaviour regressed, a
+number asserted rather than computed, a specification the next role will have
+to guess at. That pass is yours and nothing else in this system runs it.
+
+Then read it a third time against **What a revert does not undo**, which is
+a different question again. The gate asks whether the work is
 done; that list asks whether it is safe to be wrong about. A credential, a
 widened permission, a new outbound address, a deletion, a first dependency, or
 a change the pull request never mentions: any one of them is a question for the

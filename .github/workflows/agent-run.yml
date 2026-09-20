@@ -83,10 +83,50 @@ on:
           raising the number.
         type: number
         default: 20
+      max-revisions:
+        description: >-
+          Revision rounds allowed on one issue before the run is refused.
+
+          A third budget, counted with a third marker, for the same reason
+          there are already two: it measures something different again. An
+          attempt is a run at work that has not been delivered yet, and three
+          of them means the issue was scoped wrong. A revision round starts
+          from delivered work that somebody read and sent back with a review
+          attached - the scope was right, the diff was not, and the run is
+          being handed the most useful input this system ever produces.
+
+          Counting that against max-attempts made rejecting a diff cost the
+          same as failing to write one, which is why nothing was ever sent
+          back: a driver that rejected twice left the issue at
+          needs-decomposition with a third of its budget spent on work that
+          was nearly right. The two counts are now separate and neither
+          spends the other.
+
+          Two, not three, because the failure mode here is different. A run
+          that cannot satisfy a specific written review after two goes is not
+          running out of ideas - the review is not actionable, or it is asking
+          for work the issue does not cover. Both of those are the reviewer's
+          to fix, so the third round goes to a person rather than to the role.
+        type: number
+        default: 2
       run-label:
         description: Label on an issue that means "run the agent now".
         type: string
         default: 'agent:queued'
+      revise-label:
+        description: >-
+          Label on an issue that means "this was delivered, somebody read it,
+          and it is coming back with a review on it".
+
+          A second way in, deliberately. Before it, a rejected pull request
+          had two exits and both were wrong: re-queue under the run label,
+          which spends an attempt and starts a run that is handed nothing but
+          the issue it already satisfied once, or agent:blocked, which sends
+          the orchestrator to rewrite an issue whose text was never the
+          problem. The review itself - the one artifact that says exactly what
+          to change - reached neither.
+        type: string
+        default: 'agent:revise'
       trigger-phrase:
         description: Phrase in a comment that starts a run.
         type: string
@@ -175,6 +215,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
           GH_REPO: ${{ github.repository }}
           RUN_LABEL: ${{ inputs.run-label }}
+          REVISE_LABEL: ${{ inputs.revise-label }}
           MARKER: '<!-- agent-factory:stalled -->'
         run: |
           # Best effort, like every other hand-back path here: a watchdog that
@@ -239,8 +280,15 @@ jobs:
             fi
           fi
 
+          # Both run labels, because this job exists for exactly one fault -
+          # a correctly labelled issue with no run behind it - and a second way
+          # in that this did not watch would reintroduce it on the new label
+          # while the old one stayed covered.
           issues="$(gh issue list --label "$RUN_LABEL" --state open \
             --json number --jq '.[].number' 2>/dev/null || true)"
+          revising="$(gh issue list --label "$REVISE_LABEL" --state open \
+            --json number --jq '.[].number' 2>/dev/null || true)"
+          issues="$(printf '%s\n%s' "$issues" "$revising" | sort -u | sed '/^$/d')"
           if [ -z "$issues" ]; then
             echo "Nothing is queued."
           fi
@@ -276,10 +324,13 @@ jobs:
               *"agent-factory:stalled"*) echo "#$n already reported."; continue ;;
             esac
 
+            carried="$RUN_LABEL"
+            echo "$labels" | grep -qx "$REVISE_LABEL" && carried="$REVISE_LABEL"
+
             echo "Reporting #$n as queued but idle."
             gh issue comment "$n" --body "$(printf '%s %s\n\n%s\n\n%s' \
               "$MARKER" "**Queued, but nothing is running it.**" \
-              "This issue carries \`$RUN_LABEL\` and has no \`agent:running\`, so a run should have started and did not. Every fault this system has had looks exactly like this - a correctly labelled issue with nothing behind it - and the state is usually recoverable the moment somebody looks." \
+              "This issue carries \`$carried\` and has no \`agent:running\`, so a run should have started and did not. Every fault this system has had looks exactly like this - a correctly labelled issue with nothing behind it - and the state is usually recoverable the moment somebody looks." \
               "Nothing has been re-queued automatically: that would be a second way to spend the subscription. Remove and re-add the label to start a run, or read the recent workflow runs if this repeats.")" || true
           done
 
@@ -392,6 +443,8 @@ jobs:
       attempt: ${{ steps.decide.outputs.attempt }}
       budget: ${{ steps.decide.outputs.budget }}
       marker: ${{ steps.decide.outputs.marker }}
+      revision: ${{ steps.decide.outputs.revision }}
+      clear-label: ${{ steps.decide.outputs['clear-label'] }}
     steps:
       - name: Resolve role, gate, and attempt count
         id: decide
@@ -403,14 +456,17 @@ jobs:
           NUMBER: ${{ github.event.issue.number || github.event.pull_request.number || inputs.issue-number }}
           KIND: ${{ (github.event.issue.pull_request != null || github.event.pull_request != null) && 'pr' || 'issue' }}
           RUN_LABEL: ${{ inputs.run-label }}
+          REVISE_LABEL: ${{ inputs.revise-label }}
           TRIGGER_PHRASE: ${{ inputs.trigger-phrase }}
           MAX_ATTEMPTS: ${{ inputs.max-attempts }}
           MAX_SUPERVISIONS: ${{ inputs.max-supervisions }}
+          MAX_REVISIONS: ${{ inputs.max-revisions }}
           COMMENT_BODY: ${{ github.event.comment.body }}
           LABEL_NAME: ${{ github.event.label.name }}
           SKIP_PATTERNS: ${{ inputs.skip-path-patterns }}
           MARKER: '<!-- agent-factory:attempt -->'
           SUPERVISION_MARKER: '<!-- agent-factory:supervision -->'
+          REVISION_MARKER: '<!-- agent-factory:revision -->'
         run: |
           set -euo pipefail
 
@@ -434,9 +490,13 @@ jobs:
               ;;
           esac
 
-          # A label event only counts when it is the run label.
-          if [ "$EVENT_NAME" = "issues" ] && [ "$EVENT_ACTION" = "labeled" ] && [ "$LABEL_NAME" != "$RUN_LABEL" ]; then
-            skip "Label '$LABEL_NAME' is not the run label."
+          # A label event only counts when it is one of the two run labels.
+          # The revise label starts a run the same way the run label does; what
+          # differs is which budget it spends and what the run is told it is
+          # doing.
+          if [ "$EVENT_NAME" = "issues" ] && [ "$EVENT_ACTION" = "labeled" ] \
+            && [ "$LABEL_NAME" != "$RUN_LABEL" ] && [ "$LABEL_NAME" != "$REVISE_LABEL" ]; then
+            skip "Label '$LABEL_NAME' is not a run label."
           fi
 
           labels="$(view --json labels --jq '.labels[].name' || true)"
@@ -457,7 +517,7 @@ jobs:
           if has_label 'objective'; then
             role="orchestrator"
           fi
-          for candidate in researcher designer engineer; do
+          for candidate in researcher analyst designer engineer; do
             if has_label "role:$candidate"; then
               if [ -n "$role" ]; then
                 edit --add-label 'agent:blocked' || true
@@ -509,9 +569,29 @@ jobs:
           # Counted against three, every objective with more than two children
           # would be refused halfway through the work it was still doing
           # correctly.
+          # A third budget joined these for the same reason the second did.
+          # A revision round starts from work that was delivered and read, and
+          # carries a review saying what to change. Counted as an attempt, a
+          # rejected diff cost exactly what a failed run costs, so nothing was
+          # ever sent back - which made "reject it" advice with no mechanism
+          # under it. Two rounds, because a run that cannot satisfy a written
+          # review twice is not short of ideas: the review is not actionable,
+          # and that is the reviewer's to fix rather than the role's.
+          revision=0
+          if has_label "$REVISE_LABEL"; then
+            revision=1
+          fi
+
           if [ "$role" = "orchestrator" ]; then
+            if [ "$revision" -eq 1 ]; then
+              edit --remove-label "$REVISE_LABEL" || true
+              skip "An objective carries $REVISE_LABEL, and the orchestrator opens no pull request - there is no diff here to revise. A split or a child's criteria is corrected by saying so in a comment on this objective, which supervision reads on every wake."
+            fi
             marker="$SUPERVISION_MARKER"
             budget="$MAX_SUPERVISIONS"
+          elif [ "$revision" -eq 1 ]; then
+            marker="$REVISION_MARKER"
+            budget="$MAX_REVISIONS"
           else
             marker="$MARKER"
             budget="$MAX_ATTEMPTS"
@@ -519,7 +599,9 @@ jobs:
 
           attempts="$(view --json comments --jq "[.comments[] | select(.body | contains(\"$marker\"))] | length" || echo 0)"
           if [ "$attempts" -ge "$budget" ]; then
-            if [ "$role" = "orchestrator" ]; then
+            if [ "$revision" -eq 1 ]; then
+              reason="This issue has already had $attempts revision rounds. A run that cannot satisfy a written review after two goes is not out of ideas - either the review is asking for something the issue does not cover, or it is not specific enough to act on. Both are the reviewer's to fix, so this one goes to a person. Labelled \`agent:blocked\`. The attempt budget is untouched: this spent revisions, not attempts."
+            elif [ "$role" = "orchestrator" ]; then
               reason="This objective has already had $attempts orchestrator runs, which is the supervision budget. That is a stop on a loop, not the three-strike rule: something is waking the orchestrator more often than the work justifies. Read this issue's history before raising \`max-supervisions\` - a child that keeps flipping between queued and blocked is the usual cause, and raising the number spends more of the subscription on it."
             else
               reason="Three attempts on one issue means the issue was scoped wrong, not that it needs a fourth. The count is of runs, not failures. Labelled \`agent:blocked\`. Decompose it or rewrite the acceptance criteria, then clear the label."
@@ -533,7 +615,13 @@ jobs:
             exit 1
           fi
 
-          echo "Running $role on #$NUMBER (attempt $((attempts + 1)))."
+          if [ "$revision" -eq 1 ]; then
+            clear="$REVISE_LABEL"
+          else
+            clear="$RUN_LABEL"
+          fi
+
+          echo "Running $role on #$NUMBER (run $((attempts + 1)) of $budget)."
           {
             echo "should-run=true"
             echo "role=$role"
@@ -542,6 +630,8 @@ jobs:
             echo "attempt=$((attempts + 1))"
             echo "budget=$budget"
             echo "marker=$marker"
+            echo "revision=$revision"
+            echo "clear-label=$clear"
           } >> "$GITHUB_OUTPUT"
 
   agent:
@@ -610,16 +700,29 @@ jobs:
           ROLE: ${{ needs.preflight.outputs.role }}
           BUDGET: ${{ needs.preflight.outputs.budget }}
           MARKER: ${{ needs.preflight.outputs.marker }}
+          REVISION: ${{ needs.preflight.outputs.revision }}
+          CLEAR_LABEL: ${{ needs.preflight.outputs['clear-label'] }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           # The marker decides which budget this run is counted against, so it
-          # comes from preflight rather than being written twice.
+          # comes from preflight rather than being written twice. So does the
+          # label to clear: whichever of the two run labels started this run is
+          # the one that has now been consumed.
           if [ "$ROLE" = "orchestrator" ]; then
             what="supervision run $ATTEMPT of $BUDGET"
+          elif [ "$REVISION" = "1" ]; then
+            what="revision round $ATTEMPT of $BUDGET"
           else
             what="attempt $ATTEMPT of $BUDGET"
           fi
-          gh "$KIND" edit "$ISSUE" --add-label 'agent:running' --remove-label "${{ inputs.run-label }}" || true
+          gh "$KIND" edit "$ISSUE" --add-label 'agent:running' --remove-label "$CLEAR_LABEL" || true
+          # A revision starts from work that was already at review, and it is
+          # no longer waiting on a reader - it is in flight. Leaving the label
+          # on makes the child read as finished to everything that counts
+          # labels, the orchestrator's status picture first among them.
+          if [ "$REVISION" = "1" ]; then
+            gh "$KIND" edit "$ISSUE" --remove-label 'agent:review' || true
+          fi
           gh "$KIND" comment "$ISSUE" --body "$(printf '%s\n\n%s' \
             "$MARKER Starting **$ROLE**, $what." \
             "[Run log]($RUN_URL)")" || true
@@ -740,9 +843,59 @@ jobs:
               tools="$common,Write,Edit,WebFetch,WebSearch"
               tools="$tools,$authoring_pr"
               ;;
-            designer)
-              tools="$common,Write,Edit,WebFetch"
+            analyst)
+              # Writes one document and lands it. No web and no shell: the
+              # contract is derived from this repository's own issue, design
+              # doc, and event code, and an approach that needs investigating
+              # is the researcher's issue rather than a second job inside this
+              # one. Deciding which product stores the events is the same kind
+              # of question, which is why this role specifies what a store has
+              # to satisfy and never names one.
+              tools="$common,Write,Edit"
               tools="$tools,$authoring_pr"
+              ;;
+            designer)
+              # WebSearch for the same reason the researcher has it, arrived at
+              # the same way. A designer with WebFetch can open a page it
+              # already knows the address of and nothing else, so a role told to
+              # push past what is already here had no way to see what "already
+              # here" is being measured against. It chose from memory instead,
+              # which averages several years of training data and reads as
+              # bland - and, like the researcher's case, the failure was silent,
+              # because a role with no way to look still writes a confident
+              # paragraph about a direction.
+              tools="$common,Write,Edit,WebFetch,WebSearch"
+              tools="$tools,$authoring_pr"
+              # A visual spec is settled by looking, and until this the designer
+              # had nothing it could look at. It specified a refresh of a page it
+              # had never seen rendered; the engineers who built it could not open
+              # a browser either, so every "checked visually" criterion in that
+              # objective was discharged by reading compiled CSS. Nothing went
+              # red. The result was simply nobody's idea of a design, and the
+              # first eye to reach the rendered page arrived after the last of
+              # four pull requests had merged.
+              #
+              # Granted as the project's own entry points rather than a shell,
+              # for the reason the engineer's list gives below: a role that can
+              # run any command can rewrite the gates it is checked by. A project
+              # that wants its mocks rendered exposes a command that renders one;
+              # a project that exposes none leaves the designer to name what
+              # refused in the pull request, which is what its role tells it to
+              # do, and a reviewer supplies the eyes instead.
+              #
+              # That command now has a fixed name - `./scripts/design-render`,
+              # shipped in the project template - because the open-ended version
+              # of this grant was dormant for every run that held it. The grant
+              # was here, no project exposed anything to call, no role knew what
+              # to reach for, and nothing said so: the design that resulted was
+              # specified, reviewed and merged without one eye on a rendered
+              # page. A capability nobody is told the name of is not a
+              # capability. The name is in the role file and the contract is in
+              # the script's own header; what it shells out to is the project's
+              # decision and never the plugin's, which is how a vendor tool gets
+              # in here at all without a vendor's name entering the plugin.
+              tools="$tools,Bash(npm ci:*),Bash(npm install:*),Bash(npm run:*),Bash(make:*)"
+              tools="$tools,Bash(bash scripts/*),Bash(sh scripts/*),Bash(./scripts/*)"
               ;;
             engineer)
               # Writes code, runs the checks the gate runs, and opens the
@@ -797,6 +950,16 @@ jobs:
           echo "Allowing for $ROLE: $tools"
           echo "allowed=$tools" >> "$GITHUB_OUTPUT"
 
+      # The instant before the agent starts, so the handback below can tell a
+      # question this run asked from one an earlier attempt asked. Without it
+      # the marker is permanent: attempt 1 asks, a person answers and clears the
+      # label, attempt 2 runs and the handback finds the old comment and raises
+      # the same question again - a loop that looks exactly like the system
+      # working, which is the worst kind to debug.
+      - name: Stamp the run start
+        id: stamp
+        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
       - uses: anthropics/claude-code-action@v1
         env:
           # `gh` is how this run writes to GitHub. Without a token in the step
@@ -840,13 +1003,15 @@ jobs:
             `.claude/agents/` in this repository.
 
             Read that agent's definition and follow it exactly, including the
-            clause at the end about `.claude/memory/`. Follow the house-rules,
+            clause at the end about `docs/memory/`. Follow the house-rules,
             memory-protocol, and acceptance-criteria skills in `.claude/skills/`.
 
             This is run ${{ needs.preflight.outputs.attempt }} of ${{ needs.preflight.outputs.budget }} on this issue.
             Read the earlier attempts on the issue before repeating one of them.
             If this attempt fails the same way an earlier one did, stop and say
             so rather than trying a variation.
+
+            ${{ needs.preflight.outputs.revision == '1' && 'This is a revision round, not a fresh attempt. Your work was delivered, somebody read it, and it came back with a review attached - so before anything else, read the review on your own open pull request and every comment on this issue since that pull request was opened. That review is the whole of what changed, and it is the most specific input you will ever get on this issue. Work on the branch and the pull request that already exist rather than opening new ones. Address what the review asked for and nothing else - a revision that widens the diff is a new issue wearing an old one. When you are done, reply on the review saying what you changed, and what you did not change and why. If the review asks for something you believe is wrong, say so on the pull request with your reasoning and then do it their way anyway, unless doing it would break a house rule - and if it would, name which rule and stop. Revision rounds are counted separately from attempts, so this one has not spent an attempt at the work.' || '' }}
 
             ${{ needs.preflight.outputs.role == 'orchestrator' && 'You own this objective, not just its split. If it has no children yet, decompose it and queue the first wave. If it has children, you were woken because one of them reached agent:review or agent:blocked: read the state of all of them, deal with anything blocked, queue whatever has just become ready, and replace the status picture on this issue with a current one. That budget above is supervision runs on this objective, not attempts at a piece of work - being woken a dozen times over a four-child objective is normal, and getting near the end of it is worth saying out loud rather than spending quietly.' || '' }}
 
@@ -899,6 +1064,7 @@ jobs:
           RUN_LABEL: ${{ inputs.run-label }}
           MAX_TURNS: ${{ inputs.max-turns }}
           JOB_STATUS: ${{ job.status }}
+          RUN_STARTED: ${{ steps.stamp.outputs.at }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           # Hand back to the orchestrator where there is one, and to a human
@@ -980,9 +1146,65 @@ jobs:
             gh issue edit "$parent" --add-label "$RUN_LABEL" || true
           }
 
+          # A question this run asked, carried out of the run as a label.
+          #
+          # There was nowhere to put "I finished, and somebody has to decide
+          # something before this merges". The vocabulary had two terminal
+          # states and both are verdicts on the run: agent:review says it went
+          # fine, agent:blocked says it did not. A role with a real question had
+          # three bad options - block itself and spend an attempt on work that
+          # succeeded, write the question in a comment that the orchestrator's
+          # next status rewrite buries, or pick silently. Across an entire
+          # design objective every role picked silently, every time.
+          #
+          # So a role writes the marker into a comment and this reads it back.
+          # The label is the durable half and the comment is the readable half:
+          # a label survives every rewrite and can be queried, and the question
+          # itself stays where it was asked, next to the work it is about. The
+          # orchestrator then renders it onto the parent rather than storing it,
+          # which is what keeps "replace, do not append" from eating questions.
+          #
+          # Deliberately not a new authority. No role gains a label grant; the
+          # marker is a string in a comment any role can already write, and this
+          # step already holds the token and already edits labels. It costs one
+          # grep and it works for every role at once.
+          carry_question() {
+            [ -n "$RUN_STARTED" ] || return 0
+            # ISO 8601 in UTC sorts lexically, so a string compare is a date
+            # compare here, and jq needs no date parsing to do it.
+            asked="$(gh "$KIND" view "$ISSUE" --json comments \
+              --jq ".comments[] | select(.createdAt >= \"$RUN_STARTED\") | .body" \
+              2>/dev/null | grep -c 'agent-factory:needs-input' || true)"
+            [ "${asked:-0}" -gt 0 ] || return 0
+            echo "#$ISSUE asked a question this run. Labelling it agent:needs-input."
+            # Not `|| true`. Every other label here predates every project, and
+            # this one does not: a repository provisioned before the release
+            # that added it has no such label, `gh` fails, and swallowing that
+            # would leave the question sitting in a comment with nothing
+            # pointing at it - a silent failure of the mechanism built to stop
+            # silent failures. So say so where the question is.
+            if ! gh "$KIND" edit "$ISSUE" --add-label 'agent:needs-input'; then
+              echo "::warning::Could not apply agent:needs-input to #$ISSUE."
+              # printf rather than a heredoc: a heredoc body has to start at
+              # column 0, which ends the YAML block scalar this whole script
+              # lives in, and the workflow then stops parsing.
+              gh "$KIND" comment "$ISSUE" --body "$(printf '%s\n' \
+                'A question was raised on this issue and the `agent:needs-input`' \
+                'label could not be applied, so nothing but this comment marks it.' \
+                '' \
+                'The usual cause is a repository provisioned before the release that' \
+                'added the label. Re-run the `bootstrap` workflow from the Actions' \
+                'tab - it is idempotent and creates whichever labels are missing.' \
+                '' \
+                'Until then, treat this issue as waiting on an answer before its' \
+                'pull request merges.')" || true
+            fi
+          }
+
           gh "$KIND" edit "$ISSUE" --remove-label 'agent:running' || true
           if [ "$JOB_STATUS" = "success" ]; then
             gh "$KIND" edit "$ISSUE" --add-label 'agent:review' || true
+            carry_question
             wake_parent
             exit 0
           fi
@@ -1018,6 +1240,10 @@ jobs:
           else
             gh "$KIND" edit "$ISSUE" --add-label 'agent:blocked' || true
           fi
+          # Either way. A run cut off at its turn cap can have asked a good
+          # question and then died, and that question is worth more than the
+          # half-finished branch it died on.
+          carry_question
           wake_parent
 
           # What actually got delivered, as facts rather than an absence to be

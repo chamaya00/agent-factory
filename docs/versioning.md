@@ -14,7 +14,7 @@ That is the whole design, and everything below is the mechanics of it.
 | Workflows (the gates) | four thin callers pinned to a release tag | the same pull request bumps the pins |
 | Shared process prose | the managed block in `CLAUDE.md`, between the `agent-factory:begin` and `agent-factory:end` markers | the same pull request replaces the block |
 | The session-start hook | `.claude/hooks/session-start.sh`, wired by one key in `.claude/settings.json` | the same pull request copies the script and adds only that key |
-| Repo-specific lessons | `.claude/memory/<role>.md` | never - these are written in that repository and stay there |
+| Repo-specific lessons | `docs/memory/<role>.md` | never - these are written in that repository and stay there. The one exception is the move off `.claude/memory/`, which `/update-agents` performs once per repository |
 
 The second-to-last row is the newest and was missing for a long time, which
 cost something worth writing down. `CLAUDE.md` was skipped by `/update-agents`

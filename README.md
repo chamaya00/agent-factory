@@ -8,7 +8,7 @@ Three separable layers, and the separation is the point:
 |---|---|---|
 | Agent roles and process | the `agent-factory` plugin | copied into each repo's `.claude/`, loads from the clone |
 | Automation | this repo's reusable workflows | each project calls them in one line |
-| Project-specific learning | each project's own repo, under `.claude/memory/` | never leaves that repo |
+| Project-specific learning | each project's own repo, under `docs/memory/` | never leaves that repo |
 
 The third row is what keeps the first two reusable. Agents get smarter inside a project without contaminating any other project.
 
@@ -18,7 +18,7 @@ The third row is what keeps the first two reusable. Agents get smarter inside a 
 .claude-plugin/marketplace.json      marketplace manifest
 plugins/agent-factory/
   .claude-plugin/plugin.json         plugin manifest (explicit name, always)
-  agents/                            the four roles
+  agents/                            the roles
   skills/                            the process instructions
   commands/                          slash commands
   templates/project/                 what /new-project drops into a fresh repo
@@ -31,11 +31,12 @@ docs/                                the operating documentation, also a Pages s
 
 Everything except the two manifests sits at the plugin root, not inside `.claude-plugin/`.
 
-## The four roles
+## The roles
 
-- `orchestrator` - reads an objective, produces 1-5 child issues sized to the work, with acceptance criteria. No file writes, no grandchildren.
+- `orchestrator` - reads an objective, produces 2-5 child issues with acceptance criteria. No file writes, no grandchildren.
 - `researcher` - investigates options and constraints, writes to `docs/research/`. No source access.
-- `designer` - produces flows, states, and component specs, writes to `docs/design/`. No source access.
+- `analyst` - specifies the event contract, the exposure event, and the metrics a result is read with, writes to `docs/measurement/`. No source access.
+- `designer` - produces flows, states, and component specs, plus a rendered mock when the issue is visual, writes to `docs/design/`. No source access.
 - `engineer` - implements against the acceptance criteria, writes the tests, opens the pull request.
 
 ## Commands
@@ -181,11 +182,7 @@ In order, and the order is the point:
 
 1. `docs/checkpoint.md` - the things only a human can do: the subscription token, the secrets, the agent identity App, the plugin install, publishing for the project repo. Written for an iPhone, since that is the only device involved.
 2. `docs/proving-the-gate.md` - prove a red check blocks a merge, by hand, on a throwaway repo, before any agent is pointed at it. An agent aimed at a gate you do not trust produces work you have to read line by line, which is the thing the system exists to avoid.
-
-Then point an objective at it. The loop itself is no longer the thing under
-test - it has run end to end on real projects - so the first objective in a new
-repository is ordinary work, judged by opening what it produced rather than by
-a runbook.
+3. `docs/smoke-test.md` - two objectives through the whole loop, building a site the repository publishes so the result is judged by opening a URL rather than by reading a diff. What to watch for at each step, and the eight failure modes worth recognising on sight.
 
 `docs/what-is-checked.md` is the answer to "how do we know any of this works": the five scripts `guard.yml` runs and what each one asserts, the gates a project receives, the preconditions a run refuses on, and the parts nothing verifies yet. It is the page to read before trusting a layer, and the one to update when a check is added.
 

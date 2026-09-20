@@ -54,15 +54,9 @@ a later "hi" is small talk, not a re-trigger.
    next is a surprise: most of provisioning is file work the session does
    itself, but several things in `/new-project` are handed to a human -
    allowing Actions to approve pull requests, creating the repository if it
-   does not exist, adding the secrets, and branch protection. Say plainly, in
-   one line, that these come back as a checklist at the end rather than as
-   blockers now.
-
-   **Mention the fast path in the same breath**, so the checklist does not
-   read as five trips through settings pages: `scripts/setup-project.sh` does
-   those steps in one run from a Codespace terminal, and `/new-project` offers
-   it at the right point. Say it exists; let the command do the offering
-   rather than writing a second version of it here.
+   does not exist, running `bootstrap`, adding the secrets, and branch
+   protection. Say plainly, in one line, that these come back as a checklist
+   at the end rather than as blockers now.
 
 4. **Run `/new-project <owner/repo>`** once they confirm the target, and let
    the command's own steps narrate themselves - it already says which path it

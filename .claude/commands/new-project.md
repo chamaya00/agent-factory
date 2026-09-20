@@ -214,11 +214,27 @@ What goes in:
 - `CLAUDE.md` - fill in the product sentence, the stack, and the commands from
   what is actually in the repository. Do not leave a bracketed placeholder
   behind; if you cannot tell what belongs in one, ask rather than guess.
-- `.claude/memory/orchestrator.md`, `researcher.md`, `designer.md`,
-  `engineer.md` - empty, with their headers
+- `docs/memory/orchestrator.md`, `researcher.md`, `analyst.md`,
+  `designer.md`, `engineer.md` - empty, with their headers. Under `docs/` and
+  not under `.claude/`: a run cannot write a file under `.claude/` at all, so
+  memory kept there is a protocol nothing can follow. The memory-protocol skill
+  carries the whole reason
 - `.claude/agent-factory.json` - the record of which release this repository
   took, with the version filled in
-- `docs/research/`, `docs/design/`, `docs/decisions/` with the ADR template
+- `docs/research/`, `docs/measurement/`, `docs/design/`, `docs/decisions/`
+  with the ADR template
+- `scripts/design-render`, `scripts/app-render`, `scripts/contrast` - from the
+  template, and **executable**, for the same reason the hook is: without the bit
+  they are present, silent, and refuse. These are the commands the roles are
+  told the name of, and the contract each has to honour is in its own header:
+  one renders a mock, one builds and serves this repository and photographs a
+  route of it, one prints a contrast ratio. The defaults add no dependency -
+  they use a headless browser and a static server the image is asked for rather
+  than given - and `app-render` needs two lines filled in before it can build
+  anything, because what builds this repository is not the plugin's to know. Say
+  in the pull request body which of the three are working here and which are
+  not, rather than leaving it to be discovered by the first run that needs one,
+  and treat replacing any of them as this repository's decision to record.
 
 Then the roles and the commands themselves, copied rather than referenced:
 

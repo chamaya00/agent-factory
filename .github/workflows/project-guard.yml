@@ -17,7 +17,7 @@ on:
     inputs:
       memory-line-cap:
         description: >-
-          Line cap for each `.claude/memory/<role>.md`. Past the cap the retro
+          Line cap for each `docs/memory/<role>.md`. Past the cap the retro
           rewrites the file rather than appending to it, which is the point of
           the cap rather than a side effect of it.
         type: number
@@ -65,7 +65,17 @@ jobs:
           set -euo pipefail
           failed=0
           shopt -s nullglob
-          for file in .claude/memory/*.md; do
+
+          # Both paths, and that is not belt and braces. Memory moved from
+          # `.claude/memory/` to `docs/memory/` because a run cannot write a
+          # file under `.claude/` at all - the classification that refuses it is
+          # checked before any permission rule, so no allowlist lifts it - and a
+          # repository provisioned before the move still has its lessons at the
+          # old path until `/update-agents` moves them. Capping only the new
+          # path would silently stop capping every repository that has not
+          # migrated yet, which is the shape of failure this whole file is
+          # against: a check that still reports and no longer checks anything.
+          for file in docs/memory/*.md .claude/memory/*.md; do
             lines="$(grep -cve '^[[:space:]]*$' "$file" || true)"
             if [ "$lines" -gt "$CAP" ]; then
               echo "::error file=$file::$lines lines, cap is $CAP. The retro rewrites past the cap - merge or drop entries to make room, do not append."
@@ -73,6 +83,15 @@ jobs:
             fi
           done
           [ "$failed" -eq 0 ] && echo "Memory files are inside the cap."
+
+          # Said once, loudly, and never failed on: the lessons are readable
+          # where they are and the roles read the new path, so an unmigrated
+          # repository is degraded rather than broken, and failing every merge
+          # over a move nobody here agreed to is worse than saying so.
+          if compgen -G '.claude/memory/*.md' >/dev/null; then
+            echo "::warning::Memory is still at .claude/memory/. The roles in this release read docs/memory/, so nothing is reading these lessons. Run /update-agents, which moves them."
+          fi
+
           exit "$failed"
 
       - name: The managed block in CLAUDE.md is intact
@@ -193,30 +212,38 @@ jobs:
       - name: A change to privilege is declared, not slipped in
         if: github.event_name == 'pull_request'
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
 
-          # The webhook payload is frozen when the event fires, and `BODY`
-          # above comes out of it. That makes the obvious fix for this check
-          # not work: a person reads the failure, adds the declaration to the
-          # pull request body, re-runs the job - and the re-run replays the
-          # same stale payload and fails again, saying the body does not
-          # contain a line the body plainly now contains. The only thing that
-          # clears it is an unrelated new commit, which nobody would guess.
+          # The body is read live, and that is the difference between this
+          # check being fixable and not.
           #
-          # So read the body live, and keep the payload as the fallback for
-          # when the API is unreachable.
-          if [ -n "${GH_REPO:-}" ] && [ -n "${PR_NUMBER:-}" ]; then
-            live_body="$(gh api "repos/$GH_REPO/pulls/$PR_NUMBER" --jq '.body // ""' 2>/dev/null || true)"
-            if [ -n "$live_body" ]; then
-              BODY="$live_body"
-            fi
+          # A re-run replays the event that started the run, so
+          # github.event.pull_request.body is the body as it was when the pull
+          # request opened. An author whose declaration this step rejected then
+          # corrects the body, re-runs the job, and the job reads the old text
+          # again - and no number of re-runs can ever read anything else. That
+          # is not hypothetical: a declaration written wrapped in backticks did
+          # not start its line, this step failed it correctly, and fixing the
+          # body changed nothing twice in a row. The exits left were an empty
+          # commit or a close and reopen, and the house rules forbid both by
+          # name, for reasons that have nothing to do with this.
+          #
+          # The payload stays as a fallback so a failed read is never worse
+          # than the old behaviour, and the log says which was used rather than
+          # leaving somebody to wonder why a corrected body still failed.
+          live="$(gh pr view "$PR_NUMBER" --json body --jq '.body' 2>/dev/null || true)"
+          if [ -n "$live" ]; then
+            BODY="$live"
+            echo "Read the pull request body live, not from the event payload."
+          else
+            echo "::warning::Could not read the body from the API, so this used the event payload - which a re-run replays unchanged. If a corrected body keeps failing, that is why."
           fi
 
           # Deliberately no maintainer exemption, unlike the protected-paths

@@ -146,7 +146,33 @@ and will hit the cap after two real ones.
 
 ---
 
-## 4. Is 40 turns enough for the engineer?
+## 4. Some roles have still never run
+
+`researcher` and `orchestrator` are both proven under `v1.4.0`, on runs
+33792437707 and 33843275814 respectively.
+
+`analyst` has not run at all: it was added in `v1.29.0` and no objective has
+yet been split in a way that queues one, so every claim its role file makes
+about what a run produces is untested.
+
+`designer` and `engineer` have not run. The engineer is the one to watch,
+because it is the only role that needs `Bash(npm run:*)` to work and the only
+one whose output has to pass the gate rather than just exist. A role that
+writes files nobody runs is a much easier thing to get right than one that has
+to make `npm run test` green.
+
+Until an engineer run lands a pull request that passes CI, treat the engineer
+step of `docs/smoke-test.md` as untested rather than passing.
+
+**How to answer it.** Both roles run in phase 8 as it now stands: the objectives
+there produce a design document and a published site, so a full pass exercises
+three of the four roles rather than one. That is deliberate - a runbook that
+only ever ran the orchestrator was not testing the loop, it was testing the
+first step of it.
+
+---
+
+## 5. Is 40 turns enough for the engineer?
 
 **What is known.** The cap was raised from 15 to 40 in `v1.4.0` because 15 was
 below the floor. Both roles that have run since finished close to the new cap:
@@ -159,10 +185,11 @@ then labels the issue `agent:blocked` and spends one of its three attempts on
 something that was not a scoping problem at all. That is question 3 arriving by
 a second route.
 
-**How to answer it.** Read `num_turns` in the result block of an engineer run
-on a small child. Queue the smallest child of an objective first for exactly
-this reason: the answer is wanted before a larger child spends an attempt
-discovering it.
+**How to answer it.** Run the engineer on the smallest child of phase 8's first
+objective and read `num_turns` in the result block. `docs/smoke-test.md` asks
+for that number in its report, and asks for the smallest child to be queued
+first for exactly this reason: the answer is wanted before a larger child spends
+an attempt discovering it.
 
 **What changes.** If it lands near 40, raise the cap in the template and in
 `agent-run.yml`'s default. Do not raise it pre-emptively: the cap exists
@@ -171,7 +198,7 @@ evidence of anything.
 
 ---
 
-## 5. Should a run pin the model?
+## 6. Should a run pin the model?
 
 **What changed.** Every role file used to carry `model: opus` in its
 frontmatter. In an Actions run that line does nothing: the agent is started by
@@ -202,7 +229,7 @@ default is documented as deliberate in `agent-run.yml`.
 
 ---
 
-## 6. One pending run, and a wave of two loses one
+## 7. One pending run, and a wave of two loses one
 
 **What is known.** A concurrency group holds exactly one pending entry, and a
 third arrival cancels the one already waiting. `agent-run.yml` puts that group
@@ -239,3 +266,34 @@ What is genuinely still open is whether that is enough. If the report turns out
 to fire often, the answer is to loosen the group - per-issue rather than
 per-repo, with the budget protected some other way - rather than to let a
 watchdog start spending. If it never fires, this entry can go.
+
+---
+
+## 8. Do `app-render` and `contrast` work inside a run?
+
+**What is known.** Both ship in the project template, both are named in the
+role files, and both were exercised by hand before they shipped: `contrast`
+against six known pairs including the WCAG boundary cases, `app-render` against
+a built page whose stylesheet and script load from root-absolute paths - the
+exact case that made `design-render` useless for a built page, photographed
+correctly over a served origin and incorrectly over `file://`.
+
+**What is not known.** Whether a role can run them. Nothing in this repository
+runs an agent, so the allowlist entry that grants them - `Bash(./scripts/*)`,
+which both roles already held - has never been exercised against these two
+names, and `app-render` additionally runs whatever `BUILD_CMD` a project puts
+in it. That inner command is checked against the role's allowlist rather than
+the script's grant, and a project that fills it in with something no role may
+run has a script that works by hand and refuses in a run. The script's own
+header says so; nothing enforces it.
+
+**How to answer it.** Provision or update a repository, fill in `BUILD_CMD` and
+`SERVE_DIR`, and give the designer a visual issue. One run answers both: the
+pull request either carries pictures of the built page or names the refusal.
+
+**What changes.** Either this entry is deleted and the fact goes into the
+smoke-test runbook as a step that has been seen to pass, or the allowlist gains
+whatever the inner build command needs and the script's header stops being the
+only thing saying so.
+
+---

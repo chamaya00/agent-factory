@@ -139,7 +139,10 @@ SCAFFOLDING = [
     ".claude/agents/engineer.md",
     ".claude/skills/house-rules/SKILL.md",
     ".claude/commands/retro.md",
-    ".claude/memory/engineer.md",
+    "docs/memory/engineer.md",
+    "scripts/design-render",
+    "scripts/app-render",
+    "scripts/contrast",
     ".github/CODEOWNERS",
     ".github/workflows/ci.yml",
     "docs/research/.gitkeep",
@@ -165,6 +168,12 @@ def build_repo(cwd: Path, extra: list[str]) -> None:
         path = cwd / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("placeholder\n")
+        # The gate checks the entry points for the execute bit, because a role
+        # is told their names and one without the bit is present, silent, and
+        # indistinguishable from one that ran. Provisioning sets it; so does
+        # this fixture, or the tripwire cases would all fail on the wrong step.
+        if name.startswith("scripts/"):
+            path.chmod(0o755)
     quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
     subprocess.run(["git", "init", "-q"], cwd=cwd, check=True, **quiet)
     subprocess.run(["git", "add", "-A"], cwd=cwd, check=True, **quiet)
