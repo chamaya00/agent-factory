@@ -44,6 +44,53 @@ api() {
   return 1
 }
 
+# Labels this release needs, against the labels this repository has.
+#
+# A release that adds one ships the *name* in files and cannot create the label
+# itself: only `bootstrap` does that, it is workflow_dispatch only, and only a
+# person can run it. So a repository picks up a release, its roles start naming
+# a label nothing can apply, and the failure is silent in the worst way - the
+# run that should have started simply does not, and nothing anywhere says why.
+#
+# This is the only place that can say so before it bites, because it is the
+# only thing that runs when the person who can fix it turns up. It goes before
+# the objectives fetch on purpose: the riskiest moment is just after an update
+# and before any objective exists, and behind that gate this would stay silent
+# in exactly that case.
+declared="$(python3 <<'DECLARED' 2>/dev/null
+import json
+try:
+    print("\n".join(json.load(open(".claude/agent-factory.json")).get("labels") or []))
+except Exception:
+    pass
+DECLARED
+)"
+if [ -n "$declared" ]; then
+  have="$(api "repos/$repo/labels?per_page=100")" || have=""
+  [ -n "$have" ] && python3 - "$have" "$declared" <<'MISSING' 2>/dev/null
+import json, sys
+
+try:
+    have = {l["name"] for l in json.loads(sys.argv[1]) if isinstance(l, dict)}
+except Exception:
+    sys.exit(0)
+
+missing = [name for name in sys.argv[2].split("\n") if name and name not in have]
+if not missing:
+    sys.exit(0)
+
+# Only ever one direction. A label this repository has and the release no
+# longer names is harmless, and reporting it would spend the reader's trust on
+# something they do not have to act on.
+print(f"{len(missing)} label(s) this release needs are missing from this repository:")
+for name in missing:
+    print(f"  {name}")
+print("Run `bootstrap` from the Actions tab. It is idempotent and creates whichever are absent.")
+print("Until then, work that needs one of these does not start and nothing reports it.")
+print()
+MISSING
+fi
+
 objectives="$(api "repos/$repo/issues?labels=objective&state=open&per_page=20")" || exit 0
 [ -n "$objectives" ] || exit 0
 
