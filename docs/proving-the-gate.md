@@ -82,8 +82,11 @@ the whole loop from a phone.
 
 Confirm four things, in this order:
 
-1. **Checks run.** `ci / typecheck, lint, test, build` and `guard / memory cap
-   and protected paths` both appear on the pull request and both go green.
+1. **Checks run.** `ci / checks` and `guard / memory cap and protected paths`
+   both appear on the pull request and both go green. Those two names are
+   fixed: `ci`'s job is named `checks` whether it is running the placeholder
+   commands or a project's real ones, so what protection requires never has to
+   change when the gate grows up.
 2. **Publishing is on and its URL resolves.** Set from `docs/checkpoint.md`
    step 5, serving the default branch from its root. Until something lands at
    that root the URL 404s, which is the expected answer here and not a broken

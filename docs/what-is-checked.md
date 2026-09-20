@@ -120,6 +120,16 @@ because no allowlist was passed and the action's default set is read only. The
 orchestrator surfaced it first because it runs first; the engineer would have
 been worse off, unable to write a line of code.
 
+Then the check that keeps the gate from renaming itself. The `ci` job's name is
+the string branch protection matches on, so the reusable workflow's
+`check-name` default and the project template's caller have to agree. They once
+did not - the template shipped `scaffolding` while the default was the four
+Node script names - which meant replacing a placeholder gate also renamed the
+required check, and a required check that stops reporting blocks every merge
+rather than gating them, including the pull request doing the replacing. One
+stable name on both paths is the fix; this is what notices if they drift apart
+again.
+
 Then the check that exists because that one was not enough: no `Bash(...:*)`
 entry may end its prefix mid-argument. `Bash(x:*)` is shorthand for `Bash(x *)`
 and the space is part of the rule, so `Bash(bash tests/:*)` asks for a command

@@ -1,12 +1,67 @@
 ---
 description: Provision a fresh repository end to end - caller workflows, project files, labels, and the two settings only a human can change.
 argument-hint: <owner/repo>
-allowed-tools: Bash, Read, Write, Edit, Glob, mcp__github__get_file_contents, mcp__github__create_repository, mcp__github__create_branch, mcp__github__push_files, mcp__github__create_pull_request, mcp__github__get_label, mcp__github__list_branches
+allowed-tools: Bash, Read, Write, Edit, Glob, mcp__github__get_file_contents, mcp__github__create_repository, mcp__github__create_branch, mcp__github__push_files, mcp__github__create_pull_request, mcp__github__get_label, mcp__github__list_branches, mcp__github__actions_run_trigger, mcp__github__actions_list, mcp__github__actions_get, mcp__github__get_job_logs
 ---
 
 Provision `$1` so agents can work in it.
 
 If `$1` is empty, ask which repository before doing anything.
+
+## Verify, do not take "done" for an answer
+
+Most of what goes wrong here is a step somebody believes is finished. The
+Actions permission is the expensive one - with it off, every agent run appears
+to work and then silently fails to open a pull request - but every handoff
+below has the same shape: you cannot do it, a person can, and afterwards
+nothing tells you which way it went unless you look.
+
+So each handoff in this command comes in three parts, and the third is not
+optional:
+
+1. **The link**, already substituted, so nothing has to be assembled by hand.
+2. **What to do on that page**, short enough to follow without scrolling.
+3. **The check you run afterwards** - named in the step - before you move on.
+
+Ask a person to confirm only when there is genuinely nothing readable. When
+there is, read it: their "done" and the repository's actual state disagree
+often enough that the difference is worth one call. If a check says the step
+did not land, say so plainly and hand the link back rather than continuing and
+letting it surface three steps later, somewhere unrelated.
+
+## The fast path, and when to offer it
+
+`scripts/setup-project.sh` in the factory does every step below that a session
+cannot: it creates the repository, sets the Actions permission, sets the
+secrets, runs bootstrap, reads the check names back as they actually reported,
+and sets branch protection to require them. It is one paste in a terminal.
+
+That is worth offering first, because the reason those steps are handed over is
+narrower than it looks. They are not inherently manual - they are unavailable
+to *this* session. A session token is a GitHub App installation: it holds
+nothing at the account level, so creating a repository and changing a
+repository setting both come back `403 Resource not accessible by integration`
+no matter how they are asked for. `gh` in a Codespace is authenticated as the
+person, with their scopes, and every one of those steps is one API call there.
+
+Offer it like this, before step 1, and let them choose:
+
+> The setup steps I can't do myself can run as one script in a Codespace on
+> this repository, instead of five trips through GitHub's settings pages:
+>
+> 1. Open `github.com/codespaces/new?repo=chamaya00/agent-factory`
+> 2. In its terminal: `bash scripts/setup-project.sh $1`
+>
+> It pauses partway and waits for me to push the files, then finishes on its
+> own. Or we can do it by hand - say which and I'll follow along.
+
+If they take it, the script covers steps 1, 2, 4, and 5, and this command's job
+narrows to step 3 and the report. Still run each step's check afterwards: the
+script reports its own results, but this session confirming them against the
+API is what makes the report at the end true rather than repeated.
+
+If they would rather do it by hand, or the script fails, every step below
+stands on its own. Nothing in it depends on the script having run.
 
 ## How to do the work
 
@@ -45,7 +100,7 @@ repositories, and with it off every agent run appears to work and then silently
 fails to open a pull request. It cannot be set from a session token: it is a
 repository administration setting.
 
-Give them exactly this, and wait for confirmation before continuing:
+Give them exactly this:
 
 > 1. Open `github.com/$1/settings/actions`
 > 2. Scroll to **Workflow permissions**
@@ -53,7 +108,21 @@ Give them exactly this, and wait for confirmation before continuing:
 > 4. Tick **Allow GitHub Actions to create and approve pull requests**
 > 5. **Save**
 
-Nothing below is worth doing until they confirm. Ask again rather than assuming.
+**The check.** This is the one handoff on the list that this session cannot
+read back - the setting lives behind the same repository-administration
+permission that stops you writing it, so `403` is the answer either way. Say
+that rather than implying you confirmed it. Two things do confirm it, and
+naming them is what keeps this from being a step everyone assumes:
+
+- `scripts/setup-project.sh` reads the value back after setting it and prints
+  `can_approve_pull_request_reviews: true`. If they took the fast path, that
+  line is the confirmation and there is nothing to ask.
+- Otherwise it surfaces on the first agent run: the run goes green and no pull
+  request appears. That is the failure this step exists to prevent, so if a
+  first run ever ends that way, come back here before debugging anything else.
+
+Take their confirmation and continue, but record in the step 6 report that this
+one was confirmed by a person rather than read.
 
 ## 2. Make sure the repository exists and has a commit
 
@@ -224,18 +293,30 @@ getting from one place rather than retyping.
 
 `workflow_dispatch` only sees workflows that are already on the default branch.
 On the direct push path they are already there and this can be run at once. On
-the pull request path the human merges step 3 first. Then:
+the pull request path the human merges step 3 first.
+
+**Run it yourself.** Dispatching a workflow is an ordinary repository action,
+inside what a session token can do, so this is not a handoff:
+`mcp__github__actions_run_trigger` on `bootstrap.yml` against the default
+branch. Then `mcp__github__actions_list` for the run it started, and
+`mcp__github__actions_get` until it finishes.
+
+**Read its summary yourself too.** This is the step that most often gets handed
+back when it should not be. The run summary carries the check names as they
+actually reported, which step 5 needs, and asking a person to open the run and
+read them to you turns a call you can make into a page they have to find, on a
+phone, and transcribe without a typo. Read it with `mcp__github__get_job_logs`
+and carry the names forward.
+
+Only hand this over if the dispatch itself fails - a fresh repository whose
+Actions are disabled, or workflows that are not on the default branch yet:
 
 > 1. Open `github.com/$1/actions/workflows/bootstrap.yml`
 > 2. Tap **Run workflow**, then **Run workflow** again to confirm
-> 3. When it finishes, open the run and read its summary
 
-The summary lists the ten labels and, more usefully, the check names as they
-were actually reported. Step 5 needs those.
-
-Verify a sample rather than trusting the run: `mcp__github__get_label` for
-`agent:queued` and `role:engineer`. If either is missing the run did not do what
-it said.
+**The check.** Verify a sample rather than trusting the run:
+`mcp__github__get_label` for `agent:queued` and `role:engineer`. If either is
+missing the run did not do what it said, whatever its summary claims.
 
 ## 5. Branch protection
 
@@ -247,13 +328,20 @@ Only after the checks have run at least once and reported their names. A
 required check that has never run blocks every merge, including the pull
 request that would fix it.
 
-Give them the names from the step 4 summary, verbatim, then:
+Give them the names you read in step 4, verbatim, spelled out in the handoff
+rather than described - "the names from the summary" is a page they have to go
+back and find. They will be `ci / checks` and
+`guard / memory cap and protected paths` on a freshly provisioned repository,
+but quote what actually reported rather than these, because a project that
+changed `check-name` reports something else.
 
-Notice which names those are. On the placeholder gate the ci job reports as
-`scaffolding` rather than as the four scripts, and it changes the day somebody
-restores the Node path. That is why the template says to re-point this rule in
-the same sitting: a required check that no longer reports blocks every merge
-instead of gating them.
+Set once, and that is the whole point of the name. The gate's job name stays
+`checks` whether it is running the placeholder commands or the project's real
+ones, so this rule is never re-pointed: swapping the gate later changes what
+runs, not what protection matches on. A required check that stops reporting
+blocks every merge instead of gating them, including the pull request that
+would put it back, and keeping one stable name is what makes that impossible
+rather than merely documented.
 
 > 1. Open `github.com/$1/settings/branches`
 > 2. **Add branch protection rule** (or **Add classic branch protection rule**)
@@ -265,31 +353,66 @@ instead of gating them.
 >    commit directly when you need to
 > 8. **Create**
 
+**The check.** Reading a protection rule needs the same administration
+permission that setting it does, so this session gets `403` or `404` either
+way and cannot tell "no rule" from "cannot see the rule". Do not report it as
+verified. What does verify it, in order of what is available: the fast-path
+script reads the rule back and prints the contexts it now requires, and failing
+that, the next pull request shows its required checks in the merge box - so the
+first agent pull request confirms it in passing.
+
 ## 6. Report
 
-Two parts, and the second one is the deliverable.
+Three parts, and the last two are the deliverable.
 
 First, plainly: what was created, whether it went to the default branch or to a
 pull request, what already existed, and anything that failed - with the exact
 call that failed.
+
+Then **what you actually verified, separated from what you were told**. Each
+step above names a check; this is where their results go, and the separation is
+the point. A report that lists eight finished steps, three of which are
+finished only because somebody said so, is how a repository arrives at its
+first agent run with the Actions permission still off. Two short lists beat a
+paragraph:
+
+> Read back and confirmed: the files on `<branch>`, the labels (sampled
+> `agent:queued`, `role:engineer`), the bootstrap run and its check names.
+>
+> Taken on your word, because this session cannot read them: the Actions
+> permission, branch protection. Both are repository-administration settings,
+> and the same permission that stops me setting them stops me reading them.
+> The first agent pull request confirms both at once - it appears at all only
+> if the permission is on, and its merge box lists the required checks.
+
+If the fast-path script ran, move what it verified into the first list and say
+so - it reads its own settings back, which is exactly the evidence this session
+cannot gather.
 
 Then everything still waiting on the human, in the order it has to happen, each
 one as the URL that does it. Substitute `$1` and the default branch name. A
 reader assembling a settings URL by hand is a reader who ends up on the wrong
 page, and this is the whole reason the list is here rather than in prose:
 
-> 1. **Run bootstrap** - `github.com/$1/actions/workflows/bootstrap.yml`
->    Run workflow, then read the run summary for the check names. On the pull
->    request path, merge that pull request first or this page will not offer
->    the workflow.
-> 2. **Add the secrets** - `github.com/$1/settings/secrets/actions/new`
+Leave out anything you already did or already confirmed. A checklist that
+re-lists finished work is one nobody reads to the bottom, and the bottom is
+where the item that actually blocks them usually is.
+
+> 1. **Add the secrets** - `github.com/$1/settings/secrets/actions/new`
 >    `CLAUDE_CODE_OAUTH_TOKEN`, and `AGENT_APP_ID` with
 >    `AGENT_APP_PRIVATE_KEY` if the agent identity App exists.
-> 3. **Install the App here** - `github.com/settings/installations`
+> 2. **Install the App here** - `github.com/settings/installations`
 >    Nothing to do if there is no App. Without it every agent pull request
->    lands needing an approval tap before its checks will run.
-> 4. **Branch protection** - `github.com/$1/settings/branches`
->    Using the check names from the step 1 summary, not guessed ones.
+>    lands needing an approval tap before its checks will run, and an
+>    orchestrator cannot queue its own children at all.
+> 3. **Branch protection** - `github.com/$1/settings/branches`
+>    Requiring the check names quoted in step 5, not guessed ones.
+
+All three are one paste if they would rather not click through:
+`bash scripts/setup-project.sh $1 --stage post` in a Codespace on the factory
+does the secrets and the protection rule, and says whether the App is
+installed. Offer it once, here, and do not insist - somebody who has already
+done four of these by hand may prefer the fifth the same way.
 
 Say why the ones that are blocked are blocked, rather than leaving them looking
 like things you forgot: the secrets because secrets are per repository and
@@ -299,4 +422,10 @@ one.
 
 If the gate went in as a placeholder, say so here too, and say what replaces it.
 It is the one outstanding item that looks like nothing is wrong: every check is
-green, and none of them is testing the product.
+green, and none of them is testing the product. Say also what replacing it does
+*not* require - the protection rule stays as it is, because the gate's job name
+does not change when its commands do.
+
+Then say what happens next, because the report is otherwise a list of chores
+with no end: once the secrets are in, `/objective` in a session on that
+repository is how the first piece of work starts.

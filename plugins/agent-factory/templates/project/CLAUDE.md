@@ -28,9 +28,15 @@ worse than no gate. Replacing it is a step in building this project, not a
 chore to do later - the comment at the top of that file says how.
 
 Whatever the gate runs, the rule is the same. If a check is renamed here,
-rename it in `.github/workflows/ci.yml` in the same commit, and re-point the
-branch protection rule in the same sitting, or the gate silently stops checking
-that thing.
+rename it in `.github/workflows/ci.yml` in the same commit, or the gate
+silently stops checking that thing.
+
+Branch protection is not part of that change and should not be touched by it.
+The `ci` job is named `checks` on every path, so what protection requires stays
+the same however often the commands under it change. Renaming that job is the
+one edit here that breaks the rule: a required check that stops reporting
+blocks every merge rather than gating them, including the pull request that
+would name it back.
 
 <!-- agent-factory:begin -->
 <!-- Everything from here to the agent-factory:end marker describes the shared

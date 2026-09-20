@@ -120,6 +120,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
+          SENDER: ${{ github.event.sender.login }}
           MAINTAINERS: ${{ inputs.maintainers || github.repository_owner }}
           PROTECTED: ${{ inputs.protected-paths }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -134,31 +135,89 @@ jobs:
               ;;
           esac
 
+          # A human pushing a gate fix onto an agent's branch is the ordinary
+          # way a broken gate gets repaired, and binding this check to the
+          # login that opened the pull request refuses exactly that - which
+          # leaves landing the fix on the default branch as the only way
+          # through, and a push to the default branch does not run this check
+          # at all. Refusing the reviewable path and permitting the
+          # unreviewable one is the opposite of the intent.
+          #
+          # So also ask who pushed the commits that triggered this run.
+          # `sender` is GitHub's own account for the event, not metadata
+          # carried inside the commit: a `synchronize` names whoever pushed.
+          # That distinction is the whole reason it is used here. Commit
+          # author and committer are both set by whoever runs `git`, so an
+          # agent asked not to edit gates could simply commit as the owner
+          # and be believed - a bypass written into the check itself. There
+          # is no equivalent way to forge being the sender of a push.
+          #
+          # The narrowness is deliberate. This says "a maintainer pushed what
+          # is being checked right now", not "a maintainer is involved
+          # somewhere in this branch's history". A later push by the agent
+          # makes it fire again while the protected change is still in the
+          # diff, which reads as noise until it is the run that matters.
+          # Both halves have to be non-empty before the comparison is worth
+          # making. An empty sender against an empty maintainer list matches
+          # ",," and passes, which is a bypass hiding in a string test rather
+          # than in any decision anybody made.
+          if [ -n "${SENDER:-}" ] && [ -n "${MAINTAINERS:-}" ]; then
+            case ",$MAINTAINERS," in
+              *",$SENDER,"*)
+                echo "$SENDER pushed this, and is a maintainer. Nothing to check."
+                exit 0
+                ;;
+            esac
+          fi
+
           changed="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
           failed=0
           while IFS= read -r file; do
             [ -z "$file" ] && continue
+
+            hit=0
             while IFS= read -r pattern; do
               [ -z "$pattern" ] && continue
               case "$file" in
-                $pattern)
-                  echo "::error file=$file::$AUTHOR may not change this. A system that can rewrite its own gates has no gates."
-                  failed=1
-                  ;;
+                $pattern) hit=1 ;;
               esac
             done <<< "$PROTECTED"
+            [ "$hit" -eq 0 ] && continue
+
+            echo "::error file=$file::$AUTHOR may not change this. A system that can rewrite its own gates has no gates. If this change is a maintainer's, push it to this branch from their own account - the last push to a pull request is what this reads, so it clears on that push rather than needing the fix moved to the default branch."
+            failed=1
           done <<< "$changed"
-          [ "$failed" -eq 0 ] && echo "No protected path was touched."
+          [ "$failed" -eq 0 ] && echo "No protected path was touched by the automation."
           exit "$failed"
 
       - name: A change to privilege is declared, not slipped in
         if: github.event_name == 'pull_request'
         env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BODY: ${{ github.event.pull_request.body }}
         run: |
           set -euo pipefail
+
+          # The webhook payload is frozen when the event fires, and `BODY`
+          # above comes out of it. That makes the obvious fix for this check
+          # not work: a person reads the failure, adds the declaration to the
+          # pull request body, re-runs the job - and the re-run replays the
+          # same stale payload and fails again, saying the body does not
+          # contain a line the body plainly now contains. The only thing that
+          # clears it is an unrelated new commit, which nobody would guess.
+          #
+          # So read the body live, and keep the payload as the fallback for
+          # when the API is unreachable.
+          if [ -n "${GH_REPO:-}" ] && [ -n "${PR_NUMBER:-}" ]; then
+            live_body="$(gh api "repos/$GH_REPO/pulls/$PR_NUMBER" --jq '.body // ""' 2>/dev/null || true)"
+            if [ -n "$live_body" ]; then
+              BODY="$live_body"
+            fi
+          fi
 
           # Deliberately no maintainer exemption, unlike the protected-paths
           # check above. That one asks who is editing a gate, and trusts the
@@ -228,7 +287,14 @@ jobs:
             exit 0
           fi
 
-          if printf '%s' "$BODY" | grep -qE '^Privilege change:[[:space:]]*[^[:space:]]'; then
+          # Accept the shapes a person or an agent actually writes: a plain
+          # line, a markdown heading, a bolded lead-in. Demanding a bare line
+          # start rejects `## Privilege change: ...`, which reads as a correct
+          # declaration to every reader except this regex. What is still
+          # required is that the declaration opens its own line and says
+          # something after the colon, so prose mentioning the phrase in
+          # passing still does not pass.
+          if printf '%s' "$BODY" | grep -qE '^[[:space:]]*#{0,6}[[:space:]]*\**[[:space:]]*Privilege change:[[:space:]]*[^[:space:]]'; then
             echo
             echo "Declared in the pull request body. A person still has to agree with it."
             exit 0

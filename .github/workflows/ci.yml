@@ -37,12 +37,17 @@ on:
       check-name:
         description: >-
           The job name, which is the string branch protection matches on.
-          Leave it alone on a Node project. Change it when `commands` makes
-          the default a lie, and re-point the protection rule in the same
-          sitting - a required check that no longer reports blocks every
-          merge.
+          Deliberately generic, and deliberately the same on both paths: this
+          name is a stable identifier for "this repository's gate", not a
+          description of what the gate currently runs. What ran is in the run
+          summary, which changes freely; the name does not, so the protection
+          rule is set once when a repository is provisioned and never has to
+          be re-pointed. Renaming it is a breaking change for any repository
+          already requiring the old name, and a required check that no longer
+          reports blocks every merge rather than gating them - including the
+          pull request that would put the name back.
         type: string
-        default: 'typecheck, lint, test, build'
+        default: 'checks'
       node-version:
         description: Node version to run the checks on. Ignored when `commands` is set.
         type: string

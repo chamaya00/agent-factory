@@ -86,6 +86,15 @@ two halves differently:
   they are. `ci.yml` in particular carries the project's `check-name` and its
   `commands`, which the template cannot know and must never overwrite.
 
+  This holds even when the template's own `check-name` has changed. A
+  repository provisioned before that name settled may still report something
+  else - `scaffolding`, or the four Node script names - and that string is what
+  its branch protection requires. Changing it here would stop the required
+  check reporting and block every merge, including the pull request doing the
+  changing. Leave it, and say in the body that it differs and why that is
+  deliberate. Adopting the template's name is a separate, human-sequenced
+  change: rename the job and re-point protection in one sitting, once.
+
 Never rewrite a caller wholesale from the template. It reads as tidying and it
 deletes the one thing in that file nobody else can reconstruct.
 

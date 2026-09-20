@@ -54,9 +54,18 @@ a later "hi" is small talk, not a re-trigger.
    next is a surprise: most of provisioning is file work the session does
    itself, but several things in `/new-project` are handed to a human -
    allowing Actions to approve pull requests, creating the repository if it
-   does not exist, running `bootstrap`, adding the secrets, and branch
-   protection. Say plainly, in one line, that these come back as a checklist
-   at the end rather than as blockers now.
+   does not exist, adding the secrets, and branch protection. Say plainly, in
+   one line, that these come back as a checklist at the end rather than as
+   blockers now.
+
+   **Then offer the fast path, in the same breath.** Those handed-over steps
+   are not inherently manual, only unavailable to a cloud session, and
+   `scripts/setup-project.sh` does all of them from a Codespace terminal where
+   `gh` is the person rather than an App installation. One paste instead of
+   five trips through settings pages is the difference between a walkthrough
+   somebody finishes and one they abandon halfway, so offer it before the
+   first handoff rather than after the last. `/new-project` has the exact
+   wording under "The fast path" - do not invent a second version of it here.
 
 4. **Run `/new-project <owner/repo>`** once they confirm the target, and let
    the command's own steps narrate themselves - it already says which path it

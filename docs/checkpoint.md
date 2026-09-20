@@ -7,6 +7,15 @@ agent-side works until steps 1 and 2 are done, and step 3 is the fiddly one.
 All of it is doable from an iPhone. The note about the private key in step 3 is
 the part that catches people out.
 
+**Most of this is now one script.** `scripts/setup-project.sh`, run in a
+Codespace on this repository, does steps 1 and 2 for every project - it offers
+to run `claude setup-token` for you and writes the result straight to the
+repository secret, so the token never goes through a copy-paste that can
+truncate it - along with the repository, the Actions permission, the labels,
+and branch protection. Read the steps below anyway once: the script does them,
+but when one fails this is what says what it was trying to do. Step 3 is the
+exception and stays manual, because creating a GitHub App has no API.
+
 ---
 
 ## 0. Cut a release tag

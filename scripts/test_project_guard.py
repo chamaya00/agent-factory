@@ -178,6 +178,25 @@ def _():
     return run_case(PLAIN, after, body=body) == 1
 
 
+# The declaration is written by whoever is opening the pull request, and what
+# they write is markdown. Refusing a heading meant the check failed on bodies
+# that declared the change correctly, which teaches people that the check is
+# broken rather than that the diff needs declaring - and a check people work
+# around is worse than one that is slightly looser.
+@case("a declaration written as a heading counts")
+def _():
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    body = "Adds the linter.\n\n## Privilege change: runs some-org/some-action.\n"
+    return run_case(PLAIN, after, body=body) == 0
+
+
+@case("a declaration written in bold counts")
+def _():
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    body = "**Privilege change:** runs some-org/some-action to lint.\n"
+    return run_case(PLAIN, after, body=body) == 0
+
+
 @case("a removed permission is not a widening")
 def _():
     before = "permissions:\n  contents: write\n" + PLAIN

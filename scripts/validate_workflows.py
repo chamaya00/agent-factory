@@ -642,11 +642,17 @@ def check_privilege_cannot_arrive_undeclared() -> None:
                         f"project-guard.yml: the {PRIVILEGE_STEP!r} step no "
                         f"longer looks for {why}."
                     )
-            if "^Privilege change:" not in script:
+            # Anchoring is what is being protected here, not the exact prefix.
+            # The pattern is allowed to tolerate a heading or a bold lead-in -
+            # a declaration written `## Privilege change: ...` reads as correct
+            # to everyone except a regex demanding a bare line start - but it
+            # still has to be anchored, or the phrase quoted mid-sentence
+            # passes and the check means nothing.
+            if not re.search(r"grep -qE '\^[^']*Privilege change:[^']*'", script):
                 errors.append(
                     f"project-guard.yml: the {PRIVILEGE_STEP!r} step does not "
-                    "require the declaration to start a line, so the phrase "
-                    "quoted anywhere in a body would pass it."
+                    "match the declaration with a line-anchored pattern, so the "
+                    "phrase quoted anywhere in a body would pass it."
                 )
             # The documentation exclusion is a narrowing, and a narrowing is
             # how a check dies quietly: one more extension each time it is
@@ -723,6 +729,50 @@ def check_the_sweep_looks_past_the_queue() -> None:
     )
 
 
+def check_the_gate_does_not_rename_itself() -> None:
+    """The ci job name is what branch protection matches on, so it must not
+    differ between the placeholder gate and the real one.
+
+    This is a lesson with a scar behind it. The template used to ship
+    `check-name: scaffolding` while the reusable workflow defaulted to the four
+    Node script names, so a project that replaced its placeholder gate also
+    renamed its required check - and a required check that stops reporting
+    blocks every merge rather than gating them, including the pull request
+    doing the replacing. The fix was one stable name on both paths, and the
+    only way that stays true is if something fails when the two drift apart.
+    """
+    reusable = WORKFLOWS / "ci.yml"
+    template = TEMPLATES / "project" / ".github" / "workflows" / "ci.yml"
+    if not reusable.is_file() or not template.is_file():
+        return
+
+    default = ((yaml.safe_load(reusable.read_text()) or {}).get(True) or {})
+    default = ((default.get("workflow_call") or {}).get("inputs") or {})
+    default = (default.get("check-name") or {}).get("default")
+
+    shipped = (yaml.safe_load(template.read_text()) or {}).get("jobs") or {}
+    shipped = ((shipped.get("ci") or {}).get("with") or {}).get("check-name")
+
+    if default is None or shipped is None:
+        errors.append(
+            "ci.yml: could not read check-name from the reusable workflow's "
+            "default and the project template's caller. One of them stopped "
+            "declaring it, and the name branch protection matches on is no "
+            "longer pinned to anything."
+        )
+        return
+
+    if default != shipped:
+        errors.append(
+            f"ci.yml: the reusable workflow defaults check-name to {default!r} "
+            f"but the project template ships {shipped!r}. A project that "
+            "swaps its placeholder gate for the real one would rename its "
+            "required check, and a required check that no longer reports "
+            "blocks every merge - including the pull request doing the swap. "
+            "Keep one name on both paths."
+        )
+
+
 def main() -> int:
     paths = sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml"))
     if TEMPLATES.is_dir():
@@ -746,6 +796,7 @@ def main() -> int:
     check_a_delivered_run_is_a_review()
     check_privilege_cannot_arrive_undeclared()
     check_the_sweep_looks_past_the_queue()
+    check_the_gate_does_not_rename_itself()
     if errors:
         print(f"guard: {len(errors)} problem(s)\n")
         for error in errors:
