@@ -73,6 +73,31 @@ plugins, and a cloud session has nobody to answer that prompt, so a project
 that relied on one would open with no `/retro`, `/decompose`, or
 `/update-agents` at all.
 
+## Which factory, as well as which release
+
+The pin says *which release*. It does not say *which factory*, and for a long
+time nothing did: the four caller templates named an owner literally, so a fork
+provisioned repositories that called upstream's reusable workflows. Every check
+green, every run succeeding, none of it the code the person could edit.
+
+Templates now carry `__FACTORY_REPO__` beside `__FACTORY_VERSION__`, and
+provisioning substitutes both. The owner comes from `repository` in
+`plugins/agent-factory/.claude-plugin/plugin.json`, which is the same file the
+release tag is read from - so which factory and which release are declared in
+one place, and a fork edits one line.
+
+`check_factory_repo_is_declared()` cross-checks that field against the
+checkout's `origin` whenever one is readable. The remote is a witness rather
+than the source: a detached or mirrored checkout has none, and the manifest
+still has to be authoritative there, but a fork that forgets the line gets a
+red build rather than silence.
+`docs/decisions/0001-factory-repo-is-declared-in-the-manifest.md` records why
+that way round.
+
+A fork therefore has exactly one migration step, and it is the first commit
+after cloning: point `repository` at the fork. Until then the guard fails and
+names the field.
+
 ## Cutting a release
 
 1. Open a pull request here that bumps `version` in

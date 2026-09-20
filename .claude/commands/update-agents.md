@@ -8,12 +8,23 @@ Update this repository to a factory release. Nothing here happens on a
 schedule and nothing happens to any other repository: this command proposes a
 diff in one repository, and a human merges it or does not.
 
-`$1` is the release to move to, for example `v1.2.0`. If it is empty, read the
-latest release tag of `chamaya00/agent-factory` and use that.
+`$1` is the release to move to, for example `v1.2.0`.
+
+Work out which factory this repository is on before anything else, because
+every read below is against it. `.claude/agent-factory.json` records the
+release this repository took; the `uses:` lines in `.github/workflows/*.yml`
+name the factory itself, as `<owner>/<repo>` before `/.github/workflows/`. All
+four callers must agree - if they do not, stop and say so, because a repository
+half-pointed at two factories is a repository where half its gates come from
+somewhere nobody here chose. Call that `owner/repo` the factory repository, and
+never assume it is any particular account: this command ships to forks, and a
+fork's projects call the fork.
+
+If `$1` is empty, read the latest release tag of the factory repository and use
+that.
 
 Everything you copy comes out of the factory repository at that tag, read with
-`mcp__github__get_file_contents` against `chamaya00/agent-factory` with `ref`
-set to the tag. Do not read it from an installed plugin: a cloud session has
+`mcp__github__get_file_contents` against it with `ref` set to the tag. Do not read it from an installed plugin: a cloud session has
 none, and the whole point of naming a tag is that the answer does not depend on
 what happens to be on the machine you are running on.
 
@@ -55,8 +66,8 @@ deleted here too, and gets its own line in the body, because a stale role that
 nothing maintains is worse than no role.
 
 Then read `.github/workflows/*.yml` and find every line matching
-`uses: chamaya00/agent-factory/...@`. Those are the workflow pins. Collect the
-ones not already at the target version.
+`uses: <factory repository>/.github/workflows/...@`. Those are the workflow
+pins. Collect the ones not already at the target version.
 
 There is no marketplace `ref` to move: this repository loads its commands and
 roles from its own `.claude/` directory, so the copies you are writing in this
@@ -80,8 +91,18 @@ So compare each caller against its template in the release at
 two halves differently:
 
 - **The `on:` block and the `uses:` line are the factory's.** Bring them to the
-  template's shape, substituting `$1` for `__FACTORY_VERSION__`. A trigger the
-  template has and the caller does not is a trigger the release needs.
+  template's shape, substituting `$1` for `__FACTORY_VERSION__` and the factory
+  repository for `__FACTORY_REPO__`. A trigger the template has and the caller
+  does not is a trigger the release needs.
+
+  Substitute the factory repository this repository is already on - the one you
+  read off its callers above - not whatever the template's own factory declares
+  about itself. Those are the same string in the ordinary case and differ in
+  exactly one: a fork, where taking the template's word for it would quietly
+  re-point a project at upstream on an otherwise routine version bump. A
+  placeholder that survives into a caller fails as an invalid workflow
+  reference on the first run, which is loud; a substituted owner nobody chose
+  is silent, so it is the one to be careful about.
 - **Everything else in the caller is the project's.** `with:` inputs, job
   names, and the comments a project wrote about its own gate stay exactly as
   they are. `ci.yml` in particular carries the project's `check-name` and its

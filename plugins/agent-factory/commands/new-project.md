@@ -191,14 +191,31 @@ use `plugins/agent-factory/` in the checkout you are running in. Call that
 directory the factory root and resolve every path below against it. If neither
 exists you are not in the factory - stop and say so.
 
-Read the version out of `<factory root>/.claude-plugin/plugin.json`
-first. That is the release this repository gets pinned to, and it goes in
-several places below, so read it once and use the same value everywhere.
+Read `<factory root>/.claude-plugin/plugin.json` first. Two values come out of
+it and both go in several places below, so read it once and use the same
+answers everywhere.
 
-Read each file out of `<factory root>/templates/project/` and send its
-contents through. Every `__FACTORY_VERSION__` in a template is replaced with
-`v` plus that version - for example `v1.2.0`. A placeholder that survives into
-the repository fails as an invalid workflow reference on the first run.
+- `version` is the release this repository gets pinned to.
+- `repository` is which factory this is. Take the `owner/repo` out of the URL -
+  `https://github.com/example/agent-factory` gives `example/agent-factory`.
+
+Read each file out of `<factory root>/templates/project/` and send its contents
+through, replacing both placeholders:
+
+- `__FACTORY_VERSION__` becomes `v` plus the version - for example `v1.2.0`.
+- `__FACTORY_REPO__` becomes that `owner/repo`, verbatim.
+
+A placeholder that survives into the repository fails as an invalid workflow
+reference on the first run, which is loud and easy to fix.
+
+The owner is read rather than typed because this command runs in forks too, and
+a fork's projects have to call the fork. A hardcoded account here would provision
+repositories that run somebody else's workflows: every check green, every run
+succeeding, none of it the code anybody here can edit. That is silent rather
+than loud, so it is the one worth being careful about.
+`docs/decisions/0001-factory-repo-is-declared-in-the-manifest.md` in the factory
+has the reasoning. If the manifest declares no repository, stop and ask - do not
+guess an owner.
 
 What goes in:
 
@@ -310,24 +327,57 @@ getting from one place rather than retyping.
 On the direct push path they are already there and this can be run at once. On
 the pull request path the human merges step 3 first.
 
-**Run it yourself.** Dispatching a workflow is an ordinary repository action,
-inside what a session token can do, so this is not a handoff:
+**Starting it is usually a handoff, and this page used to say otherwise.** It
+claimed a dispatch was an ordinary repository action inside what a session
+token can do, and treated the handoff as the exception. On a real provisioning
+run it came back:
+
+```
+POST /repos/<owner>/<repo>/actions/workflows/bootstrap.yml/dispatches
+403 Resource not accessible by integration
+```
+
+on a public repository, freshly provisioned, with all four callers already on
+the default branch - neither of the two conditions the page called exceptional.
+That error is the App installation lacking `actions: write`. It is **not** the
+Workflow permissions setting from step 1: that governs what `GITHUB_TOKEN` may
+do *inside* a run, not what an external App may do to the repository. Granting
+one does nothing for the other, so do not send anybody to that settings page
+over this.
+
+Nothing you can do from here changes it, and it is not something the person
+can switch on for you either - the permission belongs to the App the session
+runs as, not to the repository. So try the dispatch, because it costs one call
+and succeeds where an installation does have the permission, and expect to hand
+it over:
+
 `mcp__github__actions_run_trigger` on `bootstrap.yml` against the default
-branch. Then `mcp__github__actions_list` for the run it started, and
-`mcp__github__actions_get` until it finishes.
-
-**Read its summary yourself too.** This is the step that most often gets handed
-back when it should not be. The run summary carries the check names as they
-actually reported, which step 5 needs, and asking a person to open the run and
-read them to you turns a call you can make into a page they have to find, on a
-phone, and transcribe without a typo. Read it with `mcp__github__get_job_logs`
-and carry the names forward.
-
-Only hand this over if the dispatch itself fails - a fresh repository whose
-Actions are disabled, or workflows that are not on the default branch yet:
+branch. If it returns 403, do not retry it and do not report it as a failure of
+the repository - go straight to the handoff below and say which of the two it
+was.
 
 > 1. Open `github.com/$1/actions/workflows/bootstrap.yml`
 > 2. Tap **Run workflow**, then **Run workflow** again to confirm
+
+The fast-path script does not have this problem. It runs `gh` as the person, so
+`gh workflow run bootstrap.yml` works there - one more reason to offer it
+first, which is what "The fast path" section above is for.
+
+**Read its summary yourself, whoever started it.** This is the part that must
+not go with the dispatch, and on the run above it did: the handoff went out
+with nothing concrete in it, and step 5 went with it.
+
+Starting a run and reading one are different permissions, and only the first is
+refused. Once the run exists - however it was started - `mcp__github__actions_list`
+finds it, `mcp__github__actions_get` waits for it, and `mcp__github__get_job_logs`
+reads its summary. That summary carries the check names as they actually
+reported, which step 5 needs. Asking a person to open the run and read them
+back to you turns a call you can make into a page they have to find, on a
+phone, and transcribe without a typo - and a guessed check name is worse than
+no branch protection rule at all.
+
+So the handoff is four taps and a "tell me when it is done", not a research
+task. Wait, then read.
 
 **The check.** Verify a sample rather than trusting the run:
 `mcp__github__get_label` for `agent:queued` and `role:engineer`. If either is

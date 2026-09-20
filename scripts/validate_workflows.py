@@ -666,6 +666,25 @@ def check_privilege_cannot_arrive_undeclared() -> None:
                     "match the declaration with a line-anchored pattern, so the "
                     "phrase quoted anywhere in a body would pass it."
                 )
+
+            # Two failures, and they must not share a sentence. A body with no
+            # declaration and a body whose declaration is wrapped in backticks
+            # both exit 1, and the generic text tells the second author to go
+            # and write a declaration their body already contains - which reads
+            # as the check being broken rather than as two characters needing
+            # deleting, and sent one real incident an hour in the wrong
+            # direction. Collapsing them back into one message is the
+            # regression this asserts against, so it wants both the second
+            # anchored test and the sentence that distinguishes them.
+            anchored = re.findall(r"grep -qE '\^[^']*Privilege change:[^']*'", script)
+            if len(anchored) < 2 or "no line begins with it" not in script:
+                errors.append(
+                    f"project-guard.yml: the {PRIVILEGE_STEP!r} step has one "
+                    "message for two different failures. A declaration the "
+                    "formatting hid has to be told that it is there and not "
+                    "starting its line, separately from a body that never "
+                    "declared anything."
+                )
             # The documentation exclusion is a narrowing, and a narrowing is
             # how a check dies quietly: one more extension each time it is
             # inconvenient, until nothing is read. Markdown cannot grant a

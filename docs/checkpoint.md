@@ -9,6 +9,66 @@ the part that catches people out.
 
 ---
 
+## Which path you are on, before anything below
+
+This page describes the handoffs one repository at a time, which is the only
+option on a personal account. On an organization, most of them have an
+org-level default that applies to every repository provisioned afterwards, with
+no per-repository step at all.
+
+Read whichever of the next two sections is yours and skip the other. Somebody on
+a personal account who reads the organization table will go looking for settings
+that are not there.
+
+### On a personal account
+
+Nothing changes. Steps 0 to 5 below are the list, and steps 2 and 5 repeat for
+every project repository you provision. There is no account-level version of
+them, and that is a property of personal accounts rather than something missing
+here.
+
+### In an organization
+
+Four of the five handoffs become one-time org settings:
+
+| Handoff | Org-level mechanism |
+|---|---|
+| The Actions permission (step 1 of `/new-project`) | org Settings, Actions, Workflow permissions - applies as the default for repositories in the org |
+| `CLAUDE_CODE_OAUTH_TOKEN`, `AGENT_APP_ID`, `AGENT_APP_PRIVATE_KEY` (steps 2 and 3) | org secrets, shared with all repositories |
+| Installing the agent identity App (step 3) | installed on the org with "All repositories" |
+| Branch protection (step 5 of `/new-project`) | an org ruleset targeting the repository set |
+
+Labels are the partial one, and it is worth stating precisely rather than
+rounding up. Org default labels apply **at repository creation**, so they cover
+a fresh repository and not a label a later factory release adds. `bootstrap`
+stays the mechanism for those, which is what the session-start hook is already
+checking for.
+
+You still generate the token once (step 1) and create the App once (step 3).
+What an organization removes is repeating their *installation* per repository,
+not their creation.
+
+**What it costs, which is not nothing:**
+
+- An org secret shared with all repositories is readable by every workflow in
+  every repository in that org, including ones with nothing to do with this
+  system. Scoping the secret to selected repositories is the narrower option and
+  gives back a small per-repository step.
+- Existing repositories have to be transferred. A transfer carries issue and
+  pull request history with it, but URLs change and any local remotes need
+  updating.
+- Transferring **the factory itself** interacts with the factory's own declared
+  repository. `plugins/agent-factory/.claude-plugin/plugin.json` names it, every
+  caller a project receives is written from that name, and
+  `docs/decisions/0001-factory-repo-is-declared-in-the-manifest.md` has the
+  reasoning. Move the repository and that field needs the same change in a pull
+  request; the guard fails until it does, which is the intended signal rather
+  than a problem. Every repository already provisioned keeps calling the old
+  location until `/update-agents` moves its pins - which is the pinning working
+  as designed, not a migration failure.
+
+---
+
 ## 0. Cut a release tag
 
 This is not a deploy. Nothing here reaches a project on its own, and no
@@ -210,6 +270,41 @@ merge. Connecting a preview provider on top of this is a later decision, not a
 prerequisite.
 
 ---
+
+## 6. Start the `bootstrap` run for each new project
+
+Confirmed as yours rather than the session's, which this page and
+`/new-project` both used to get wrong.
+
+`/new-project` step 4 dispatches `bootstrap.yml` to create the labels and
+report the check names branch protection needs. That dispatch comes back
+`403 Resource not accessible by integration` - on a public repository, freshly
+provisioned, with all four callers already on the default branch, so none of
+the usual explanations apply. The cause is that the App the session runs as has
+no `actions: write`.
+
+The distinction that matters, because it sends people to the wrong settings
+page: the **Workflow permissions** setting in step 1 of `/new-project` governs
+what `GITHUB_TOKEN` may do *inside* a run. It has no bearing on what an
+external App may do *to* the repository. Setting it to "Read and write" does
+not make the dispatch work, and there is no repository setting that does - the
+permission belongs to the App, not to you.
+
+So this is four taps, per project, after step 3 lands on the default branch:
+
+> 1. Open `github.com/<owner>/<repo>/actions/workflows/bootstrap.yml`
+> 2. Tap **Run workflow**, then **Run workflow** again to confirm
+
+Then tell the session it has finished. **Do not read the summary back to it.**
+Starting a run and reading one are different permissions and only the first is
+refused, so the session reads the run itself and takes the check names off it.
+Transcribing them off a phone is how a typo gets into a branch protection rule,
+and a required check name that never reports blocks every merge including the
+one that would fix it.
+
+The fast-path script avoids this entirely: `scripts/setup-project.sh` runs `gh`
+as you, so `gh workflow run bootstrap.yml` works there, along with the labels
+and branch protection. If you are at a terminal, that is the shorter road.
 
 ## When you are done
 

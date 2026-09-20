@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -158,6 +159,7 @@ CLAIM_FIXTURES = {
 # What a template writes instead of a release tag. Provisioning substitutes it.
 PIN_PLACEHOLDER = "__FACTORY_VERSION__"
 OWNER_PLACEHOLDER = "__PROJECT_OWNER__"
+REPO_PLACEHOLDER = "__FACTORY_REPO__"
 ROLES = ["orchestrator", "researcher", "analyst", "designer", "engineer"]
 
 # The commands a provisioned project receives. `new-project` is deliberately not
@@ -504,27 +506,146 @@ def check_label_vocabulary_is_declared() -> None:
 
 
 def check_template_pins() -> None:
-    """Every caller a project receives must be pinned through the placeholder.
+    """Every caller a project receives names the factory by placeholder, twice.
 
-    A template that hardcodes a ref ships that ref to every repository
-    provisioned afterwards, and a moving one puts them all back on a live
-    pointer, which is the thing the pinning is for. The placeholder is
-    substituted at provision time, so it is the only correct value here.
+    Two things in a `uses:` line could be hardcoded, and both ship silently to
+    every repository provisioned afterwards.
+
+    The ref, which this check was written for: a template that hardcodes one
+    pins every later project to that release, and a moving one puts them all
+    back on a live pointer, which is the thing the pinning is for.
+
+    The owner, which it used to be blind to. The pattern held the factory's own
+    account inside itself, so it matched `uses:` lines naming that account and
+    nothing else. In a fork where the owner had been changed it matched
+    nothing - and a check that matches nothing does not fail, it goes quiet. A
+    fork could hardcode a ref in all four callers and the gate stayed green.
+    The same literal was the larger bug underneath: a fork that changed nothing
+    provisioned repositories calling *upstream's* reusable workflows, with
+    every check green and every run succeeding, none of it the code the person
+    thought they were running.
+
+    So this is anchored on the shape of a reusable workflow reference rather
+    than on anybody's account, and both halves have to be a placeholder.
+    `docs/decisions/0001-factory-repo-is-declared-in-the-manifest.md` records
+    where the substituted values come from.
     """
     templates = PLUGIN_DIR / "templates"
     if not templates.is_dir():
         return
-    pattern = re.compile(r"uses:\s*chamaya00/agent-factory/[^@\s]+@(\S+)")
+    # `<something>/.github/workflows/<file>` is the shape of a reusable
+    # workflow call and nothing else, so this finds every caller without
+    # knowing who owns it. The ref group is optional on purpose: a reference
+    # with no `@` at all is also wrong, and a pattern that simply failed to
+    # match it would be the quiet failure this check exists to stop.
+    pattern = re.compile(
+        r"uses:\s*(?P<repo>[^@\s]+?)/\.github/workflows/[^@\s]+?(?:@(?P<ref>\S+))?\s*$"
+    )
     for path in sorted(templates.rglob("*.yml")) + sorted(templates.rglob("*.yaml")):
         for number, line in enumerate(path.read_text().splitlines(), start=1):
             found = pattern.search(line)
-            if found and found.group(1) != PIN_PLACEHOLDER:
+            if not found:
+                continue
+            if found.group("repo") != REPO_PLACEHOLDER:
                 fail(
                     path,
-                    f"line {number} pins the factory at {found.group(1)!r}; "
-                    f"templates must use {PIN_PLACEHOLDER} so provisioning "
+                    f"line {number} addresses the factory as "
+                    f"{found.group('repo')!r}; templates must use "
+                    f"{REPO_PLACEHOLDER} so provisioning substitutes the "
+                    "factory this session is running out of. A literal here "
+                    "means a fork provisions repositories that call somebody "
+                    "else's workflows, silently and greenly",
+                )
+            ref = found.group("ref")
+            if ref is None:
+                fail(
+                    path,
+                    f"line {number} calls a reusable workflow with no `@ref` "
+                    f"at all; it must end {PIN_PLACEHOLDER} so provisioning "
                     "substitutes the installed release",
                 )
+            elif ref != PIN_PLACEHOLDER:
+                fail(
+                    path,
+                    f"line {number} pins the factory at {ref!r}; templates "
+                    f"must use {PIN_PLACEHOLDER} so provisioning substitutes "
+                    "the installed release",
+                )
+
+
+def factory_repo() -> str | None:
+    """The `owner/repo` this factory declares itself to be, or None.
+
+    Read out of the plugin manifest's `repository`, which already existed and
+    already had to be right - making it the declaration costs a fork one line
+    it was going to edit anyway.
+    """
+    manifest = PLUGIN_DIR / ".claude-plugin" / "plugin.json"
+    if not manifest.is_file():
+        return None
+    try:
+        declared = json.loads(manifest.read_text()).get("repository") or ""
+    except json.JSONDecodeError:
+        return None
+    found = re.search(r"github\.com[/:]([^/\s]+/[^/\s.]+)", declared)
+    return found.group(1) if found else None
+
+
+def check_factory_repo_is_declared() -> None:
+    """The factory says which repository it is, and its remote does not disagree.
+
+    The callers a project receives address the factory through
+    `__FACTORY_REPO__`, and provisioning substitutes the `owner/repo` in the
+    manifest's `repository` field. ADR 0001 has the reasoning. What matters
+    here is the one failure that choice leaves open: a fork that never edits
+    the field provisions repositories pointing at upstream, which is silent,
+    green, and precisely the bug the placeholder was added to fix.
+
+    So the declaration is cross-checked against this checkout's own `origin`.
+    The remote is deliberately not the source - a detached or mirrored checkout
+    has none, or has an unhelpful one, and the manifest still has to be
+    authoritative there. It is a witness. Where a remote is readable and
+    disagrees, a fork hears about it in one line at its own first build,
+    instead of hearing nothing and finding out from a provisioned repository
+    that quietly runs somebody else's code.
+
+    A pull request from a fork to this repository does not trip it: the
+    checkout for that run is this repository, so `origin` is this repository.
+    """
+    manifest = PLUGIN_DIR / ".claude-plugin" / "plugin.json"
+    declared = factory_repo()
+    if declared is None:
+        fail(
+            manifest,
+            "declares no parseable `repository`, so provisioning has nothing "
+            f"to substitute for {REPO_PLACEHOLDER} in the four caller "
+            "templates. It must be the factory's own GitHub URL",
+        )
+        return
+
+    try:
+        done = subprocess.run(
+            ["git", "config", "--get", "remote.origin.url"],
+            cwd=ROOT, capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return
+    if done.returncode != 0:
+        return
+    found = re.search(r"github\.com[/:]([^/\s]+/[^/\s]+?)(?:\.git)?$", done.stdout.strip())
+    if found is None:
+        return
+    remote = found.group(1)
+    if remote.lower() != declared.lower():
+        fail(
+            manifest,
+            f"declares this factory as {declared!r}, but `origin` is "
+            f"{remote!r}. Provisioning writes the declared value into every "
+            "caller it creates, so projects provisioned from this checkout "
+            "would call a factory nobody here can edit. If this is a fork, "
+            "change `repository` to this fork; if the remote is the odd one "
+            "out, leave the manifest alone",
+        )
 
 
 def check_runbooks_name_every_project_command() -> None:
@@ -1087,6 +1208,7 @@ def main() -> int:
     check_skills()
     check_commands()
     check_template_pins()
+    check_factory_repo_is_declared()
     check_template_owner_placeholder()
     check_runbooks_name_every_project_command()
     check_label_vocabulary_is_declared()

@@ -74,7 +74,26 @@ def git(repo: Path, *args: str) -> None:
     )
 
 
-def run_case(before, after, body: str = "", live_body: str | None = None) -> int:
+class Result(int):
+    """The step's exit code, with the output it printed kept alongside it.
+
+    Most cases only ever ask whether the step passed, and `== 1` is the
+    clearest way to write that, so this stays an int. Two cases have to ask
+    something else: a missing declaration and a declaration the formatting hid
+    both exit 1, and telling them apart is the entire point of the second
+    message. The output rides along rather than every existing case growing a
+    tuple unpack it has no use for.
+    """
+
+    output: str
+
+    def __new__(cls, code: int, output: str) -> "Result":
+        self = super().__new__(cls, code)
+        self.output = output
+        return self
+
+
+def run_case(before, after, body: str = "", live_body: str | None = None) -> "Result":
     """Build a real two-commit repo, diff it, and return the step's exit code.
 
     `before` and `after` are either a string, meaning one file called
@@ -131,7 +150,7 @@ def run_case(before, after, body: str = "", live_body: str | None = None) -> int
                  "GH_REPO": "owner/repo",
                  "FAKE_LIVE_BODY": live_body or ""},
         )
-        return done.returncode
+        return Result(done.returncode, done.stdout + done.stderr)
 
 
 CASES = []
@@ -254,6 +273,67 @@ def _():
     after = PLAIN + "      - uses: some-org/some-action@v1\n"
     body = "**Privilege change:** runs some-org/some-action to lint.\n"
     return run_case(PLAIN, after, body=body) == 0
+
+
+# Both of the next two exit 1, and that is exactly why the exit code is not
+# what they assert on. The declaration was written `\`Privilege change:\`` on a
+# real pull request, the step failed it correctly, and the message said the body
+# did not declare the change - to a reader looking straight at a body that did.
+# An hour went on the theory that the check was reading stale text. The fix was
+# deleting two characters.
+@case("a declaration the formatting hid says so, rather than asking for one")
+def _():
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    got = run_case(PLAIN, after,
+                   body="`Privilege change:` all four callers move to v1.31.0.\n")
+    return got == 1 and "no line begins with it" in got.output
+
+
+@case("a body that declares nothing still gets the generic message")
+def _():
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    got = run_case(PLAIN, after, body="Adds the linter.\n")
+    return (got == 1
+            and "no line begins with it" not in got.output
+            and "does not say so" in got.output)
+
+
+@case("a bare declaration still passes, unchanged")
+def _():
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    got = run_case(PLAIN, after,
+                   body="Privilege change: runs some-org/some-action to lint.\n")
+    return got == 0 and "no line begins with it" not in got.output
+
+
+@case("a list marker is formatting too")
+def _():
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    got = run_case(PLAIN, after,
+                   body="Notes:\n\n- Privilege change: runs some-org/some-action.\n")
+    return got == 1 and "no line begins with it" in got.output
+
+
+# The looser message must not swallow the case the anchor exists for. Words
+# before the phrase mean it is being mentioned, not used, and telling that
+# author to remove formatting they did not write would be the same bug aimed
+# the other way.
+@case("the phrase used mid-sentence is not treated as hidden formatting")
+def _():
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    body = "I was told to write Privilege change: something and it would pass.\n"
+    got = run_case(PLAIN, after, body=body)
+    return got == 1 and "no line begins with it" not in got.output
+
+
+# Nothing after the colon is an empty declaration, not a formatting problem,
+# and the message has to stay on the generic branch or it tells somebody who
+# wrote nothing to delete punctuation they did not use.
+@case("an empty declaration behind backticks is not called a formatting problem")
+def _():
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    got = run_case(PLAIN, after, body="Privilege change:\n")
+    return got == 1 and "no line begins with it" not in got.output
 
 
 @case("a removed permission is not a widening")
