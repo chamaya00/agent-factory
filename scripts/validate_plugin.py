@@ -456,6 +456,52 @@ def check_no_emoji() -> None:
                 fail(path, f"line {number} contains emoji {found.group()!r}")
 
 
+def check_label_vocabulary_is_declared() -> None:
+    """A project has to be able to find out which labels it is missing.
+
+    Only `bootstrap` creates a label, it is workflow_dispatch only, and only a
+    person can run it. So a release that adds one ships the name in files and
+    leaves the label itself absent until somebody notices - and the failure is
+    silent: the preflight matches on a label nothing can apply, the run that
+    should have started does not, and nothing reports it. It cost a real
+    release here before anything checked.
+
+    The fix needs the required set to exist somewhere a project carries, which
+    is the template manifest. This keeps that copy honest against the one place
+    the labels are really created. Order matters too: the manifest is read by a
+    person comparing it with `bootstrap.yml`, and two lists in different orders
+    are far harder to diff by eye than two lists in the same one.
+    """
+    manifest = PLUGIN_DIR / "templates" / "project" / ".claude" / "agent-factory.json"
+    bootstrap = ROOT / ".github" / "workflows" / "bootstrap.yml"
+    if not manifest.is_file() or not bootstrap.is_file():
+        return
+    data = check_json(manifest)
+    if data is None:
+        return
+    created = re.findall(r"^\s*label\s+([a-z:-]+)", bootstrap.read_text(), re.M)
+    if not created:
+        fail(bootstrap, "no `label` lines, so nothing here creates the vocabulary a project needs.")
+        return
+    declared = data.get("labels")
+    if declared is None:
+        fail(
+            manifest,
+            "declares no `labels`, so nothing shipped to a project can say which "
+            "labels it is missing after a release adds one.",
+        )
+        return
+    if declared != created:
+        missing = [name for name in created if name not in declared]
+        extra = [name for name in declared if name not in created]
+        if missing:
+            fail(manifest, f"does not declare label(s) bootstrap.yml creates: {', '.join(missing)}")
+        if extra:
+            fail(manifest, f"declares label(s) bootstrap.yml never creates: {', '.join(extra)}")
+        if not missing and not extra:
+            fail(manifest, "declares the same labels as bootstrap.yml in a different order; keep them in step so the two can be read side by side.")
+
+
 def check_template_pins() -> None:
     """Every caller a project receives must be pinned through the placeholder.
 
@@ -970,6 +1016,7 @@ def main() -> int:
     check_skills()
     check_commands()
     check_template_pins()
+    check_label_vocabulary_is_declared()
     check_vendored_roles()
     check_self_vendored()
     check_no_stale_marketplace_pin()
