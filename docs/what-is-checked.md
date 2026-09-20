@@ -65,8 +65,9 @@ ships: change the shell and the tests run the change.
 
 ### validate_plugin.py
 
-Thirteen groups of structural checks. The ones with a reason behind them rather
-than a convention:
+Structural checks, in groups. No count is given: this section said thirteen
+while `main()` ran sixteen, which is the same way the table above once said
+five. The ones with a reason behind them rather than a convention:
 
 - **Roles carry the containment clause.** Every role file the manifest lists must exist, have
   `name` and `description` frontmatter matching the filename, keep the body
@@ -86,6 +87,18 @@ than a convention:
 - **Templates pin the placeholder.** A caller template must address the factory
   at `__FACTORY_VERSION__`, never a literal ref. A hardcoded ref ships to every
   repository provisioned afterwards.
+- **The CODEOWNERS template names no handle.** Same reasoning one step further:
+  it carries `__PROJECT_OWNER__` and no literal account. It used to ship a real
+  handle with prose telling the session to replace it, and a skipped
+  replacement is invisible - what lands is a perfectly formed gate file naming
+  somebody who owns nothing in that repository, so it reviews nothing and looks
+  configured.
+- **The runbooks name every command a project gets.** `new-project.md` and
+  `update-agents.md` both have to name all of `PROJECT_COMMANDS` in their own
+  prose. They had drifted to five and three against a list of six, and the one
+  both had lost was `check-in` - which the project template's CLAUDE.md tells
+  every provisioned repository to run by name. A session following either
+  runbook shipped a repository pointing at a command nobody had copied.
 - **The manifest matches disk.** The roles, skills, and commands named in
   `agent-factory.json` have to be the ones actually present, or provisioning
   copies nothing and succeeds.

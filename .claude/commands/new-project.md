@@ -33,14 +33,24 @@ level, so changing a repository setting is `403 Resource not accessible by
 integration` however it is asked for. `gh` in a Codespace is the person.
 
 Offer it after step 3, once the workflows are pushed, since it runs bootstrap
-and reads check names that do not exist before then:
+and reads check names that do not exist before then. Substitute this factory's
+own `owner/repo` into the URL, read from `git config --get remote.origin.url`
+in the checkout you are running in rather than assumed - a fork that sends
+people to the upstream Codespace has them run somebody else's scripts against
+their repository:
 
 > The rest is one paste instead of four trips through settings pages:
 >
-> 1. Open `github.com/codespaces/new?repo=chamaya00/agent-factory`
+> 1. Open `github.com/codespaces/new?repo=<this factory's owner/repo>`
 > 2. In its terminal: `bash scripts/setup-project.sh $1`
 >
 > Or we can do it by hand - say which and I'll follow along.
+
+**Make the offer before you start handing steps over, not after.** It is easy
+to skip - the manual path works, so nothing goes wrong, and the cost is only
+visible as four settings pages the person did not have to open. A run that
+reaches the report having never mentioned the script has spent their attention
+on the one part of this that was already automated.
 
 If they take it, steps 4 and 5 are done and the report says what it confirmed.
 If not, every step below stands on its own.
@@ -163,6 +173,17 @@ that is wrong in the recoverable direction.
 
 Either way it is one commit, and the rest of this step is what goes in it.
 
+**Write that commit through a clone and `git`, whichever path you are on.**
+`mcp__github__push_files` sends content and no file mode, so everything it
+writes lands unexecutable - and four of the files below have to carry the bit.
+Nothing reports that at the time, in the way nothing ever reports a missing
+execute bit: the hook is wired and silent, the three scripts are present and
+refuse, and the first thing to notice is `ci.yml`'s own placeholder gate, which
+checks `test -x scripts/...` and so fails the first run on a repository that
+was otherwise provisioned perfectly. Clone the target, write the files,
+`chmod +x` the hook and the three scripts, commit, push. The API tools are
+still right for reading the tree and for everything in steps 4 and 5.
+
 Everything you copy below comes out of the factory itself.
 `${CLAUDE_PLUGIN_ROOT}` is set only when the factory is installed as a plugin,
 which does not happen in a cloud session, so use it if it is set and otherwise
@@ -210,7 +231,11 @@ What goes in:
 
   What is not acceptable is not answering. An unstated assumption here is
   invisible until it has been wrong for a day.
-- `.github/CODEOWNERS` - set the owner to the repository owner
+- `.github/CODEOWNERS` - replace every `__PROJECT_OWNER__` with the handle that
+  owns the repository. It is a placeholder for the same reason the pin is: a
+  literal handle in the template is one a session can forget to change, and
+  what lands then is a gate file naming an account with no relationship to the
+  repository - which reviews nothing and looks exactly like a configured one
 - `CLAUDE.md` - fill in the product sentence, the stack, and the commands from
   what is actually in the repository. Do not leave a bracketed placeholder
   behind; if you cannot tell what belongs in one, ask rather than guess.
@@ -245,7 +270,7 @@ Then the roles and the commands themselves, copied rather than referenced:
 - `.claude/agents/*.md` - every file in `<factory root>/agents/`
 - `.claude/skills/*/SKILL.md` - every skill in `<factory root>/skills/`
 - `.claude/commands/objective.md`, `retro.md`, `decompose.md`, `update-agents.md`,
-  `ship.md` - from
+  `ship.md`, `check-in.md` - from
   `<factory root>/commands/`. Not `new-project.md`: provisioning is the
   factory's job, and a project that can provision another project is a way to
   get a second factory nobody is maintaining.
