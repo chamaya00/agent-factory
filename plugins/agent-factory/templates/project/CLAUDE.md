@@ -49,8 +49,10 @@ would name it back.
 
 Objectives become issues labelled `objective`. A human labels the objective
 `agent:queued`; nothing else needs labelling by hand. The orchestrator splits it
-into 2-5 child issues, each with acceptance criteria and one role label, and
-then queues them itself as each one becomes ready.
+into 1-5 child issues sized to the work, each with acceptance criteria and one
+role label, and then queues them itself as each one becomes ready. A small
+objective may be a single engineer issue - when it is, the orchestrator says
+which roles it skipped, so a thin plan is visible rather than assumed.
 
 It stays with the objective after the split. A child reaching `agent:review` or
 `agent:blocked` wakes it: it reads the state of every child, queues whatever the

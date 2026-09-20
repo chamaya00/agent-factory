@@ -5,27 +5,15 @@ they cover different ground. This page says which is which, what each one
 actually asserts, and - the part worth reading first - what nothing asserts
 yet.
 
-## There is no smoke-test workflow
+## Some of this is checked by a person, on purpose
 
-`docs/smoke-test.md` is a runbook for a person, not an Action. Nothing under
-`.github/workflows/` is named smoke, and no job invokes it. It is phase 8 of
-standing the system up: you file two objectives by hand and watch the loop carry
-each one, judging the result yourself.
+Nothing under `.github/workflows/` runs a model, and the conditions that decide
+whether the loop is working are not mechanical. "The children have checkable
+acceptance criteria" and "the tests map onto those criteria one to one" are
+judgments, and a script cannot make either. Those are manual because what they
+check needs judgment, not because nobody automated them.
 
-That matters because its pass conditions are not mechanical. "The children have
-checkable acceptance criteria" and "the tests map onto those criteria one to
-one" are the conditions, and a script cannot decide either. It is a manual
-check because the thing it checks needs judgment, not because nobody got round
-to automating it.
-
-What the judgment is spent on changed, though, and that was the point of the
-rewrite. The objectives build a website that publishes from the repository, so
-the top-level question is answered by opening the published URL and looking at
-it rather than by reading the diff. How much of the diff you had to read is the
-number that phase reports back, because a phase 8 that needs a careful line-by-
-line read has demonstrated the opposite of what it set out to.
-
-The automated checking is elsewhere.
+The rest is automated, and that is what the layers below describe.
 
 ## The four layers
 
@@ -34,11 +22,11 @@ The automated checking is elsewhere.
 | 1. `guard.yml` | every push and pull request | this repository | the factory is well formed and its shell does what it claims |
 | 2. `ci.yml`, `project-guard.yml` | every push and pull request | each project | the project's own gate holds, and agents stay out of it |
 | 3. agent-run preconditions | every agent run | each project | a run that cannot work refuses to start |
-| 4. the two runbooks | by hand, once per setup | a throwaway repo | the loop end to end |
+| 4. the runbook | by hand, once per setup | a throwaway repo | the loop end to end |
 
 Layers 1 to 3 are deterministic: each one passes or fails with nothing to
-interpret, and no model decides any of it. Layer 4 is the only one that
-exercises a real agent, and the only one a human has to sit through.
+interpret, and no model decides any of it. Layer 4 is the only one a human has
+to sit through.
 
 ## Layer 1: guard.yml
 
@@ -244,41 +232,31 @@ silent failure into a loud one.
   role copies, or `CODEOWNERS`; never skip or disable a test to get a check
   green; stay inside the one issue.
 
-## Layer 4: the two runbooks
+## Layer 4: the runbook
 
-`docs/proving-the-gate.md` (phase 7) and `docs/smoke-test.md` (phase 8) are the
-only checks that cover the loop end to end.
-
-Phase 7 proves the gate before any agent is pointed at it, and its fourth step
-is the one that actually proves something: open a pull request that breaks a
-test on purpose and confirm the merge button is disabled. A gate that has never
+`docs/proving-the-gate.md` is the only check that covers the loop end to end.
+It proves the gate before any agent is pointed at it, and its fourth step is
+the one that actually proves something: open a pull request that breaks a test
+on purpose and confirm the merge button is disabled. A gate that has never
 refused anything is not known to be a gate.
 
-Phase 8 needs all of this in place before it can start, and each item is a
-separate way for it to fail confusingly:
+Past that, a real objective is the test. Before one can run, all of this has to
+be in place, and each item is a separate way for it to fail confusingly:
 
-1. A repository provisioned by `/new-project`, from phase 7.
+1. A repository provisioned by `/new-project`.
 2. `CLAUDE_CODE_OAUTH_TOKEN` on that repository. Secrets are per repository,
    and without it every run fails immediately at auth.
 3. Both Actions settings ticked: read and write permissions, and "Allow GitHub
    Actions to create and approve pull requests". With the second one off the
    run succeeds and no pull request ever appears.
-4. The nine labels, from the `bootstrap` workflow.
+4. The labels, from the `bootstrap` workflow.
 5. Branch protection using the check names that run reported.
 6. A release tag matching the version in the plugin manifest. The callers are
    pinned to it, and a pin with no tag behind it fails as an invalid workflow
    reference naming nothing about a tag in another repository.
-7. Publishing configured on that repository, serving the default branch from
-   its root. It is a repository setting, so no agent can turn it on, and the
-   objectives are not acceptable until something is visible at the published
-   URL. Set it before filing anything, so its 404 is expected rather than
-   discovered halfway through.
 
-Then two objectives go through eight steps each: the orchestrator splits one,
-you queue the children in dependency order, the engineer opens a pull request,
-you merge and open the site, you ask for a revision with the trigger phrase, and
-`/retro` proposes a memory entry. What to watch for at each step, and the eight
-failure modes worth recognising on sight, are in that file.
+`scripts/setup-project.sh` does 2 to 5 in one run and reads each back, which is
+why they are listed as prerequisites rather than as steps.
 
 ## What is not checked
 
@@ -286,18 +264,18 @@ Everything automated tests form. Nothing automated tests behaviour, by design -
 no model runs in `guard.yml`, because a check that needs judgment is not a gate.
 That leaves real gaps, and they are worth naming.
 
-- **Three of the four roles have never completed a run.** Only the researcher
-  has run successfully under the current allowlist. The engineer is the one to
-  watch: it is the only role that needs `Bash(npm run:*)` and the only one
-  whose output has to pass the gate rather than merely exist. It has now been
-  tried once, on new-project-agents-v3#18, and it failed in exactly the place
-  this bullet points at - refused by its own test-runner grants, which is the
-  failure the check above now catches. Until an engineer run lands a pull
-  request that passes CI, treat step 3 of the smoke test as untested rather
-  than passing.
-- **Nothing confirms branch protection still matches the job names.**
-  `bootstrap` reports the names; keeping the rule pointed at them is manual,
-  and the drift reads as green.
+- **No role's output is checked for being correct, only for passing.** All four
+  roles have now completed runs and landed pull requests, so the gap is no
+  longer whether they run. It is that a green pull request means the gate was
+  satisfied, never that the work is right - and on a placeholder gate it means
+  considerably less than that. Read the diff against the acceptance criteria;
+  that is the check, and it is a person's.
+- **Nothing confirms branch protection is actually set, or still matches the
+  job names.** `bootstrap` reports the names and `setup-project.sh` sets the
+  rule from them, but neither can read the rule back from inside a run, and a
+  rule that was never set reads exactly like one that passes everything. The
+  job names no longer move on their own, which removes the drift half of this;
+  the "was it ever set" half remains.
 - **Nothing confirms the OAuth secret exists** until a run fails at auth.
 - **A run that dies for a configuration reason still burns an attempt.** The
   attempt marker is written before the agent starts, so a run that never got to

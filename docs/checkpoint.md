@@ -112,7 +112,7 @@ More importantly, an orchestrator that queues its own children cannot work
 without it. Events raised by `GITHUB_TOKEN` do not start workflow runs, so with
 no App the label the orchestrator puts on a child raises nothing and the child
 never runs - and neither does the wake when a child lands. You get the
-decomposition and then silence. `docs/open-questions.md` entry 7 has the
+decomposition and then silence. `docs/open-questions.md` entry 6 has the
 detail.
 
 1. `github.com/settings/apps` then **New GitHub App**.
@@ -221,6 +221,6 @@ prerequisite.
 
 ## When you are done
 
-Reply with which of these are done. Then phase 7 proves the gate before any
-agent is pointed at it - that ordering matters, and the reason is in
-`docs/proving-the-gate.md`.
+Reply with which of these are done. Then `docs/proving-the-gate.md` proves the
+gate before any agent is pointed at it - that ordering matters, and the reason
+is in that document.

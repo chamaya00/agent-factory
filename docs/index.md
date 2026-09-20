@@ -21,10 +21,6 @@ In order, and the order is the point.
    check blocks a merge, on a throwaway repository, before any agent is
    pointed at it. An agent aimed at a gate you do not trust produces work you
    have to read line by line, which is the thing this system exists to avoid.
-3. **[The smoke test](smoke-test.md)** - two objectives through the whole loop,
-   building a site the repository publishes, so the result is judged by opening
-   a URL rather than by reading a diff. What to watch for at each step, and the
-   eight failure modes worth recognising on sight.
 
 ## Reference
 
@@ -43,5 +39,3 @@ In order, and the order is the point.
 - **[Driving an objective](driving-an-objective.md)** - a proposal, not
   yet built: what the interactive session's role is, and how a person's
   "merge when green" survives the end of the session they said it in.
-- **[Implementation plan](implementation-plan.md)** - the document this was
-  built from, phase by phase. Kept for the reasoning behind each phase.

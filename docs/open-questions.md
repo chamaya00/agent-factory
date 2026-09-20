@@ -146,29 +146,7 @@ and will hit the cap after two real ones.
 
 ---
 
-## 4. Two of the four roles have still never run
-
-`researcher` and `orchestrator` are both proven under `v1.4.0`, on runs
-33792437707 and 33843275814 respectively.
-
-`designer` and `engineer` have not run. The engineer is the one to watch,
-because it is the only role that needs `Bash(npm run:*)` to work and the only
-one whose output has to pass the gate rather than just exist. A role that
-writes files nobody runs is a much easier thing to get right than one that has
-to make `npm run test` green.
-
-Until an engineer run lands a pull request that passes CI, treat the engineer
-step of `docs/smoke-test.md` as untested rather than passing.
-
-**How to answer it.** Both roles run in phase 8 as it now stands: the objectives
-there produce a design document and a published site, so a full pass exercises
-three of the four roles rather than one. That is deliberate - a runbook that
-only ever ran the orchestrator was not testing the loop, it was testing the
-first step of it.
-
----
-
-## 5. Is 40 turns enough for the engineer?
+## 4. Is 40 turns enough for the engineer?
 
 **What is known.** The cap was raised from 15 to 40 in `v1.4.0` because 15 was
 below the floor. Both roles that have run since finished close to the new cap:
@@ -181,11 +159,10 @@ then labels the issue `agent:blocked` and spends one of its three attempts on
 something that was not a scoping problem at all. That is question 3 arriving by
 a second route.
 
-**How to answer it.** Run the engineer on the smallest child of phase 8's first
-objective and read `num_turns` in the result block. `docs/smoke-test.md` asks
-for that number in its report, and asks for the smallest child to be queued
-first for exactly this reason: the answer is wanted before a larger child spends
-an attempt discovering it.
+**How to answer it.** Read `num_turns` in the result block of an engineer run
+on a small child. Queue the smallest child of an objective first for exactly
+this reason: the answer is wanted before a larger child spends an attempt
+discovering it.
 
 **What changes.** If it lands near 40, raise the cap in the template and in
 `agent-run.yml`'s default. Do not raise it pre-emptively: the cap exists
@@ -194,7 +171,7 @@ evidence of anything.
 
 ---
 
-## 6. Should a run pin the model?
+## 5. Should a run pin the model?
 
 **What changed.** Every role file used to carry `model: opus` in its
 frontmatter. In an Actions run that line does nothing: the agent is started by
@@ -225,7 +202,7 @@ default is documented as deliberate in `agent-run.yml`.
 
 ---
 
-## 7. One pending run, and a wave of two loses one
+## 6. One pending run, and a wave of two loses one
 
 **What is known.** A concurrency group holds exactly one pending entry, and a
 third arrival cancels the one already waiting. `agent-run.yml` puts that group

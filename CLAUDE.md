@@ -111,7 +111,7 @@ Do not read all of `docs/`. Read the one that matches what you are doing:
   template's CLAUDE.md
 - `docs/getting-started.md` - the onboarding walkthrough script, before
   changing the trigger phrases above or how a session opens `/new-project`
-- `docs/proving-the-gate.md` and `docs/smoke-test.md` - the two runbooks
+- `docs/proving-the-gate.md` - the runbook for proving a red check blocks a merge
 - `README.md` - the tour, if none of the above is the thing
 
 The workflows under `.github/workflows/` carry their reasoning in comments, at

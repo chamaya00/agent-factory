@@ -1,4 +1,4 @@
-# Phase 7: prove the gate before wiring agents
+# Prove the gate before wiring agents
 
 ## Why this ordering
 
@@ -10,8 +10,8 @@ does, most of them are a glance at the checks and then at the published page.
 So the gate gets proven by hand, on a repo you can throw away, before
 `agent-run.yml` is enabled anywhere.
 
-Do not skip to phase 8 because phase 7 is boring. Boring is the result you are
-looking for.
+Do not skip this because it is boring. Boring is the result you are looking
+for.
 
 ## 1. Create the throwaway repo
 
@@ -124,11 +124,14 @@ One more, because this rule is the one an agent is most likely to trip.
 
 Open a pull request that adds a line to `.github/workflows/ci.yml`. Since you
 are the repository owner, `project-guard` will pass it - that is correct
-behaviour, and it is why the check reads the pull request author.
+behaviour. The check clears on either the pull request's author or the account
+that pushed, so a maintainer repairing a gate on an agent's branch is allowed
+too, and the fix does not have to be moved to the default branch where this
+check does not run at all.
 
-To see it fail you need an author who is not a maintainer, which in practice
-means an agent pull request. So do not force this one now: note it, and confirm
-it in phase 8, when the engineer opens its first pull request. If an agent ever
+To see it fail you need both to be something other than a maintainer, which in
+practice means an agent pull request. So do not force this one now: note it,
+and confirm it when the engineer opens its first pull request. If an agent ever
 does touch a workflow file, this check is what catches it.
 
 ## 6. Only now enable agent-run
@@ -138,7 +141,9 @@ When steps 1 to 4 are boring and repeatable, add `CLAUDE_CODE_OAUTH_TOKEN` to
 the repo from `/new-project`, and it does nothing until an issue carries the
 right labels.
 
-Then go to phase 8.
+Then point a real objective at it. The loop has run end to end on real
+projects, so there is no separate rehearsal to do first - the first objective
+is ordinary work.
 
 ## What to report back
 

@@ -253,9 +253,9 @@ question a person actually has, which is what is different now.
 
 When an objective is met, the report should also name **what a person can now
 open, and what changed from a user's point of view** - the URL, the page, the
-command. The smoke test already takes this position for the system as a whole
-("judged by opening a URL rather than by reading a diff"); this applies the
-same standard to every objective.
+command. Judging work by opening what it produced rather than by reading a
+diff is the standard the whole system is built around; this applies it to
+every objective.
 
 ## What this deliberately does not do
 
