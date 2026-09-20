@@ -459,6 +459,68 @@ def check_no_emoji() -> None:
                 fail(path, f"line {number} contains emoji {found.group()!r}")
 
 
+LIQUID = re.compile(r"\{\{|\{%")
+RAW_SPAN = re.compile(r"\{%-?\s*raw\s*-?%\}.*?\{%-?\s*endraw\s*-?%\}", re.DOTALL)
+
+
+def check_docs_carry_no_liquid() -> None:
+    """The docs folder is published by a build this gate does not run.
+
+    `docs/` is a GitHub Pages site served from the default branch, built by
+    Jekyll, and nothing here builds it. That is the one place in this
+    repository where the thing that publishes and the thing that checks are two
+    different programs - the gap `ci.yml`'s header warns every project about,
+    sitting in the factory itself. ADR 0002 records why it is accepted and what
+    this check covers of it.
+
+    Jekyll runs Liquid over a page before Markdown, so backticks and fenced
+    blocks protect nothing. Both failure modes were measured against Liquid
+    5.14 rather than assumed:
+
+      `${{ secrets.DEPLOY_KEY }}`   renders as `$`
+      `${{ inputs.memory-line-cap }}`  renders as `$`
+      {% if x %} with no matching end   fails the build
+
+    The first is the dangerous one, and it had already happened: what-is-checked
+    said the test scripts substitute "the `${{ }}` expressions the runner
+    would", and the published page said "the `$` expressions the runner would"
+    for as long as that sentence existed. Every check green the whole time,
+    because no check here has ever read the built site.
+
+    This repository documents workflow files for a living, so quoting an
+    expression is a normal thing to write here and the hazard is permanent
+    rather than a one-off.
+
+    The fix is to write the sentence without the braces where that reads
+    naturally, and to wrap it in a raw tag where it does not - which this
+    allows. Prefer the rewrite: a raw tag is Liquid, so it renders on the site
+    and shows up as markup on github.com, and the site's whole premise is that
+    a document is edited once and reads correctly in both places.
+    """
+    docs = ROOT / "docs"
+    if not docs.is_dir():
+        return
+    for path in sorted(docs.rglob("*.md")):
+        text = path.read_text()
+        # Blank out raw spans, newlines included, so line numbers still point
+        # at the line the author has to look at.
+        scanned = RAW_SPAN.sub(lambda m: re.sub(r"[^\n]", "", m.group()), text)
+        for number, line in enumerate(scanned.splitlines(), start=1):
+            found = LIQUID.search(line)
+            if found:
+                fail(
+                    path,
+                    f"line {number} contains {found.group()!r}, which Jekyll "
+                    "reads as Liquid when it builds this folder into the Pages "
+                    "site - backticks do not protect it. An expression "
+                    "collapses to nothing and the page says something other "
+                    "than what is written here; an unclosed tag fails the build "
+                    "outright, and no check in this repository would report "
+                    "either. Rewrite the sentence without the braces, or wrap "
+                    "it in a raw tag",
+                )
+
+
 def check_label_vocabulary_is_declared() -> None:
     """A project has to be able to find out which labels it is missing.
 
@@ -1284,6 +1346,7 @@ def main() -> int:
     check_template_memory_files()
     check_portability()
     check_no_emoji()
+    check_docs_carry_no_liquid()
     if errors:
         print(f"guard: {len(errors)} problem(s)\n")
         for error in errors:
