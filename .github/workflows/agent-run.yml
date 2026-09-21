@@ -45,7 +45,14 @@ on:
         type: number
         default: 30
       model:
-        description: Model for the run. Empty uses the action default.
+        description: >-
+          Model for every role in this run, overriding the per-role defaults
+          resolved in the agent job. Empty is the normal case and does not mean
+          "the action's default" any more: it means each role gets whatever the
+          `Resolve the model for this role` step picks for it, which is the
+          action's default for most of them. Set this only to pin the whole
+          repository to one model - a project economising, or a bisect asking
+          whether a model change explains a change in output.
         type: string
         default: ''
       max-attempts:
@@ -950,6 +957,78 @@ jobs:
           echo "Allowing for $ROLE: $tools"
           echo "allowed=$tools" >> "$GITHUB_OUTPUT"
 
+      # Which model each role runs on, in the one place a reader can see it
+      # next to what that role is allowed to do.
+      #
+      # This used to be a line in the role files. Every one of them carried
+      # `model: opus`, and in an Actions run that line does nothing: the agent
+      # is started by a prompt telling it to follow the definition in
+      # `.claude/agents/`, not through the subagent mechanism that reads
+      # frontmatter. Run 33843275814 ran the "opus" orchestrator on
+      # claude-sonnet-5 and claude-haiku-4-5, which is how it was found. The
+      # lines were deleted rather than left describing something that was not
+      # happening, and that left the policy question with nowhere to live:
+      # every role in every project ran on whatever the action defaulted to,
+      # and that default can move between two runs with nothing in this
+      # repository changing.
+      #
+      # So it lives here, beside the allowlist, because the two are the same
+      # kind of fact about a role and a reader looking up one wants the other.
+      # A role absent from the case below is not an oversight - it is the
+      # action's default, chosen, and the default is right for most of them.
+      #
+      # The caller's `model` input still wins. Pinning the whole repository to
+      # one model is an explicit act - economising, or bisecting whether a
+      # model change explains a change in output - and a per-role default must
+      # not quietly survive it.
+      - name: Resolve the model for this role
+        id: model
+        env:
+          ROLE: ${{ needs.preflight.outputs.role }}
+          REQUESTED: ${{ inputs.model }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "$REQUESTED" ]; then
+            model="$REQUESTED"
+            echo "Model for $ROLE: $model (pinned by the caller for every role)"
+          else
+            case "$ROLE" in
+              # The one role whose output is entirely judgement. It reads what
+              # it finds, decides which sources are worth a second hop, and
+              # produces a comparison somebody commits to - and its craft
+              # skill asks it to carry an option nobody requested and to go
+              # looking for the case against its own pick, which is more room
+              # to be shallow in than the method alone gave it. Nothing else
+              # here has that shape: the orchestrator splits work against a
+              # rubric, the analyst and designer write to a specified form, the
+              # engineer is checked by a gate that either goes green or does
+              # not. A weaker model shows up in those as a failing check. Here
+              # it shows up as a plausible document, which is the failure this
+              # role exists to prevent and the only one nothing downstream
+              # catches.
+              #
+              # An alias rather than a full model id, deliberately. The tier is
+              # the decision; which build serves it is not, and pinning a build
+              # would need a bump in this repository every time one ships, with
+              # a stale pin as the cost of forgetting.
+              #
+              # This is a bet, not a measurement. Nothing has yet compared two
+              # runs on one objective, and open-questions.md keeps asking for
+              # that comparison. Deleting this line is the whole of the
+              # rollback.
+              researcher) model='opus' ;;
+              *)          model='' ;;
+            esac
+            if [ -n "$model" ]; then
+              echo "Model for $ROLE: $model"
+            else
+              echo "Model for $ROLE: the action's default"
+            fi
+          fi
+
+          echo "name=$model" >> "$GITHUB_OUTPUT"
+
       # The instant before the agent starts, so the handback below can tell a
       # question this run asked from one an earlier attempt asked. Without it
       # the marker is permanent: attempt 1 asks, a person answers and clears the
@@ -996,7 +1075,7 @@ jobs:
           claude_args: |
             --max-turns ${{ inputs.max-turns }}
             --allowedTools "${{ steps.tools.outputs.allowed }}"
-            ${{ inputs.model && format('--model {0}', inputs.model) || '' }}
+            ${{ steps.model.outputs.name && format('--model {0}', steps.model.outputs.name) || '' }}
           prompt: |
             Work issue #${{ needs.preflight.outputs.issue }} in ${{ github.repository }}
             as the `${{ needs.preflight.outputs.role }}` agent defined in
