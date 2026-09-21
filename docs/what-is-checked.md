@@ -190,6 +190,21 @@ passed the whole time they were there: one confirms a role is granted Bash, the
 other that a runner needing no package.json is listed, and neither asks whether
 what is listed can match a command. Run 34200686220 is what the gap cost.
 
+Then the check that exists because neither of those asks what a role can reach:
+every role must be granted `git fetch` and `git checkout`. A revision round is
+told to work on the branch and the pull request that already exist, and the run
+starts on a fresh branch holding neither. Reading the real branch is possible
+without them - `git show origin/<ref>:<path>` is not refused - but writing to it
+is not, because both push paths send a local branch and nothing else permitted
+builds a local ref at the pull request's history. Those four commands sat in the
+engineer's branch of the `case` alone, so the revision path was dead for the
+other four roles from the day `agent:revise` shipped. A researcher sent back on
+a review read it, worked out the whole fix, was refused every command that could
+reach its branch, and stopped. Nothing reported it: the label applied, the run
+started, the budget was spent, and the diff never moved, which is what a working
+round looks like from outside. The same gap costs an interrupted run its work -
+a second attempt cannot resume the first one's branch either.
+
 ### test_ci.py
 
 Sixteen cases, run under the same `bash -e -o pipefail` GitHub uses for a `run:`
