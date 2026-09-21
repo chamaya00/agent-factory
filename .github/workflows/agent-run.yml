@@ -798,6 +798,34 @@ jobs:
           common='Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh issue comment:*)'
           common="$common,Bash(git push:*),Bash(git status:*),Bash(git diff:*)"
 
+          # Navigation, and it belongs to every role rather than to the
+          # engineer alone. A revision round tells the role to "work on the
+          # branch and the pull request that already exist", and the run starts
+          # on a fresh branch that contains neither. Without fetch and checkout
+          # a role can read that branch - `git show origin/<ref>:<path>` is not
+          # refused - and has no way whatsoever to write to it: both push paths
+          # send a *local* branch, and no permitted command builds a local ref
+          # pointing at the pull request's history.
+          #
+          # background-research-agents#3 is what that cost. The researcher's
+          # revision round read the review, worked out the entire fix, was
+          # refused `git fetch`, `git checkout`, `git worktree add`, the
+          # contents API and `git hash-object` in turn, and stopped - correctly,
+          # because its role tells it a refused command is a configuration
+          # fault rather than something to route around. The round was spent,
+          # the pull request was untouched, and the second round would have
+          # failed the same way. These four sat in the engineer's list only, so
+          # the revision path was dead for researcher, analyst and designer
+          # from the day agent:revise shipped, and nothing said so: the label
+          # applies, the run starts, the budget is spent, and the diff never
+          # moves.
+          #
+          # None of the four widens what can be *landed*. The push paths are
+          # unchanged and project-guard still decides what may reach a
+          # protected path - so this grants reaching the right branch, not
+          # putting anything new on it.
+          common="$common,Bash(git fetch:*),Bash(git checkout:*),Bash(git switch:*),Bash(git log:*)"
+
           # Opening a pull request is not an engineer-only act. Every role that
           # writes a file has to be able to land it, because the chain is gated
           # on a *merged* pull request: a role that can push a branch but not
@@ -946,7 +974,6 @@ jobs:
               # and grants nothing the broken form was not already meant to.
               tools="$tools,Bash(bash tests/*),Bash(bash scripts/*),Bash(sh tests/*),Bash(sh scripts/*)"
               tools="$tools,Bash(./tests/*),Bash(./scripts/*)"
-              tools="$tools,Bash(git log:*),Bash(git switch:*),Bash(git checkout:*)"
               ;;
             *)
               echo "::error::No tool allowlist for role '$ROLE'. Add one before this role can run."
