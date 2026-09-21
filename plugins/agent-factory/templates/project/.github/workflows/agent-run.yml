@@ -63,6 +63,17 @@ jobs:
       issue-number: ${{ inputs.issue-number || '' }}
       max-turns: 80
       timeout-minutes: 30
+      # No `model:` line on purpose. Left out, every role gets the model the
+      # factory resolves for it, which is not the same for all of them - the
+      # reasoning is in the factory's own agent-run.yml, next to the allowlist
+      # each role gets, and it moves when a release moves it.
+      #
+      # Setting this pins every role in this repository to one model and
+      # overrides all of that. Worth doing to economise, or to ask whether a
+      # model change explains a change in output. Not worth doing otherwise,
+      # and a value left here after the question it answered will not be
+      # noticed again - it fails nothing, it just quietly stops the repository
+      # tracking what the factory learns.
     secrets:
       claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       app-id: ${{ secrets.AGENT_APP_ID }}
