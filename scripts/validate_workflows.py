@@ -169,6 +169,64 @@ def check_roles_can_work() -> None:
                 )
 
 
+# What a revision round needs in order to reach the branch its pull request is
+# on. `git show origin/<ref>:<path>` is enough to READ that branch; writing to
+# it needs a local ref, and only these build one.
+REVISION_GIT = ("Bash(git fetch", "Bash(git checkout")
+
+
+def check_every_role_can_reach_its_revision_branch() -> None:
+    """Any role can be sent back with agent:revise, so any role must be able to
+    check out the branch its own pull request is on.
+
+    The prompt tells a revision round to "work on the branch and the pull
+    request that already exist" and the run starts on a fresh branch holding
+    neither. Without fetch and checkout the role can read the real branch and
+    has no way to write to it - both push paths send a local branch, and
+    nothing else permitted builds a local ref at the pull request's history.
+
+    This is the check for the failure that produced it. These sat in the
+    engineer's branch alone, so a researcher sent back on
+    background-research-agents#3 read the review, worked out the whole fix, was
+    refused every command that could reach its branch, and stopped. The round
+    was spent and the pull request never moved. Nothing reported it, because
+    every visible signal - the label, the run, the budget - behaved normally.
+    """
+    workflow = WORKFLOWS / "agent-run.yml"
+    if not workflow.exists() or not AGENTS.is_dir():
+        return
+
+    script = ""
+    for step in agent_run_steps():
+        if step.get("name") == ALLOWLIST_STEP:
+            script = step.get("run") or ""
+    if not script:
+        return
+
+    common = ""
+    for line in script.splitlines():
+        match = re.match(r"""common=['"](.*)['"]\s*$""", line.strip())
+        if match:
+            common = match.group(1).replace("$common", common)
+
+    for role_file in sorted(AGENTS.glob("*.md")):
+        role = role_file.stem
+        start = script.find(f"{role})")
+        if start == -1:
+            continue
+        end = script.find(";;", start)
+        branch = script[start : end if end != -1 else len(script)]
+        granted = granted_tools(branch, common)
+
+        for needed in REVISION_GIT:
+            if not any(name.startswith(needed) for name in granted):
+                errors.append(
+                    f"role {role!r} is not granted {needed}...); a revision "
+                    f"round cannot reach the branch its pull request is on, so "
+                    f"the round is spent and the diff never moves"
+                )
+
+
 # Runners that do not assume a package.json. The engineer has to be able to run
 # the checks the gate runs, and ci.yml's commands path means the gate is not
 # necessarily a Node gate.
@@ -869,6 +927,7 @@ def main() -> int:
         check(path)
     check_roles_can_work()
     check_engineer_can_run_tests()
+    check_every_role_can_reach_its_revision_branch()
     check_allowlist_entries_can_match()
     check_prompt_states_the_turn_budget()
     check_failure_is_diagnosed()
