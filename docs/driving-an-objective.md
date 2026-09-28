@@ -517,24 +517,29 @@ would close the loop the house rules keep open on purpose: the factory
 splitting an objective, building it, judging it, and re-running itself with no
 decision from a person anywhere in the chain.
 
-## Addendum: several objectives, and a person away (1.39.0)
+## Addendum: several objectives, and self-driving (1.39.0)
 
 One project ran the driver harder than this document assumed: one session drove
-four objectives at once, then kept the last one moving overnight on the
+four objectives at once, then kept the last one moving through a night on the
 person's explicit say-so, with every call it made on their behalf logged on a
-single issue for them to review in the morning. It worked, and what made it work
-is now in the `driving-an-objective` skill rather than in that one session's
-scrollback.
+single issue for them to review afterwards. It worked, and what made it work is
+now in the `driving-an-objective` skill and a command rather than in that one
+session's scrollback.
 
-Two sections carry it. **More than one objective at once** is mechanical: the
-repository has one queue slot, not one per objective, so the driver sequences
-children across all of them and checks after each merge that nothing it queued
-was cancelled (open question 7 has the evidence). **While the person is away** is
-a delegation with edges: ask one round of questions before they go, log every
-call with its reversal, wake on a short self-re-arming clock as well as on
-events, keep a ledger outside the conversation, treat a turn-cap ending as a
-budget finding, and close out cleanly. What a revert does not undo, a merge
-policy, and anything needing their hands to go live stay theirs throughout.
+**More than one objective at once** is mechanical: the repository has one queue
+slot, not one per objective, so the driver sequences children across all of
+them and checks after each merge that nothing it queued was cancelled (open
+question 7 has the evidence).
+
+**Self-driving** is a delegation with edges, and it is not about the time of
+day: overnight is one case, a working day spent elsewhere or a hefty objective
+the person wants run end to end is the same thing. `/self-driving` starts one.
+It asks one round of questions first, logs every call with its reversal, wakes
+on a short self-re-arming clock as well as on events, keeps a ledger outside the
+conversation, treats a turn-cap ending as a budget finding, and closes out when
+the objectives close, the stated end arrives, or the person says stop. What a
+revert does not undo, a merge policy, and anything needing their hands to go
+live stay theirs throughout, and nothing but the person starts one.
 
 The same run found a false positive in `project-guard`: it diffed a pull request
 against the base branch's tip rather than its fork point, so a gate change a

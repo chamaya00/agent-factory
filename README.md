@@ -44,6 +44,7 @@ Everything except the two manifests sits at the plugin root, not inside `.claude
 - `/new-project <owner/repo>` - provisions a fresh repo: caller workflows, `CLAUDE.md`, memory files, and the labels. Three of its steps are handed to a human rather than scripted - see below.
 - `/decompose <issue>` - runs the orchestrator on one issue by hand.
 - `/retro` - proposes memory updates for the current repo as a pull request.
+- `/self-driving [objectives] [until ...]` - starts a long autonomous run, day or night: one round of questions, then the session drives the named objectives to done on delegated judgment, logging every call it makes on the person's behalf, until they close, the stated end arrives, or the person says stop.
 - `/update-agents [version]` - brings one repo's copy of the roles, skills, and workflow pins up to a release, as one reviewable pull request. Nothing else moves.
 
 ## Workflows

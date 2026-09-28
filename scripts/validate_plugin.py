@@ -165,7 +165,7 @@ ROLES = ["orchestrator", "researcher", "analyst", "designer", "engineer"]
 # The commands a provisioned project receives. `new-project` is deliberately not
 # among them: provisioning is the factory's job, and a project that can
 # provision another project is a second factory nobody is maintaining.
-PROJECT_COMMANDS = ["objective", "retro", "decompose", "update-agents", "ship", "check-in"]
+PROJECT_COMMANDS = ["objective", "retro", "decompose", "update-agents", "ship", "check-in", "self-driving"]
 
 # Hooks a provisioned project receives. Unlike roles, skills and commands these
 # are not mirrored into this repository's own `.claude/`: the factory runs its

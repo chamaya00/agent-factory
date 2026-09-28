@@ -56,7 +56,7 @@ Read these out of the factory at `$1`:
 - `agents/*.md` - every role
 - `skills/*/SKILL.md` - every skill
 - `commands/objective.md`, `retro.md`, `decompose.md`, `update-agents.md`,
-  `ship.md`, `check-in.md` - the commands a project gets. Not
+  `ship.md`, `check-in.md`, `self-driving.md` - the commands a project gets. Not
   `new-project.md`, which stays in the factory.
 
 Compare each against the copy in `.claude/agents/`, `.claude/skills/`, and
