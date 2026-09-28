@@ -224,7 +224,19 @@ jobs:
             esac
           fi
 
-          changed="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+          # Diff from where this branch forked, not from the base branch's
+          # tip. `pull_request.base.sha` is the tip at the time of the event,
+          # so a two-point diff against it also carries everything that landed
+          # on the base since the fork - reversed. A protected-path change a
+          # maintainer merged there then reads as this pull request's own, and
+          # every agent branch opened before it goes red for work it never
+          # did. That happened: one project raised its own run cap, and the
+          # agent pull request already open failed here on a workflow file its
+          # diff never touched, until a maintainer pushed a base merge onto it.
+          # `fetch-depth: 0` above is what makes the fork point findable; the
+          # fallback keeps the old behaviour if it somehow is not.
+          fork_point="$(git merge-base "$BASE_SHA" "$HEAD_SHA" 2>/dev/null || echo "$BASE_SHA")"
+          changed="$(git diff --name-only "$fork_point" "$HEAD_SHA")"
           failed=0
           while IFS= read -r file; do
             [ -z "$file" ] && continue
@@ -296,14 +308,18 @@ jobs:
           # repository that carries it, which is all of them. A check that is
           # routinely red is one people stop reading, and that costs more than
           # the narrowing does. Nothing executable is excluded.
-          files="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" \
+          # From the fork point, for the reason the protected-paths step gives:
+          # against the base tip, a line the base *removed* after the fork
+          # reads as a line this pull request added.
+          fork_point="$(git merge-base "$BASE_SHA" "$HEAD_SHA" 2>/dev/null || echo "$BASE_SHA")"
+          files="$(git diff --name-only "$fork_point" "$HEAD_SHA" \
             | grep -vE '\.(md|markdown|txt)$' || true)"
           if [ -z "$files" ]; then
             echo "Only documentation changed. Nothing here can widen anything."
             exit 0
           fi
 
-          added="$(git diff --unified=0 "$BASE_SHA" "$HEAD_SHA" -- $files \
+          added="$(git diff --unified=0 "$fork_point" "$HEAD_SHA" -- $files \
             | grep -E '^\+' | grep -vE '^\+\+\+' || true)"
 
           scopes='actions|attestations|checks|contents|deployments|discussions'
