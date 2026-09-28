@@ -174,6 +174,62 @@ def run_case(before, after, body: str = "", live_body: str | None = None) -> "Re
         return Result(done.returncode, done.stdout + done.stderr)
 
 
+PROTECTED_STEP = "Nothing that gates this repo was edited"
+
+
+def run_forked(base: dict, main_after: dict, branch_after: dict,
+               step: str = STEP, body: str = "") -> "Result":
+    """Build a history where the base branch moved on after the fork.
+
+    `base` is the common ancestor. `branch_after` is committed on a branch cut
+    from it, and `main_after` on the base branch afterwards, so the base tip
+    the event reports is *not* the fork point - the shape every long-lived
+    agent pull request has once anything else merges. Each mapping is
+    {filename: content}; a None content deletes the file.
+    """
+    def apply(repo: Path, files: dict) -> None:
+        for name, text in files.items():
+            target = repo / name
+            if text is None:
+                target.unlink()
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(text)
+
+    def sha(repo: Path) -> str:
+        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo,
+                              capture_output=True, text=True).stdout.strip()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp)
+        git(repo, "init", "-q", "-b", "main")
+        apply(repo, base)
+        git(repo, "add", "-A")
+        git(repo, "commit", "-qm", "fork point")
+        git(repo, "checkout", "-q", "-b", "agent")
+        apply(repo, branch_after)
+        git(repo, "add", "-A")
+        git(repo, "commit", "-qm", "agent work")
+        head = sha(repo)
+        git(repo, "checkout", "-q", "main")
+        apply(repo, main_after)
+        git(repo, "add", "-A")
+        git(repo, "commit", "-qm", "merged since")
+        base_tip = sha(repo)
+        git(repo, "checkout", "-q", "agent")
+
+        done = subprocess.run(
+            ["bash", "-e", "-c", step_script(step)], cwd=repo, text=True,
+            capture_output=True,
+            env={"PATH": "/usr/bin:/bin", "BASE_SHA": base_tip, "HEAD_SHA": head,
+                 "BODY": body, "PR_NUMBER": "1", "GH_TOKEN": "fake",
+                 "GH_REPO": "owner/repo", "AUTHOR": "agent-bot[bot]",
+                 "SENDER": "agent-bot[bot]", "MAINTAINERS": "owner",
+                 "PROTECTED": ".github/workflows/*\n.claude/skills/**\n"},
+        )
+        return Result(done.returncode, done.stdout + done.stderr)
+
+
 CASES = []
 
 
@@ -500,6 +556,46 @@ def _():
 def _():
     return run_placeholder_case("# Project context\n\nRead [the notes][ref]\n") == 0
 
+
+
+@case("a protected path merged on the base after the fork is not this branch's")
+def _():
+    # The false positive this was fixed for: a maintainer raises the run cap
+    # on the base branch, and an agent pull request opened earlier - touching
+    # only source - goes red on a workflow file it never edited.
+    wf = {".github/workflows/agent-run.yml": "max-turns: 160\n"}
+    return run_forked(
+        {**wf, "src/app.ts": "a\n"},
+        {".github/workflows/agent-run.yml": "max-turns: 300\n"},
+        {"src/app.ts": "b\n"},
+        step=PROTECTED_STEP,
+    ) == 0
+
+
+@case("a protected path the branch itself edits is still stopped")
+def _():
+    # The same forked history, with the agent's own diff reaching into a
+    # gate. Measuring from the fork point must not blunt the check it exists
+    # to keep honest.
+    wf = {".github/workflows/agent-run.yml": "max-turns: 160\n"}
+    return run_forked(
+        {**wf, "src/app.ts": "a\n"},
+        {"src/app.ts": "a\nmain moved on\n"},
+        {".github/workflows/agent-run.yml": "max-turns: 999\n"},
+        step=PROTECTED_STEP,
+    ) == 1
+
+
+@case("a permission the base removed after the fork is not read as added")
+def _():
+    # Against the base tip, a line the base dropped since the fork shows as a
+    # `+` line in this branch's diff - an undeclared widening nobody wrote.
+    granted = "permissions:\n  contents: write\n" + PLAIN
+    return run_forked(
+        {"file.yml": granted, "src/app.ts": "a\n"},
+        {"file.yml": PLAIN},
+        {"src/app.ts": "b\n"},
+    ) == 0
 
 
 def main() -> int:

@@ -346,7 +346,7 @@ Then the roles and the commands themselves, copied rather than referenced:
 - `.claude/agents/*.md` - every file in `<factory root>/agents/`
 - `.claude/skills/*/SKILL.md` - every skill in `<factory root>/skills/`
 - `.claude/commands/objective.md`, `retro.md`, `decompose.md`, `update-agents.md`,
-  `ship.md`, `check-in.md` - from
+  `ship.md`, `check-in.md`, `self-driving.md` - from
   `<factory root>/commands/`. Not `new-project.md`: provisioning is the
   factory's job, and a project that can provision another project is a way to
   get a second factory nobody is maintaining.

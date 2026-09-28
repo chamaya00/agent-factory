@@ -1,6 +1,6 @@
 ---
 name: driving-an-objective
-description: How an interactive session drives an objective it filed or was pointed at - the technical judgment it owns, what it may reject and how, what to read and what not to, adopting the merge policy, and surfacing what only the person can decide. Use whenever an objective is in play, a child reaches review, a pull request is waiting, or a session is catching up on what happened while nobody was watching.
+description: How an interactive session drives an objective it filed or was pointed at - the technical judgment it owns, what it may reject and how, what to read and what not to, adopting the merge policy, and surfacing what only the person can decide. Use whenever an objective is in play, a child reaches review, a pull request is waiting, a session is catching up on what happened while nobody was watching, one session is driving several objectives at once, or the person has started a self-driving stretch - a long autonomous run, day or night, in which they have handed over the calls.
 ---
 
 # Driving an objective
@@ -222,6 +222,11 @@ can always produce an answer that sounds like theirs; that is exactly why it
 must not. Relay it and wait. Judging the work is yours and answering for them is
 not, and the difference between the two is the whole of this skill.
 
+The one exception is one they made themselves: an explicit, stated hand-over of
+calls like this one for a self-driving stretch, per **Self-driving**. Then
+you answer - on the record, where they will read it, with the run's
+recommendation and your reasoning beside it - and never silently.
+
 **Say it on the issue, not only in this turn.** A blocker spoken only in chat
 is real for as long as someone is reading that turn; the label and a comment on
 the issue are what outlive the session, and what a later one - this one
@@ -251,6 +256,86 @@ reminder.
   then it should wake a session that re-reads the objective's actual state
   rather than trusting the reminder's own text. Say plainly that a timer is
   standing in for a person, per **Promise a watch it cannot keep**.
+- **Waiting on runs during a self-driving stretch.** The other legitimate case,
+  and the one **Self-driving** covers: a run that ends on its turn cap, blocks,
+  or never starts raises no pull request event, so subscriptions alone cannot
+  see the failures a long autonomous stretch is most likely to hide.
+
+## More than one objective at once
+
+One session can drive several objectives. The posture does not change; three
+mechanics do.
+
+- **The repository has one queue slot, not one per objective.** The agent-run
+  workflow holds a single pending job per repository, and a newer pending job
+  cancels the one already waiting - including the orchestrator run a merge
+  wakes. Queue two children at once, or queue one just before a merge, and one
+  of them is cancelled with nothing said. So queue one child at a time across
+  every objective, see it start before queueing the next, and after each merge
+  check that nothing queued was displaced. Removing and re-adding the queue
+  label re-raises the event; that is the handle when one was.
+- **The order across objectives is yours.** Each orchestrator sees one
+  objective; only you see two of them competing for the same slot. Prefer the
+  child that unblocks the most downstream work, and say the order you chose on
+  each parent so neither brief reads as stalled.
+- **A role that only writes documents may run in this session, if they agree.**
+  A researcher or a designer produces documents, not code, and can run here as
+  a subagent while an engineer holds the queue. That steps around the workflow's
+  attempt counting, so it is the person's call, asked once. The output still
+  arrives as a pull request and still gets both reading passes.
+
+## Self-driving
+
+A person may hand over, for a stretch, the calls that would normally wait for
+them, and ask for the work to keep moving without them - "take these through to
+done, make the judgment calls, write them down". Overnight is the obvious case;
+a working day spent elsewhere, or a hefty objective they want run end to end
+rather than supervised step by step, is the same thing. `/self-driving` is how
+they start one, and it names the objectives, when the stretch ends, and what
+they have already answered.
+
+That is a real delegation, and it changes what follows and nothing else: the
+merge gate, both reading passes, and **What a revert does not undo** hold
+exactly as they did. It lasts until every named objective is closed, the stated
+end arrives, or they say stop - whichever is first - and they can step back in
+at any point. A message from them mid-stretch is theirs to direct, not a wake to
+fold into the loop.
+
+- **Ask once, before handing over.** One round of questions aimed at every gate
+  the work will reach later: a dependency a specification will want, numbers a
+  design needs signed off, a default only they can pick. Record each answer,
+  numbered, where the calls will be logged. A stretch that starts with this
+  rarely produces a call they would have made differently; one that skips it
+  produces a run of guesses.
+- **Make the call, and write it where they will read it.** One issue holds
+  every call made on their behalf, numbered, each saying what was decided, why,
+  the alternative, and how to reverse it. The delegation never covers what
+  **What a revert does not undo** lists, a merge policy, or anything that needs
+  their credentials or their hands to go live - those still wait, written down
+  on that same issue under what is still theirs.
+- **Wake on a clock as well as on events.** Keep the pull request
+  subscriptions, and add a short durable reminder - about fifteen minutes - that
+  re-arms itself first thing on every wake, backed by a slower recurring one in
+  case the chain breaks. An hourly cadence alone leaves reviewable work idle for
+  most of an hour, which across a long stretch is most of it. A wake that finds
+  nothing changed says nothing.
+- **Keep a ledger outside the conversation.** A long stretch outlives the
+  session's context. A scratch file with one line per state change - what
+  merged, what is queued, what comes next - is what every wake reads first, and
+  what gets rebuilt from the parents and the decision log if it is gone.
+- **A run that ends on its turn cap is a budget finding, not a verdict.** Read
+  what it pushed before anything else, then brief the next attempt with what
+  already landed, the remaining steps in order, and what not to re-read - a run
+  told to rediscover the codebase spends the same budget the same way. A child
+  about to run with far more criteria than its siblings is cheaper to split
+  before it starts than after two caps. If most children are hitting the cap,
+  the budget is wrong: that is one question for the person, with the numbers,
+  not something to split around for the rest of the stretch.
+- **Close out.** When the stretch ends: a final report on each parent - what
+  shipped, what they can now open, what is left for their hands - a closing
+  note on the decision log, and every timer you set deleted, said so. An
+  objective still open at a stated end gets the same report, saying where it
+  stopped and what the next wake would have done.
 
 ## Say what happens next, every turn
 

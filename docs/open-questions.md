@@ -191,6 +191,14 @@ for that number in its report, and asks for the smallest child to be queued
 first for exactly this reason: the answer is wanted before a larger child spends
 an attempt discovering it.
 
+**What has been measured since.** One project raised its own caller to 160
+after design runs with rendered mocks took 139 turns. Its engineer children
+building screens then ended `error_max_turns` at 161 five times across three
+issues, usually with one or two criteria landed. Raised again to 300 turns and
+90 minutes, every engineer child after it finished in one attempt. That is one
+project, and its children carried render matrices; it is evidence for the
+template's 80 being low for UI work, not yet a number to ship to everyone.
+
 **What changes.** If it lands near 40, raise the cap in the template and in
 `agent-run.yml`'s default. Do not raise it pre-emptively: the cap exists
 because a Pro subscription is a fixed budget, and a cap nobody has hit is not
@@ -265,6 +273,14 @@ from a watchdog is a second path into the one place where a bug spends the
 subscription, and that risk has not changed. So the loss is no longer silent,
 which was the part that made it dangerous, and recovery is still a human
 removing and re-adding a label.
+
+**What happened since (1.39.0).** It fired, from a source this entry did not
+count. A project drove four objectives from one session, and the orchestrator
+run a merge wakes is itself a pending run: it cancelled queued children twice
+in one evening, and a third child was displaced twice before it started. The
+driver now treats the repository as one queue slot across every objective and
+checks after each merge that nothing it queued was displaced - the
+`driving-an-objective` skill carries that - but it is still a convention.
 
 What is genuinely still open is whether that is enough. If the report turns out
 to fire often, the answer is to loosen the group - per-issue rather than

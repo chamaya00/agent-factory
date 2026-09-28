@@ -39,7 +39,8 @@
     "decompose",
     "update-agents",
     "ship",
-    "check-in"
+    "check-in",
+    "self-driving"
   ],
   "hooks": [
     "session-start"

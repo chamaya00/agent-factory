@@ -153,6 +153,12 @@ it runs the same catch-up: what is waiting on the person first, then the state
 of every child, then the two reading passes over each waiting diff, merging
 under the policy where it applies.
 
+**Long autonomous runs are `/self-driving`.** When the person wants one or more
+objectives taken to done without them in the loop - overnight, or a day spent
+elsewhere - that command starts the stretch: one round of questions first, a
+decision log for every call made on their behalf, wakes on a clock as well as on
+events, and a close-out when it ends. It never begins on its own.
+
 **Read `.claude/skills/driving-an-objective/` whenever an objective is in play**
 - what to do with its merge policy, how to report, how to put a blocker so it
 can be answered, and what only the person can decide. This paragraph exists to
