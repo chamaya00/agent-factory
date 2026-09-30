@@ -205,6 +205,17 @@ started, the budget was spent, and the diff never moved, which is what a working
 round looks like from outside. The same gap costs an interrupted run its work -
 a second attempt cannot resume the first one's branch either.
 
+Then the check that exists because a grant is not the whole of a permission:
+the agent prompt must name `--body-file - <<'EOF'` as the way to pass a
+multi-line body. `gh issue create --body "..."` with a newline followed by `#`
+inside the quotes is refused by the shell's permission check whatever the
+allowlist grants, and markdown is exactly that shape. The role reads the refusal
+as a configuration fault and stops, as its prompt tells it to. Whether a run hit
+it depended on how the model quoted the body that day: one orchestrator created
+two children with headings, then could not create the next objective's child or
+amend a brief. The quoted heredoc on stdin passes with the grants every role
+already has, so the fix is a sentence in the prompt, and this keeps it there.
+
 ### test_ci.py
 
 Sixteen cases, run under the same `bash -e -o pipefail` GitHub uses for a `run:`

@@ -372,6 +372,37 @@ def check_prompt_states_the_turn_budget() -> None:
         return
 
 
+def check_prompt_names_the_body_form_that_works() -> None:
+    """The prompt must tell the agent how to pass a multi-line body.
+
+    `gh issue create --body "..."` with a newline followed by `#` inside the
+    quoted text is refused by the shell's permission check, whatever the
+    allowlist grants, and markdown is exactly that shape. The role reads the
+    refusal as a configuration fault, which its prompt tells it to name and
+    stop on, so the work is lost. Whether a run hit it depended on how the
+    model happened to quote the body that day: the same orchestrator created
+    two children with headings, then could not create the next objective's
+    one (background-research-agents#91, run 36608077345) and could not amend a
+    brief (#85, run 36598879748).
+
+    `--body-file -` with a quoted heredoc passes with the grants every role
+    already has, so the fix is a sentence rather than a privilege. This keeps
+    the sentence.
+    """
+    for step in agent_run_steps():
+        if not str(step.get("uses") or "").startswith("anthropics/claude-code-action"):
+            continue
+        prompt = ((step.get("with") or {}).get("prompt")) or ""
+        if "--body-file - <<'EOF'" not in prompt:
+            errors.append(
+                ".github/workflows/agent-run.yml: the agent prompt does not name "
+                "`--body-file - <<'EOF'` as the way to pass a multi-line body. "
+                "Without it a role passes markdown as --body \"...\", the "
+                "permission check refuses it, and the role stops."
+            )
+        return
+
+
 def check_failure_is_diagnosed() -> None:
     """A failed run must say why on the issue, not just label it.
 
@@ -930,6 +961,7 @@ def main() -> int:
     check_every_role_can_reach_its_revision_branch()
     check_allowlist_entries_can_match()
     check_prompt_states_the_turn_budget()
+    check_prompt_names_the_body_form_that_works()
     check_failure_is_diagnosed()
     check_only_the_attempt_marker_counts_attempts()
     check_concurrency_gates_the_agent_not_the_preflight()
