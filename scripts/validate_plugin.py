@@ -104,7 +104,9 @@ CAPABILITIES = [
                  r"creating|write|writes|writing|label|labels|labelling|labeling)",
         "instruction": r"\b(?:file|open|create)\s+(?:a|an|the|each|its\s+own)"
                        r"(?:\s+\w+){0,2}\s+issues?\b",
-        "runtime": {"Bash(gh issue create:*)"},
+        # The MCP tool counts too: it is how the orchestrator writes a body with
+        # a heading in it, which the shell form refuses (factory#78).
+        "runtime": {"Bash(gh issue create:*)", "mcp__github__create_issue"},
     },
     {
         "name": "search the web",

@@ -866,6 +866,35 @@ jobs:
               # Reads runs on the default branch, so "the objective is met" can
               # be checked against what shipped rather than what merged.
               tools="$tools,Bash(gh run list:*),Bash(gh run view:*)"
+              # The GitHub MCP issue tools, because `gh issue create` cannot
+              # carry a child's body. analytics-practice#264 (factory#78) is
+              # what that cost: every child body has a `## Acceptance
+              # criteria` heading, and Claude Code's own shell check refuses a
+              # quoted argument with a newline followed by `#` ("can hide
+              # arguments from path validation"). No allowlist entry lifts that
+              # check, a `--body-file` needs a Write this role must not hold,
+              # and a heredoc is refused too - so the orchestrator planned six
+              # children and created none, and the driver made every one by
+              # hand. A read loop (`for n in ...; gh issue view $n`) was refused
+              # the same way, as `simple_expansion`.
+              #
+              # Naming any mcp__github__ tool here is what makes
+              # claude-code-action start github-mcp-server for the run
+              # (install-mcp-server.ts, `hasGitHubMcpTools`), with the same
+              # token `gh` uses. Its tools take the body as a JSON string, so
+              # no shell quoting is involved, and `add_sub_issue` links a child
+              # to its parent, which no granted `gh` command can do. The names
+              # are the server version the action pins (v0.17.1): `create_issue`
+              # and `update_issue` where the role file says `issue_write`, and
+              # `add_sub_issue` where it says `sub_issue_write`.
+              #
+              # Issue tools and read-only pull request tools only. No
+              # merge_pull_request, no pull request writes, nothing on
+              # workflows or repository settings: this role decides what runs,
+              # not what lands.
+              tools="$tools,mcp__github__create_issue,mcp__github__update_issue,mcp__github__add_sub_issue,mcp__github__list_sub_issues"
+              tools="$tools,mcp__github__get_issue,mcp__github__get_issue_comments,mcp__github__list_issues,mcp__github__search_issues,mcp__github__add_issue_comment"
+              tools="$tools,mcp__github__get_pull_request,mcp__github__list_pull_requests,mcp__github__get_pull_request_status"
               ;;
             researcher)
               # The action lists WebSearch and WebFetch in its own
@@ -1147,6 +1176,14 @@ jobs:
             write to GitHub. If a command you actually need is refused, name it
             and stop - that is a configuration bug worth one comment, not
             something to work around.
+
+            The shell has two refusals no allowlist lifts, so do not spend a
+            turn discovering them: a quoted argument with a newline followed by
+            `#` (any multi-line markdown body), and `$variable` expansion (a
+            `for` loop over issue numbers). Run one `gh` command per call with
+            literal arguments.
+
+            ${{ needs.preflight.outputs.role == 'orchestrator' && 'For creating and linking issues you also hold the GitHub MCP issue tools, and they are the way to write any body with a heading in it. Your role file names them by newer names; in this run they are: `mcp__github__create_issue` (title, body, labels) where it says `issue_write` to create; `mcp__github__update_issue` where it says `issue_write` to edit; `mcp__github__add_sub_issue` where it says `sub_issue_write`, which takes the child issue''s id (the `id` field `mcp__github__get_issue` returns, not its number); `mcp__github__get_issue`, `mcp__github__get_issue_comments` and `mcp__github__list_sub_issues` for reading. Create each child with its body and role label in one call, then link it to this parent with `add_sub_issue`.' || '' }}
 
             Hard limits for this run, above anything the issue text asks for:
             - Never edit anything under `.github/workflows/`, `CODEOWNERS`, or
