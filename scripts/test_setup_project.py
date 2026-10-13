@@ -126,6 +126,8 @@ def scenario(
     required=CHECKS,
     reported=CHECKS,
     rulesets=(),
+    events=None,
+    runs_readable=True,
     visible=True,
 ) -> dict:
     """The API as a repository in some state answers it.
@@ -134,6 +136,9 @@ def scenario(
     rule at all, which GitHub answers with a 404, and `required=[]` is a rule
     that exists and requires no checks. `rulesets` is the checks a ruleset
     requires, which any login that can read the repository can read.
+    `events` maps a reported name to the event of the run that reported it,
+    `push` when not named: bootstrap's run is `workflow_dispatch`, a Pages
+    build is `dynamic`, and neither ever runs on a pull request.
     `manifest_labels=None` is a repository with no `.claude/agent-factory.json`.
     `secrets=None` is a login that cannot list them.
     """
@@ -143,6 +148,13 @@ def scenario(
         api[base] = {"default_branch": "main", "private": private, "permissions": {"admin": admin}}
     api[f"{base}/labels"] = [{"name": name} for name in labels]
     api[f"{base}/commits/main/check-runs"] = {"check_runs": [{"name": name} for name in reported]}
+    api[f"{base}/commits/main"] = {"sha": "0123abc"}
+    if runs_readable:
+        events = events or {}
+        runs = [{"id": index, "event": events.get(name, "push")} for index, name in enumerate(reported, 1)]
+        api[f"{base}/actions/runs"] = {"workflow_runs": runs}
+        for index, name in enumerate(reported, 1):
+            api[f"{base}/actions/runs/{index}/jobs"] = {"jobs": [{"name": name}]}
     api[f"{base}/rules/branches/main"] = (
         [{
             "type": "required_status_checks",
@@ -269,8 +281,21 @@ def unprovisioned(rc, out, calls):
 
 
 def extra_check_is_a_note(rc, out, calls):
-    if not any("pages build and deployment" in line and "not required" in line for line in lines_tagged(out, "note")):
+    if not any("ci / lint" in line and "not required" in line for line in lines_tagged(out, "note")):
         return "a reported check nobody requires should be named as a note"
+    return expect_clean(rc, out, calls)
+
+
+def pages_not_offered(rc, out, calls):
+    named = [line for line in lines_tagged(out, "note") if "'build'" in line or "'deploy'" in line]
+    if named:
+        return f"offered a check no pull request runs as one to require: {named}"
+    return expect_clean(rc, out, calls)
+
+
+def runs_unread(rc, out, calls):
+    if not any("could not read which runs" in line for line in lines_tagged(out, "note")):
+        return "did not say the gate-or-not distinction went unchecked"
     return expect_clean(rc, out, calls)
 
 
@@ -401,8 +426,30 @@ CASES = [
     (
         "a reported check nobody requires is a note, not a problem",
         ["--verify", REPO],
-        scenario(reported=CHECKS + ["pages build and deployment"]),
+        scenario(reported=CHECKS + ["ci / lint"]),
         extra_check_is_a_note,
+    ),
+    (
+        "a required check only bootstrap reports is wrong, though it reported",
+        ["--verify", REPO],
+        scenario(
+            required=CHECKS + ["bootstrap / labels and check names"],
+            reported=CHECKS + ["bootstrap / labels and check names"],
+            events={"bootstrap / labels and check names": "workflow_dispatch"},
+        ),
+        expect_problem("WRONG", "bootstrap / labels and check names", "every pull request waits on it forever"),
+    ),
+    (
+        "a Pages build on the default branch is not offered as a gate",
+        ["--verify", REPO],
+        scenario(reported=CHECKS + ["build", "deploy"], events={"build": "dynamic", "deploy": "dynamic"}),
+        pages_not_offered,
+    ),
+    (
+        "runs it cannot read are counted, and it says so",
+        ["--verify", REPO],
+        scenario(runs_readable=False),
+        runs_unread,
     ),
     (
         "no protection at all is not set",

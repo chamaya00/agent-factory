@@ -236,6 +236,32 @@ verify() {
   log "Branch protection on $branch - github.com/$REPO/settings/branches"
   local reported required="" classic="" rulesets="" rule_read=""
   reported="$(gh api "repos/$REPO/commits/$branch/check-runs" --jq '.check_runs[].name' 2>/dev/null | sort -u | grep -v '^$' || true)"
+
+  # Not every name on the default branch is one a pull request can wait for.
+  # Bootstrap's own run, a release, a Pages build and the agent sweep all report
+  # there and never on a pull request, so a rule requiring one of them leaves
+  # every pull request waiting for a status that never comes - and reads as
+  # protected. ci and guard are the callers that run on push and on
+  # pull_request both, so a name counts as a gate when a push run reported it.
+  # When the runs cannot be read, every reported name is counted, and the
+  # output says that this one distinction was not checked.
+  local sha runs id gates="" runs_read=""
+  sha="$(gh api "repos/$REPO/commits/$branch" --jq '.sha' 2>/dev/null || true)"
+  if [ -n "$sha" ] &&
+    runs="$(gh api "repos/$REPO/actions/runs?head_sha=$sha&per_page=100" --jq '.workflow_runs[] | select(.event == "push" or .event == "pull_request") | .id' 2>/dev/null)"; then
+    for id in $runs; do
+      gates="$gates
+$(gh api "repos/$REPO/actions/runs/$id/jobs" --jq '.jobs[].name' 2>/dev/null || true)"
+    done
+    gates="$(printf '%s\n' "$gates" | grep -v '^$' | sort -u || true)"
+    [ -n "$gates" ] && runs_read=1
+  fi
+  if [ -z "$runs_read" ]; then
+    gates="$reported"
+    [ -z "$reported" ] ||
+      report note "could not read which runs reported these, so a required name only bootstrap or a release reports would pass unnoticed"
+  fi
+
   rulesets="$(gh api "repos/$REPO/rules/branches/$branch" --jq '.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context' 2>/dev/null || true)"
   if [ "$is_admin" = "true" ]; then
     # A 404 here is GitHub's answer for "no classic rule", which an
@@ -251,14 +277,18 @@ verify() {
   fi
   while IFS= read -r name; do
     [ -n "$name" ] || continue
-    if printf '%s\n' "$reported" | grep -qxF -- "$name"; then
+    if printf '%s\n' "$gates" | grep -qxF -- "$name"; then
       report ok "requires '$name', which reports on $branch"
+    elif printf '%s\n' "$reported" | grep -qxF -- "$name"; then
+      report WRONG "requires '$name', which reports on $branch only from a run a pull request never starts - bootstrap, a release, a Pages build - so every pull request waits on it forever"
     else
       report WRONG "requires '$name', which has never reported on $branch, so every merge blocks on it - including the one that would fix it"
     fi
   done <<<"$required"
-  # Without the classic rule, a reported name cannot be called unrequired, so
-  # it is listed as-is for the person to compare against the settings page.
+  # Only gates are worth naming here: a name no pull request ever runs is not
+  # one to require. Without the classic rule, a gate cannot be called
+  # unrequired, so it is listed as-is for the person to compare against the
+  # settings page.
   if [ -z "$reported" ]; then
     report note "nothing has reported on $branch yet. Let ci and guard run once (open any pull request)"
   else
@@ -271,7 +301,7 @@ verify() {
       else
         report note "'$name' reports on $branch"
       fi
-    done <<<"$reported"
+    done <<<"$gates"
   fi
 
   log ""

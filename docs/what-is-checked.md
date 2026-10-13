@@ -294,7 +294,9 @@ as "off" sends a person to change something that may be right. Then the reads
 themselves: a private repository, the two Actions settings, the token secret,
 half an agent identity App, a missing label judged against the repository's own
 release rather than the factory's latest, a required check that never reports,
-and protection from a ruleset as well as a classic rule. One case runs the
+a required check that reports only from a run no pull request starts - bootstrap
+dispatched on the default branch puts its own name there - and protection from a
+ruleset as well as a classic rule. One case runs the
 script without the flag and requires a write, because a verify mode that wrote
 nothing only because the whole script had stopped writing would pass the rest.
 
