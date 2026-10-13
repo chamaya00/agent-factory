@@ -206,9 +206,10 @@ act on a round from this page alone, in a couple of minutes, on a phone.
 3. **Ready to merge**: built, checks green. One checkbox per item.
 4. **Ideas**: not built. One checkbox per item. The wildcard says so.
 5. **How to answer**: two lines - tick, or reply `yes 1 3` / `no 2 reason`.
-6. Collapsed at the bottom: the evidence behind each item, what was looked at
-   and passed on, and the not-wanted list carried forward from every earlier
-   digest.
+6. Collapsed at the bottom: further finds, numbered on from the ideas so a
+   reply can promote one; the evidence behind each item; upkeep the next round
+   will build without asking, though merging it still waits on a tick; and the
+   not-wanted list carried forward from every earlier digest.
 
 **Each item is three lines at most**, numbered across both sections so a
 reply can name it:
@@ -257,8 +258,17 @@ branches, pull requests, and issues, and merges only what was ticked.
 
 Run by hand on 2026-10-13 from a session asked to "try autonomously improving
 this codebase". The gate was green on `main`, so upkeep started at its second
-source. No digest existed yet; round 1's work became the first digest's ready
-items.
+source. No digest existed yet; round 1's work became the ready items of the
+first digest, issue #81, alongside a month-old security fix (#39) that nothing
+had brought back to the owner's attention.
+
+Its discovery pass ran all four lenses at once, to give the first digest a full
+menu, and found twenty-three ideas; six were pitched and the rest listed for
+promotion by reply. One find was a flaw in round 1's own work: `--verify`
+compared required checks against every name on the default branch, which
+includes bootstrap's own run, so it would have passed a rule that leaves every
+pull request waiting forever. It was fixed on that branch before the digest
+went out - which is what discovery is for.
 
 - **Built: issue #69**, a read-only `setup-project.sh --verify`. Owner-filed,
   concrete, and it narrows two entries in "What is not checked" - protection
