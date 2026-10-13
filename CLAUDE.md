@@ -28,6 +28,12 @@ A message that already names a task - a repository, a bug, a file, an
 objective - skips this. The walkthrough is for the message that gives you
 nothing to act on yet, not a detour before every task.
 
+A session asked to improve the factory itself - "run an improvement round",
+"improve the factory", or a scheduled routine that points here - follows
+`docs/improvement-round.md`. That is how this repository gets self-directed
+work without an agent run: a session picks a few changes, proves each with the
+gate, and hands them over, and a person still merges and tags.
+
 ## Layout, and the one thing sessions get backwards
 
 `plugins/agent-factory/` is the source. `.claude/` is a byte-identical copy of
@@ -114,6 +120,9 @@ Do not read all of `docs/`. Read the one that matches what you are doing:
   template's CLAUDE.md
 - `docs/getting-started.md` - the onboarding walkthrough script, before
   changing the trigger phrases above or how a session opens `/new-project`
+- `docs/improvement-round.md` - a self-directed round of improvements to the
+  factory: where candidates come from, what a round never picks, and the proof
+  each change needs before it is handed over
 - `docs/proving-the-gate.md` and `docs/smoke-test.md` - the two runbooks
 - `README.md` - the tour, if none of the above is the thing
 
