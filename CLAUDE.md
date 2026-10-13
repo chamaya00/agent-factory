@@ -66,6 +66,8 @@ this list, `docs/what-is-checked.md`, and `guard.yml` name the same scripts.
 - `python scripts/test_capability_claims.py` - the capability checks still fire
   on drift and stay quiet on prose
 - `python scripts/test_release.py` - release still refuses to tag unmerged history
+- `python scripts/test_setup_project.py` - `setup-project.sh --verify` still
+  reads every setting back and writes nothing (needs `jq`)
 
 `python -m pip install --quiet pyyaml` is the only dependency. The SessionStart
 hook installs it and runs the first script, so a session that opened cleanly has

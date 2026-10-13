@@ -306,6 +306,12 @@ The fast-path script avoids this entirely: `scripts/setup-project.sh` runs `gh`
 as you, so `gh workflow run bootstrap.yml` works there, along with the labels
 and branch protection. If you are at a terminal, that is the shorter road.
 
+If you did this page by hand, `bash scripts/setup-project.sh --verify
+<owner/repo>` in the same Codespace reads every one of these settings back and
+changes nothing. It is the only way the Actions permission and branch
+protection get confirmed rather than taken on your word, because a session
+cannot read either of them.
+
 ## When you are done
 
 Reply with which of these are done. Then phase 7 proves the gate before any

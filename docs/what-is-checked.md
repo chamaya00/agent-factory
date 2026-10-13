@@ -57,6 +57,7 @@ that the table, `CLAUDE.md`, and `guard.yml` name the same scripts.
 | `test_project_guard.py` | a privilege change cannot arrive undeclared |
 | `test_capability_claims.py` | the capability checks fire on drift and stay quiet on prose |
 | `test_release.py` | a release tag cannot move or disagree with the manifest |
+| `test_setup_project.py` | `setup-project.sh --verify` reads every setting back and writes nothing |
 
 Most of the `test_` scripts do not read the workflows as data. They lift the
 `run:` block straight out of the YAML and execute it, substituting only
@@ -278,6 +279,28 @@ a missing manifest or a manifest with no version is refused. Then eight
 malformed versions, including the moving pointers `v1`, `v1.2` and `main`, and
 `v1.2.0; rm -rf /`, because the step writes a ref.
 
+### test_setup_project.py
+
+`scripts/setup-project.sh --verify` is what a person runs after doing the
+handover steps by hand, so that the two settings a session cannot read - the
+Actions permission and branch protection - are proved rather than taken on
+trust. Its whole value rests on one promise, that it writes nothing, so every
+case runs the real script against a fake `gh` and fails on any call outside a
+closed list of reads. A subcommand nobody listed counts as a write.
+
+The second promise is that "not set" and "cannot read" stay different answers.
+A login without administration gets a 403 for both settings, and reporting that
+as "off" sends a person to change something that may be right. Then the reads
+themselves: a private repository, the two Actions settings, the token secret,
+half an agent identity App, a missing label judged against the repository's own
+release rather than the factory's latest, a required check that never reports,
+and protection from a ruleset as well as a classic rule. One case runs the
+script without the flag and requires a write, because a verify mode that wrote
+nothing only because the whole script had stopped writing would pass the rest.
+
+The fake applies `--jq` with the real `jq`, as `gh` applies its built-in one, so
+an expression the script gets wrong fails here as it would against GitHub.
+
 ## Layer 2: the gates every project receives
 
 Three reusable workflows, called from each project in one line and pinned to a
@@ -390,10 +413,12 @@ That leaves real gaps, and they are worth naming.
   A project gets a bound here that this repository does not: the scheduled
   sweep in `agent-run.yml` names a red default branch and says so on the open
   objective, and no agents run here. ADR 0002.
-- **Nothing confirms branch protection still matches the job names.**
-  `bootstrap` reports the names; keeping the rule pointed at them is manual,
-  and the drift reads as green.
-- **Nothing confirms the OAuth secret exists** until a run fails at auth.
+- **Nothing confirms branch protection still matches the job names, unless
+  somebody asks.** `bootstrap` reports the names, and `setup-project.sh
+  --verify` flags a required name that has never reported - but only when a
+  person runs it. Nothing runs it on a schedule, and the drift reads as green.
+- **Nothing confirms the OAuth secret exists** until a run fails at auth, or
+  until somebody runs `setup-project.sh --verify`, which lists secret names.
 - **A run that dies for a configuration reason still burns an attempt.** The
   attempt marker is written before the agent starts, so a run that never got to
   attempt anything consumes a third of the issue's budget.
@@ -416,6 +441,7 @@ python scripts/test_handback.py
 python scripts/test_project_guard.py
 python scripts/test_capability_claims.py
 python scripts/test_release.py
+python scripts/test_setup_project.py
 ```
 
 Run them before opening a pull request here. They are the same commands

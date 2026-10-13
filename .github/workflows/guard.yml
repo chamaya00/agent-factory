@@ -65,3 +65,9 @@ jobs:
 
       - name: Release resolves the right commit for a major tag
         run: python scripts/test_release.py
+
+      # The one mode of a provisioning script that promises to write nothing.
+      # Executed against a fake gh, so a write that leaks into it fails here
+      # rather than in somebody's repository settings. jq ships on the runner.
+      - name: The setup script's verify mode reads and never writes
+        run: python scripts/test_setup_project.py

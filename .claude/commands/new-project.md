@@ -18,7 +18,8 @@ hand the link back rather than letting it surface three steps later somewhere
 unrelated.
 
 Two settings cannot be read from here at all. Those are marked, and they are
-reported as taken on trust rather than confirmed.
+reported as taken on trust rather than confirmed - unless the person runs the
+read-back offered below, which reads them with their own login.
 
 ## Handing over: the list first, then the offer
 
@@ -45,7 +46,7 @@ merge including the one that would remove the rule. Bootstrap comes before it
 for the same reason. A flat checklist invites working through it in the order it
 happens to be written.
 
-Then make two offers, separately, and let them take either, both, or neither:
+Then make three offers, separately, and let them take any, all, or none:
 
 - **Going deeper on any one step.** Some are a single tick and some are not, and
   nobody can tell which from a URL.
@@ -56,10 +57,18 @@ Then make two offers, separately, and let them take either, both, or neither:
   identity App, because creating a GitHub App has no API, so the id, the private
   key and the installation stay with the person whatever they choose here.
 
-**Offer it per step, never as all or nothing.** Presented whole it reads as
-though taking it finishes the job, and a person who runs it and stops has a
-repository where every agent pull request needs an approval tap and nothing
-tells them why.
+- **A read-back, whichever path they take.** `scripts/setup-project.sh
+  --verify` writes nothing at all - no setting, no secret, no workflow run -
+  and reports every item the script would set as set, not set, or cannot read,
+  including the agent identity App's two secrets and whether the protection
+  rule requires check names that have actually reported. It is not the script
+  doing a step; offer it to the person doing everything by hand just as much,
+  because it is what lets them keep the manual path and still have it proved.
+
+**Offer the script per step, never as all or nothing.** Presented whole it
+reads as though taking it finishes the job, and a person who runs it and stops
+has a repository where every agent pull request needs an approval tap and
+nothing tells them why.
 
 Running it is a Codespace on this factory and one paste. Substitute this
 factory's own `owner/repo` into the URL, read from `git config --get
@@ -68,17 +77,20 @@ fork that sends people to the upstream Codespace has them run somebody else's
 scripts against their repository:
 
 > 1. Open `github.com/codespaces/new?repo=<this factory's owner/repo>`
-> 2. In its terminal: `bash scripts/setup-project.sh $1`
+> 2. In its terminal: `bash scripts/setup-project.sh $1`, or
+>    `bash scripts/setup-project.sh --verify $1` to only read
 
 **Default to the manual path, and price both rather than recommending one.**
 Manual is the more transparent: the person watches each setting land, which is
 worth something on the steps that decide what automation may do in their
-repository. What it costs is verification. The Actions permission and branch
-protection sit behind the same administration permission that stops this session
-writing them, so it cannot read them back either - done by hand they stay taken
-on trust in the report at step 6 and nothing ever checks them, and done by the
-script they are confirmed. Seeing it happen and having it proved are different
-goods, and which one matters more is the person's call, not this page's.
+repository. What it used to cost is verification. The Actions permission and
+branch protection sit behind the same administration permission that stops this
+session writing them, so it cannot read them back either - done by hand they
+stay taken on trust in the report at step 6, and done by the script they are
+confirmed. The read-back removes that trade: manual, then one `--verify` run,
+gets both goods. So when they choose manual, say that the read-back is what
+turns "taken on trust" into "confirmed", rather than leaving it as the price of
+the choice.
 
 Any of it is available at all because the reason these steps are handed over is
 narrower than it looks: they are not inherently manual, only unavailable to
@@ -481,10 +493,11 @@ rather than merely documented.
 **The check.** Reading a protection rule needs the same administration
 permission that setting it does, so this session gets `403` or `404` either
 way and cannot tell "no rule" from "cannot see the rule". Do not report it as
-verified. What does verify it, in order of what is available: the fast-path
-script reads the rule back and prints the contexts it now requires, and failing
-that, the next pull request shows its required checks in the merge box - so the
-first agent pull request confirms it in passing.
+verified. What does verify it, in order of what is available: the script reads
+the rule back - in its setup path after setting it, and with `--verify` without
+setting anything, where it also flags a required name that has never reported -
+and failing that, the next pull request shows its required checks in the merge
+box, so the first agent pull request confirms it in passing.
 
 ## 6. Report
 
@@ -503,11 +516,13 @@ off. Two lines:
 > check names.
 >
 > Taken on your word, because I cannot read them: the Actions permission and
-> branch protection. The first agent pull request confirms both - it appears
-> at all only if the permission is on, and its merge box lists the required
-> checks.
+> branch protection. `bash scripts/setup-project.sh --verify $1` reads both
+> back without changing anything; failing that, the first agent pull request
+> confirms both - it appears at all only if the permission is on, and its
+> merge box lists the required checks.
 
-If the fast-path script ran, move what it read back into the first line.
+If the script ran in either mode, move what it read back into the first line,
+and carry anything it reported as not set or wrong into the list below.
 
 Then everything still waiting on the human, in the order it has to happen, each
 one as the URL that does it. Substitute `$1` and the default branch name. A
