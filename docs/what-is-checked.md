@@ -110,6 +110,15 @@ five. The ones with a reason behind them rather than a convention:
   both had lost was `check-in` - which the project template's CLAUDE.md tells
   every provisioned repository to run by name. A session following either
   runbook shipped a repository pointing at a command nobody had copied.
+- **The README names every command.** `README.md` has to name each file in
+  `plugins/agent-factory/commands/` as `/<name>`. It is the first page a human
+  reads and it restates the list by hand, and it had drifted to five against
+  eight. The three it lost were `/objective`, `/check-in`, and `/ship`: the
+  command every piece of work starts from, and the two that carry it to a
+  merge. So the first page never mentioned the command `/new-project`'s closing
+  report sends the person to type next. Only presence is checked: each line
+  says what its command is for, which a list generated from filenames would
+  drop, and whether that sentence is still true needs a reader.
 - **The manifest matches disk.** The roles, skills, and commands named in
   `agent-factory.json` have to be the ones actually present, or provisioning
   copies nothing and succeeds.
@@ -307,7 +316,7 @@ that is the whole line counts, so ordinary prose with links in it passes;
 `validate_plugin.py` holds the template to that same shape, which is what keeps
 the pair honest in both directions.
 
-**`bootstrap.yml`** is one-shot and manual. It creates the nine labels - whose
+**`bootstrap.yml`** is one-shot and manual. It creates the labels - whose
 names are load-bearing, since the preflight matches them exactly - and reads
 back the check names actually reported on the default branch, for pasting into
 branch protection. Reading them back rather than assuming them is the point: a
@@ -351,7 +360,8 @@ separate way for it to fail confusingly:
 3. Both Actions settings ticked: read and write permissions, and "Allow GitHub
    Actions to create and approve pull requests". With the second one off the
    run succeeds and no pull request ever appears.
-4. The nine labels, from the `bootstrap` workflow.
+4. Every label the `bootstrap` workflow creates, which is the list under
+   `labels` in the project's `.claude/agent-factory.json`.
 5. Branch protection using the check names that run reported.
 6. A release tag matching the version in the plugin manifest. The callers are
    pinned to it, and a pin with no tag behind it fails as an invalid workflow
