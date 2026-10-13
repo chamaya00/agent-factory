@@ -32,9 +32,9 @@ In order, and the order is the point.
   follows when it is opened with a greeting instead of a task, so the answer
   to "hi" is a guided run of `/new-project` rather than a menu.
 - **[Improvement rounds](improvement-round.md)** - how a session improves
-  the factory itself on its own judgment, a few changes at a time, each proved
-  by the gate and handed to a person to merge. Also how to run one on a
-  schedule.
+  the factory on its own judgment: finds needs nobody has named yet, builds the
+  small safe ones ahead of approval, and reads it all back as one digest issue
+  the owner answers with ticks. Also how to run one weekly.
 - **[What is checked](what-is-checked.md)** - which parts of the system are
   verified automatically, which are verified by hand, and which are not
   verified at all. Start here if you are asking whether any of this works.

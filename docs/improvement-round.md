@@ -1,29 +1,32 @@
 # Improvement rounds
 
 **Status: built.** Round 1 ran on 2026-10-13 and is the worked example at the
-bottom.
+bottom. The digest and the discovery lenses were added the same day, after the
+owner asked for improvements they had not thought of yet, built ahead of
+their approval, and read back in a form they can act on from a phone.
 
 ## What a round is
 
-One session, on its own judgment, improves the factory itself: it picks up to
-three things worth changing, makes each one on its own branch, proves each one
-with the whole gate, hands them over for review, and writes down what it
-looked at and passed on. A person still merges, and a person still cuts the
-tag.
+One session, on its own judgment, improves the factory itself. It acts on what
+the owner said about the last round, looks for what is worth changing next -
+including needs nobody has named yet - builds the small safe ones ahead of
+approval, pitches the rest, and publishes everything as one **digest**: a
+GitHub issue with a checkbox per item. The owner's ticks decide what merges and
+what gets built next. Nothing merges without a tick, and nobody but a person
+cuts a tag.
 
 That fits "no agents run in this repository" rather than bending it. The rule
 exists because an agent run carries the containment clause, and here the
 containment clause forbids the whole product. A round is not an agent run: it
 is a session like the one a person opens by hand, holding the same access,
-started by nothing under `.github/workflows/`, and landing nothing without a
-merge somebody chose to make. What keeps the gate the person's is the merge
-and the tag, and a round touches neither.
+started by nothing under `.github/workflows/`, and landing nothing the owner
+did not tick. What keeps the gate the person's is the tick, the merge gate, and
+the tag.
 
 What a round adds over a person typing "fix whatever you find" is the parts
-nobody sets up the same way twice: where candidates come from and in what
-order, what is never round material, what proof a change needs before it is
-handed over, and a record the next round reads so it does not rediscover what
-this one already passed on.
+nobody sets up the same way twice: where candidates come from, what is never
+round material, what proof a change needs, a record of what the owner said no
+to, and a read-back short enough to act on between other things.
 
 ## How a round starts
 
@@ -32,181 +35,250 @@ Either a person in a session here asks for one - "run an improvement round",
 session with the prompt under **Scheduling a round**. Both read this page first
 and follow it.
 
-Nothing else starts one. A pull request event, an issue, or an earlier round's
-report suggesting a follow-up is a candidate for the next round, not a reason
-to begin it.
+Nothing else starts one. A pull request event, an issue, or an earlier
+digest's suggestion is a candidate for the next round, not a reason to begin.
 
-## 1. Read what earlier rounds left
+## 1. Act on the last digest first
 
-- **The round log.** An open issue titled `Improvement rounds`, one comment per
-  round. Read the last two comments: what was deferred, and what they said to
-  look at first.
-- **Round pull requests still open.** If two or more are waiting on review,
-  report that and stop. Unreviewed output is the bottleneck, and a third pull
-  request spends the person's attention rather than saving it. This is the
-  backpressure that makes a weekly schedule safe to leave running.
-- **Round pull requests that were closed.** Closed is not the same as rejected
-  here: work in this repository often lands on `main` by a route other than
-  the merge button, and the pull request then shows as closed and unmerged.
-  Before reading one as a rejection, check whether its change is on `main`
-  (`git log main --grep '#<number>'`, or look for its files). One that was
-  closed and did not land is a rejection. Do not propose it again without
-  evidence the earlier round did not have, and name that evidence.
+The newest open issue whose title starts `Improvement digest` is the last
+round's. Read its body and every comment on it, then:
 
-## 2. Gather candidates, in this order
+- **A ticked "Ready" item merges** - if the gate is green on its head and it
+  has no conflict with `main`. Open the pull request first if the item was a
+  branch only, wait for its checks, and merge. A conflict or a red check is
+  not a reason to merge anyway or to drop it: rebuild it on current `main`, and
+  carry it into this round's digest as ready again, saying what changed. If the
+  merged item moved the manifest version, the digest's first line says which
+  tag to cut, because that is the one step a session cannot take.
+- **A ticked "Idea" gets built** in this round, ahead of anything new.
+- **A reply comment counts the same as a tick**, because a checkbox is fiddly
+  on a small screen. `yes 1 4` is two ticks. `no 3` - with or without a reason
+  after it - means never: the item goes on the not-wanted list and no round
+  proposes it, or a close variant of it, again. `revive 6` brings back an item
+  that expired.
+- **An item left alone stays** for one more digest, marked as carried over.
+  Left alone twice, it expires: the draft pull request is closed with a
+  one-line note and the branch is kept, so `revive` costs nothing.
+- **Close the old digest** with a link to the new one once this round's is up,
+  so there is only ever one to read.
+
+Only the owner's ticks and comments count. A tick or comment from anybody else
+is reported in the digest and not acted on.
+
+Closed is not the same as rejected for anything older: work here often lands
+on `main` by a route other than the merge button, and the pull request then
+shows as closed and unmerged. Check `git log main` before reading one as a
+no.
+
+## 2. Gather candidates
+
+Two kinds, and a round wants both.
+
+### Upkeep
 
 1. **A red gate on `main`.** Run every script `guard.yml` runs on a clean
-   checkout. If any fails, fixing it is the round, and nothing else is picked.
-2. **Open issues here with a concrete ask.** Somebody already decided these;
-   the round implements them. An issue that asks a question rather than
-   describing a change is not one of these.
+   checkout. If any fails, fixing it is the round, and nothing else is built.
+2. **Open issues here with a concrete ask.** Somebody already decided these.
+   An issue that asks a question rather than describing a change is not one.
 3. **Prose that restates a source and has drifted from it.** Counts, lists of
    scripts, commands, labels or roles, and summaries of a role file - starting
-   with `README.md` and the pages `docs/index.md` sends a reader to first. The
-   sources are `guard.yml`, `plugins/agent-factory/commands/`, `bootstrap.yml`,
-   the template's `agent-factory.json`, and the role files. Fix the prose, and
-   where the comparison is mechanical, add the check that keeps it fixed.
-4. **Lessons in `CLAUDE.md` that can graduate into a check.** The goal that
-   section states for itself.
-5. **Gaps that can be narrowed without a live run.** The "What is not checked"
-   section of `docs/what-is-checked.md`, and entries in `docs/open-questions.md`.
-   Most open questions are only settled by a real agent run in a real project,
-   and those are not round material - a round may write the runbook step that
-   would get the answer, never the answer.
-6. **Friction in what a person runs or reads.** An error that names no fix, a
-   handover with no URL, output nobody can act on from a phone, a command that
-   does something irreversible on a typo.
+   with `README.md` and the pages `docs/index.md` sends a reader to first. Fix
+   the prose, and where the comparison is mechanical, add the check that keeps
+   it fixed.
+4. **Lessons in `CLAUDE.md` that can graduate into a check.**
+5. **Gaps narrowable without a live run**, from "What is not checked" in
+   `docs/what-is-checked.md` and from `docs/open-questions.md`. Most open
+   questions are only settled by a real agent run; a round may write the
+   runbook step that would get the answer, never the answer.
 
-## 3. What a round never picks
+### Discovery: needs nobody has named yet
+
+This is where the improvements the owner did not see coming come from. Each
+round takes **one lens**, the next in this rotation after the last digest's,
+and goes deep on it rather than skimming all four. One lens per round keeps a
+round's cost bounded on a fixed subscription, and four rounds cover the lot.
+
+1. **The first hour.** Walk provisioning as the docs actually direct it, on a
+   phone: `docs/getting-started.md`, `/new-project`, `docs/checkpoint.md`,
+   the two runbooks, the first `/objective`. Look for waits with no signal,
+   values assembled by hand, errors naming no fix, and the moment at the end
+   where the person would want to see what they now have and nothing shows it.
+2. **Living with several projects.** The morning-after read, the fleet view
+   (which project is on which release, which is stuck, which needs the owner),
+   the gap between a release and `/update-agents`, and what the agents spent.
+   Read the project template, its hook, the driving commands and
+   `agent-run.yml`'s scheduled jobs.
+3. **What the history says breaks next.** Read `git log` bodies on `main`, the
+   closed issues, and the incident notes in workflow comments and check
+   docstrings. Find the failure patterns that recur, then the instance of each
+   that has not happened yet and is set up to. Anything held only by a
+   convention written in prose is a candidate for a mechanism.
+4. **Maintaining the factory.** What a session here learns at start and would
+   want to; where a mistake is caught in CI that could be caught at edit time;
+   what releasing makes the owner remember.
+
+A find is not a find without two things, and a round re-checks both itself
+before pitching anything a helper reported:
+
+- **Evidence** - a `file:line`, a commit, an issue or a run - that the need is
+  real and not a guess about one.
+- **A "you'll notice" sentence written from the owner's side.** "After setup,
+  one message tells you what is on and what is off" is a find. "Refactor the
+  label check" is not, however true.
+
+At least one item per digest is a **wildcard**: the idea the owner is least
+likely to have had, flagged as such. It is allowed to be a stretch; it is not
+allowed to be unsupported.
+
+## 3. What a round never builds ahead of approval
+
+These can be pitched as ideas. They are never built until ticked, and some are
+never built at all.
 
 - **A widening of what automation may do in a project** - an allowlist entry,
-  a permission, a tool grant, a label the preflight matches on - unless an
-  issue from the owner asks for exactly that. Then the pull request says so in
-  its body, the same rule `project-guard.yml` holds every project to.
+  a permission, a tool grant, a label the preflight matches on. Pitched with
+  the widening named in its first line. Built only on a tick, and its pull
+  request declares it, the rule `project-guard.yml` holds every project to.
+- **Anything that changes what provisioned projects receive.** It needs a
+  version bump and then a tag, and the owner should see it coming.
 - **Anything that spends subscription quota**: run budgets, turn caps, the
-  concurrency group, the preflight's refusals. The open questions on these are
-  judgment calls already written down as judgment calls.
-- **A release.** No tag, which a session cannot push anyway, and no version
-  bump on its own. A bump rides with a change projects must pick up, in the
-  same pull request, per the standing rules in `CLAUDE.md`.
-- **Merging, approving, or closing** anybody's pull request or issue.
+  concurrency group, the preflight's refusals.
 - **A rewrite of a page's voice, or a reorganisation of `docs/`.** One change,
-  one reason; a reviewer can say yes to that from a phone.
-- **An agent workflow in this repository**, of any kind.
+  one reason.
 
-## 4. Choose
+And never, ticked or not: a tag; merging anything without the owner's tick;
+approving or closing anybody else's pull request or issue; an agent workflow
+in this repository.
 
-At most three per round, and one or two is normal. Prefer, in order: what
-somebody already decided over what the round found; a fix that lands with the
-check that keeps it fixed over a fix alone; what a person runs or reads first
-over what nobody opens. Two changes that would touch the same lines are one
-change, or one of them waits.
+## 4. Choose: build some, pitch the rest
 
-For every candidate not picked, keep one line on why. Those go in the report,
-and they are what stop the next round spending its first hour on the same
-search.
+- **Build** up to three. Factory-only (`docs/`, `scripts/`, `README.md`,
+  `CLAUDE.md`, `.claude/hooks/`), small, and provable with the gate. Ticked
+  ideas from the last digest come first.
+- **Pitch** up to five more, with the wildcard among them. Anything from
+  section 3 is pitch-only.
+- **Backpressure.** If three or more built items from earlier digests are still
+  waiting on a tick, build nothing new: pitch only, and say so at the top. The
+  limit is the owner's attention, and more unread work spends it.
+
+Prefer, in order: what the owner ticked; what turns a silent failure into a
+visible one; what removes a step the owner does by hand; what the owner
+would want to look at. Two changes touching the same lines are one change, or
+one waits.
 
 ## 5. Make each one
 
-- **Its own branch from `main`**, named `claude/<short-slug>`.
+- **Its own branch from `main`**, named `claude/<short-slug>`, and a draft pull
+  request when the round has authority to open one, so the checks have run by
+  the time the owner reads the digest.
 - **The plugin is the source.** Edit `plugins/agent-factory/`, then copy the
-  file into `.claude/` in the same commit. `validate_plugin.py` names which
-  side is the source if they disagree.
+  file into `.claude/` in the same commit.
 - **A new `scripts/*.py` is a gate check.** It goes into `guard.yml`,
   `CLAUDE.md` and `docs/what-is-checked.md` in the same commit, or
   `validate_plugin.py` refuses it.
 - **Prove a new check fires.** Break the thing it guards on purpose, watch the
   gate fail with a message that names the fix, restore it. For a new test,
   mutate the code it covers and watch it fail. A check that has never failed
-  is not known to be a check, which is the same argument
-  `docs/proving-the-gate.md` makes about branch protection.
-- **Run the whole gate** - every script `guard.yml` runs, in its order - and
-  keep the tail of each one's output for the pull request.
+  is not known to be a check.
+- **Run the whole gate** - every script `guard.yml` runs, in its order.
 - **Re-read the diff as a reviewer hunting a reason to refuse it.** A new count
   that can go stale, an emoji, Liquid syntax in `docs/`, a sentence saying a
   role lacks a capability its tool list grants, a claim the source does not
-  bear out. Fix what you find before pushing, not after.
-- **A commit message in this repository's voice**: what changes and why, with
-  the evidence.
+  bear out.
+- **A pull request body in five parts**, so a reviewer on a phone knows where
+  to look: what changes; why, with the evidence; verified, with how each new
+  check was shown to fire; not verified; after merge, if anything.
 
-## 6. Hand it over
+## 6. The digest
 
-Push each branch. Open one pull request per branch when the round was started
-with authority to - a scheduled round's prompt carries it; a person who typed
-"run a round" in a session may want the branches only, so ask once if they did
-not say.
+One new issue per round. It is the whole read-back: the owner should be able to
+act on a round from this page alone, in a couple of minutes, on a phone.
 
-Each pull request body has the same five parts, so a reviewer on a phone knows
-where to look:
+**The title carries the state**, so the notification is already the summary:
+`Improvement digest 2026-10-20: 2 ready, 5 ideas`.
 
-- **What changes**, in a few lines.
-- **Why**, with the evidence: `file:line`, the issue, the run.
-- **Verified**: the gate's output tail, and how each new check was shown to
-  fire.
-- **Not verified**: anything only a live run or a person's account can prove.
-- **After merge**: the owner steps, if any - the tag when the manifest moved,
-  `/update-agents` in the projects that should take it.
+**The body, in this order:**
 
-The round never merges, including its own work.
+1. **One line on what needs the owner beyond ticking**, if anything - a tag
+   to cut, a setting to change. Omitted when there is nothing.
+2. **Since last time**: what merged on their ticks, what was built on them,
+   what expired. One line each.
+3. **Ready to merge**: built, checks green. One checkbox per item.
+4. **Ideas**: not built. One checkbox per item. The wildcard says so.
+5. **How to answer**: two lines - tick, or reply `yes 1 3` / `no 2 reason`.
+6. Collapsed at the bottom: the evidence behind each item, what was looked at
+   and passed on, and the not-wanted list carried forward from every earlier
+   digest.
 
-## 7. Report
+**Each item is three lines at most**, numbered across both sections so a
+reply can name it:
 
-One comment on the round log issue - creating the issue on the first round,
-when the round may file issues:
+```
+- [ ] **1. Setup can be checked without changing anything**
+  You'll notice: after setting up by hand, one command says what is on, what
+  is off, and what it could not see. Closes #69. Draft PR #81, checks green.
+```
 
-- the date, and each improvement with its pull request;
-- each candidate considered and passed on, one line each with the reason;
-- what the next round should look at first.
+The first line is the headline in the owner's words. The second is the "you'll
+notice" sentence. The third is where it lives and how big it is - a pull request
+and its checks for a ready item, a size and a track for an idea. Anything
+longer goes in the collapsed evidence.
 
-If a person is in the session, the same in a few lines to them, ending with
-what is now waiting on them.
+## 7. Read it back
+
+A round run by a person in a session ends with the digest's link and its first
+two sections, in a few lines.
+
+A scheduled round ends with a final message of three lines - the digest title,
+the one item most worth opening, and the link - because a routine with push
+notifications on sends that message to the owner's phone. The digest is the
+record; the notification is only the knock on the door.
 
 ## Scheduling a round
 
-A round can run on a schedule as a routine in Claude Code on the web: a
-scheduled trigger that starts a fresh session on this repository each time it
-fires. Weekly is plenty. The limit is review, not generation, and step 1 stops
-a round from adding to a queue nobody has read.
+A routine in Claude Code on the web: a scheduled trigger that starts a fresh
+session on this repository each time it fires, with push notifications on.
+Weekly is plenty - the limit is the owner's reading, and backpressure stops a
+round adding to a pile nobody has read. Each round spends subscription like any
+other session; one lens per round is what keeps that bounded.
 
 The prompt, to paste as the routine's message:
 
 > Read docs/improvement-round.md in this repository and run one improvement
-> round exactly as it says. You may push branches, open one pull request per
-> improvement, and comment on or create the "Improvement rounds" issue. Do not
-> merge, approve, or close anything.
+> round exactly as it says. You may push branches, open draft pull requests,
+> create the digest issue, close the previous digest, and merge a pull request
+> only when I ticked or replied yes to it in a digest and its checks are green.
+> Do not cut a tag, and do not merge, approve, or close anything else.
 
-A scheduled round spends the same subscription as any other session. Deleting
-the routine stops it, and nothing else needs undoing: every round leaves only
-branches, pull requests, and comments.
+Deleting the routine stops it. Nothing else needs undoing: a round leaves
+branches, pull requests, and issues, and merges only what was ticked.
 
 ## Round 1, as the worked example
 
 Run by hand on 2026-10-13 from a session asked to "try autonomously improving
-this codebase". The gate was green on `main`, so step 2 started at its second
-source.
+this codebase". The gate was green on `main`, so upkeep started at its second
+source. No digest existed yet; round 1's work became the first digest's ready
+items.
 
-- **Picked: issue #69**, a read-only `setup-project.sh --verify`. Owner-filed,
+- **Built: issue #69**, a read-only `setup-project.sh --verify`. Owner-filed,
   concrete, and it narrows two entries in "What is not checked" - protection
   drifting from the job names, and the token secret - from never checked to
   checked on demand. Made with an executed test that fails on any call that is
   not a read, and shown to fail when a write was planted in the verify path.
-- **Picked: `README.md` drift.** It named five of the eight commands, five of
+- **Built: `README.md` drift.** It named five of the eight commands, five of
   the guard scripts, "nine labels" against the thirteen `bootstrap.yml`
   creates, and "2-5" children against the role file's "1-5". Made with a check
   that `README.md` names every command. A check on label counts was tried and
   dropped: ordinary prose like "two role labels" trips any pattern loose
   enough to catch the drift, so the counts were removed instead.
-- **Passed on: the open questions.** Each needs a live run in a project. Not
-  round material.
-- **Passed on: auto-mirroring `.claude/` from the plugin with a hook.** Real
-  friction, but the gate already catches the drift and names the fix, and a
-  hook that writes files is a bigger change than the problem. Worth an issue
-  if the mirror keeps costing a CI cycle.
-- **Passed on: reading a project's workflow pins in `--verify`.** A pin with
-  no tag behind it fails every check, so it is worth reading - but #69 did not
-  ask for it, and one change, one reason.
+- **Passed on: the open questions.** Each needs a live run in a project.
+- **Passed on: auto-mirroring `.claude/` from the plugin with a hook.** The
+  gate already catches the drift and names the fix, and a hook that writes
+  files is a bigger change than the problem.
+- **Passed on: reading a project's workflow pins in `--verify`.** Worth doing,
+  but #69 did not ask for it, and one change, one reason.
 
-Left for round 2, found while making the two above and kept out of them:
+Left as upkeep for a later round, found while making the two above:
 
 - `check_gate_inventory` reads the whole of `guard.yml`, comments included, so
   a script named only in a comment counts as run.
