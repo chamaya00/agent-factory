@@ -161,7 +161,9 @@ five. The ones with a reason behind them rather than a convention:
 - **The gate names itself consistently.** Every `scripts/*.py` must be run by
   `guard.yml` and named in both `CLAUDE.md` and this file. A script nobody runs
   proves nothing, and an inventory that omits one sends a reader looking for a
-  check that is there.
+  check that is there. A script named only in a comment in `guard.yml` does
+  not count as run: a step deleted with its explanation left behind used to
+  pass.
 - **A command a role is told to run is a command the template ships, and one
   the role may run.** Where a role file names `./scripts/<thing>`,
   `templates/project/scripts/<thing>` must exist and be executable, the role's
@@ -228,8 +230,7 @@ already has, so the fix is a sentence in the prompt, and this keeps it there.
 
 ### test_ci.py
 
-Sixteen cases, run under the same `bash -e -o pipefail` GitHub uses for a `run:`
-block. The gate's commands path is hand-written shell, and a bug in it does not
+Run under the same `bash -e -o pipefail` GitHub uses for a `run:` block. The gate's commands path is hand-written shell, and a bug in it does not
 fail loudly - it passes a run that should have failed, which is the one failure
 mode a gate cannot have.
 
@@ -240,8 +241,8 @@ failure rather than a pass; `false && x` still fails the line; a failure
 mid-pipeline is not hidden by the last command; an unset variable is an error
 rather than an empty string.
 
-Then six cases on the placeholder gate the project template ships, run against
-real temporary git repositories. They pull the `commands` block straight out of
+Then the placeholder gate the project template ships, run against real
+temporary git repositories. They pull the `commands` block straight out of
 `templates/project/.github/workflows/ci.yml`, so they cannot drift from what a
 provisioned repository actually receives. A freshly provisioned repository
 passes; research writing an ADR and design writing a document still pass,
@@ -260,8 +261,8 @@ quietly skipping this group.
 
 ### test_preflight.py
 
-Fifteen cases against a fake `gh`. This is the only place in the repository
-where a bug spends money, so the preflight gets executed rather than read.
+Against a fake `gh`. This is the only place in the repository where a bug
+spends money, so the preflight gets executed rather than read.
 
 An objective runs the orchestrator; one role label runs that role; no role
 label does not run; two role labels refuse rather than guess;
@@ -271,13 +272,23 @@ comment with it runs; the third attempt still runs and the fourth fails the
 job; a docs-only pull request is not worth a run and one touching source is;
 `workflow_dispatch` takes the number from its input.
 
-The fifteenth is not a decision but a trace: refusing a fourth attempt has to
-label the issue `agent:blocked` and comment why, or the refusal reads as a
-flake.
+Then the budgets other than attempts. A revision spends revisions, not
+attempts, and a third round is refused; a blocked issue cannot be unblocked by
+relabelling it for revision; an objective cannot be revised, and past its
+supervision budget it fails the job.
+
+Then who may trigger a run by comment. On a public repository anybody can type
+the trigger phrase, so a stranger's comment and a past contributor's do not
+run, a collaborator's does, and a stranger cannot reach the budget path that
+labels an exhausted issue.
+
+Three are not decisions but traces: each refusal - of a fourth attempt, a third
+revision, an objective past its budget - has to label and comment why, naming
+its own budget, or it reads as a flake.
 
 ### test_release.py
 
-Fifteen cases against real temporary git repositories. A bug here is either a
+Against real temporary git repositories. A bug here is either a
 tag that disagrees with the plugin manifest, which installs as the version
 already cached and updates nothing, or a release tag that moves, which silently
 changes what a project resolves after its author reviewed and pinned it.
@@ -290,7 +301,7 @@ malformed versions, including the moving pointers `v1`, `v1.2` and `main`, and
 
 ### test_provision.py
 
-Thirty-four cases against a fake `gh`, on three steps of `provision.yml`. It is
+Against a fake `gh`, on three steps of `provision.yml`. It is
 the one workflow here that holds an admin token for every repository the person
 owns, so what it refuses is the whole of its safety, and each refusal is
 executed rather than read.

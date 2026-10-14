@@ -1318,7 +1318,12 @@ def check_gate_inventory() -> None:
     if not workflow.exists():
         return
     on_disk = {path.name for path in (ROOT / "scripts").glob("*.py")}
-    workflow_text = workflow.read_text()
+    # Comment lines are dropped first. A script named only in a comment - a
+    # step deleted with its explanation left behind - would otherwise count as
+    # run, and the check would vouch for a script nothing executes.
+    workflow_text = "\n".join(
+        line for line in workflow.read_text().splitlines() if not line.lstrip().startswith("#")
+    )
     run_by_gate = set(re.findall(r"scripts/([a-z_]+\.py)", workflow_text))
 
     for name in sorted(on_disk - run_by_gate):
