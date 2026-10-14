@@ -25,8 +25,9 @@ back to reading diffs, and it will look like a perfectly good criterion.
 ## Before you start
 
 Everything phase 7 asked for, still: the provisioned repository, the OAuth
-secret, both Actions settings, the nine labels, branch protection on the check
-names that actually reported, and a release tag matching the plugin manifest.
+secret, both Actions settings, every label `bootstrap` creates, branch
+protection on the check names that actually reported, and a release tag
+matching the plugin manifest.
 
 One thing that reads as a prerequisite and is not. Phase 7 leaves you with a
 real gate; a repository provisioned fresh has the placeholder instead, and that

@@ -50,7 +50,8 @@ repository. `docs/checkpoint.md` step 0 cuts one.
 Then confirm by hand:
 
 - The Actions settings above are actually ticked. Look, do not remember.
-- The repo has all nine labels.
+- The repo has every label listed under `labels` in its
+  `.claude/agent-factory.json`, which is the set `bootstrap` creates.
 - No file under `.github/workflows/` still contains `__FACTORY_VERSION__` or
   `__FACTORY_REPO__`. Both are substituted at provision time; a surviving one
   means the callers address a ref or a repository that does not exist.

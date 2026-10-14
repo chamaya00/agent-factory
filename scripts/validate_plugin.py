@@ -742,6 +742,51 @@ def check_runbooks_name_every_project_command() -> None:
             )
 
 
+def check_readme_names_every_command() -> None:
+    """The README has to name every command the plugin ships.
+
+    `README.md` is the first page a human reads, and its command list is
+    restated by hand. It listed five while `commands/` held eight, and the
+    three it had lost were `/objective`, `/check-in`, and `/ship` - the
+    command every piece of work starts from, and the two that carry an
+    objective to a merge. `/new-project`'s own closing report tells the person
+    to type `/objective` next, so the first page they read had never mentioned
+    the one command they were about to be sent to.
+
+    Every file in `commands/` counts, not just `PROJECT_COMMANDS`, because the
+    README describes the factory as well as what a project receives, and
+    `/new-project` is the command a reader of this repository runs first.
+
+    Checked as prose rather than generated from the directory, because each
+    line says what the command is for and where it sits in the order a project
+    meets them, which a list built from filenames would drop. Only presence is
+    checked: whether a line still tells the truth about its command is a
+    question for a reader, and a check that needs judgment is not a gate.
+
+    A command counts only as `/<name>` standing on its own, so a path such as
+    `commands/retro.md` does not satisfy it for `/retro`.
+    """
+    readme = ROOT / "README.md"
+    commands_dir = PLUGIN_DIR / "commands"
+    if not readme.is_file() or not commands_dir.is_dir():
+        return
+    text = readme.read_text()
+    missing = [
+        f"/{path.stem}"
+        for path in sorted(commands_dir.glob("*.md"))
+        if not re.search(rf"(?<![\w./-])/{re.escape(path.stem)}(?![\w-]|\.\w)", text)
+    ]
+    if missing:
+        fail(
+            readme,
+            f"never names {', '.join(missing)}, though each is a command in "
+            "plugins/agent-factory/commands/. Add a line for each to the "
+            "Commands section as `/<name>`, in the same form as the others: "
+            "this is the first page a human reads, and a command it leaves out "
+            "is one they do not know to type",
+        )
+
+
 def check_template_owner_placeholder() -> None:
     """The CODEOWNERS a project receives names its owner, never this one.
 
@@ -1334,6 +1379,7 @@ def main() -> int:
     check_template_owner_placeholder()
     check_template_placeholders_are_visible()
     check_runbooks_name_every_project_command()
+    check_readme_names_every_command()
     check_label_vocabulary_is_declared()
     check_vendored_roles()
     check_self_vendored()
