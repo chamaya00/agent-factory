@@ -9,8 +9,11 @@ name: agent-run
 # Projects call it with:
 #   jobs:
 #     agent:
-#       uses: chamaya00/agent-factory/.github/workflows/agent-run.yml@v1
+#       uses: chamaya00/agent-factory/.github/workflows/agent-run.yml@vX.Y.Z
 #       secrets: inherit
+#
+# where vX.Y.Z is a release tag. There is no moving major tag such as v1, so a
+# copied @v1 fails as an invalid workflow reference; docs/versioning.md says why.
 
 on:
   workflow_call:

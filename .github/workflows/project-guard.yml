@@ -10,7 +10,10 @@ name: project-guard
 # Projects call it with:
 #   jobs:
 #     guard:
-#       uses: chamaya00/agent-factory/.github/workflows/project-guard.yml@v1
+#       uses: chamaya00/agent-factory/.github/workflows/project-guard.yml@vX.Y.Z
+#
+# where vX.Y.Z is a release tag. There is no moving major tag such as v1, so a
+# copied @v1 fails as an invalid workflow reference; docs/versioning.md says why.
 
 on:
   workflow_call:
