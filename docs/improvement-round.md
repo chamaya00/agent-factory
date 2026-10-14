@@ -256,13 +256,33 @@ Weekly is plenty - the limit is the owner's reading, and backpressure stops a
 round adding to a pile nobody has read. Each round spends subscription like any
 other session; one lens per round is what keeps that bounded.
 
-The prompt, to paste as the routine's message:
+**A scheduled round skips itself when the newest digest is under six days
+old.** A digest needs a full cycle to be read, and a round that fired the same
+day as a hand-run one would publish a near-copy and expire items the owner had
+had hours to see. The skip is not wasted: it still checks out the repository
+and reads the digest, so its notification doubles as a check that the routine
+can do its job before a real round depends on it.
 
-> Read docs/improvement-round.md in this repository and run one improvement
-> round exactly as it says. You may push branches, open draft pull requests,
-> create the digest issue, close the previous digest, and merge a pull request
-> only when I ticked or replied yes to it in a digest and its checks are green.
-> Do not cut a tag, and do not merge, approve, or close anything else.
+**A routine's sessions start with no repository attached**, unlike a session
+opened on this repository by hand. So the prompt has the round attach and
+clone it first, and say in its notification if it could not. Selecting the
+repository on the routine in the claude.ai routines page removes that step.
+
+The prompt the factory's own routine carries, to paste into a new one:
+
+> Weekly improvement round for this repository. First, make sure you can
+> work: if the repository is not checked out, attach it with add_repo (push
+> access) and clone it, then read the newest open issue titled "Improvement
+> digest". If either fails, stop and say exactly which. If that digest is
+> under six days old, skip the round and say so, with its age and link.
+> Otherwise read docs/improvement-round.md on main and run one round exactly
+> as it says. You may push branches, open draft pull requests and mark them
+> ready, create the digest issue, and comment on and close the previous
+> digest. You may merge a pull request only when I ticked or replied yes to it
+> on a digest, and only once every check passes on it merged with today's
+> main. Do not cut a tag, and do not merge, approve, or close anything else.
+> End with three lines: the digest's title, the one item most worth opening,
+> and its link.
 
 Deleting the routine stops it. Nothing else needs undoing: a round leaves
 branches, pull requests, and issues, and merges only what was ticked.
