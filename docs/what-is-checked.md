@@ -290,7 +290,7 @@ malformed versions, including the moving pointers `v1`, `v1.2` and `main`, and
 
 ### test_provision.py
 
-Thirty-four cases against a fake `gh`, on three steps of `provision.yml`. It is
+Thirty-nine cases against a fake `gh`, on four steps of `provision.yml`. It is
 the one workflow here that holds an admin token for every repository the person
 owns, so what it refuses is the whole of its safety, and each refusal is
 executed rather than read.
@@ -315,6 +315,12 @@ never reported, is still running, or still failed after its one re-run sets no
 rule at all, rather than a rule requiring the other gate alone. An existing rule
 is added to and never replaced, and a rule that does not read back is reported
 as not set.
+
+The App installation: an add that was refused is said so on the report line,
+with what GitHub answered, even when the App could already mint a token for the
+repository. The first real provisioning reported that case as "already covered"
+and closed its issue, while the refusal behind it meant the App was installed on
+every repository - the wider setting ADR 0003 declined - and nobody was told.
 
 ## Layer 2: the gates every project receives
 
