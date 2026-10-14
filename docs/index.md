@@ -16,7 +16,9 @@ In order, and the order is the point.
 
 1. **[The checkpoint](checkpoint.md)** - the steps only a human can do: the
    subscription token, the repository secrets, the agent identity App, the
-   release tag. Written for an iPhone, since that is the only device involved.
+   release tag, and the provisioning workflow that turns the per-repository
+   part into one approval. Written for an iPhone, since that is the only
+   device involved.
 2. **[Proving the gate](proving-the-gate.md)** - confirm by hand that a red
    check blocks a merge, on a throwaway repository, before any agent is
    pointed at it. An agent aimed at a gate you do not trust produces work you

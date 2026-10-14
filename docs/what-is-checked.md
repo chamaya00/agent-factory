@@ -57,6 +57,7 @@ that the table, `CLAUDE.md`, and `guard.yml` name the same scripts.
 | `test_project_guard.py` | a privilege change cannot arrive undeclared |
 | `test_capability_claims.py` | the capability checks fire on drift and stay quiet on prose |
 | `test_release.py` | a release tag cannot move or disagree with the manifest |
+| `test_provision.py` | provisioning refuses a bad request or a missing approval gate, and requires only the gates' check names |
 
 Most of the `test_` scripts do not read the workflows as data. They lift the
 `run:` block straight out of the YAML and execute it, substituting only
@@ -169,7 +170,7 @@ five. The ones with a reason behind them rather than a convention:
 
 ### validate_workflows.py
 
-All ten workflows, factory and templates, must parse as YAML, declare an `on:`
+Every workflow, factory and templates, must parse as YAML, declare an `on:`
 block, give every job that is not a `uses:` call a `timeout-minutes`, and never
 request `actions: write`. A system that can rewrite its own gates has no gates.
 
@@ -277,6 +278,34 @@ an existing tag is refused rather than moved; an unrelated tag does not block;
 a missing manifest or a manifest with no version is refused. Then eight
 malformed versions, including the moving pointers `v1`, `v1.2` and `main`, and
 `v1.2.0; rm -rf /`, because the step writes a ref.
+
+### test_provision.py
+
+Thirty-four cases against a fake `gh`, on three steps of `provision.yml`. It is
+the one workflow here that holds an admin token for every repository the person
+owns, so what it refuses is the whole of its safety, and each refusal is
+executed rather than read.
+
+The request: a repository name typed into an issue title or a dispatch box is
+the one untrusted input, and it reaches a shell and `GITHUB_OUTPUT`. A plain
+`owner/repo` on the person's own account is accepted and trimmed; another
+account, the factory itself, a dot, a path, and five shapes that would run
+something or write a second output line are refused, and every refusal has to
+say why on the request. None of it may call `gh`, because that job holds no
+token and needs none.
+
+The approval gate: the run goes no further unless the `provision` environment
+exists, has a required-reviewer rule - a wait timer is a rule and approves
+nothing - and limits which branches may use it. A run started from another
+branch is refused before any call.
+
+Branch protection: only the two gates' check names, as they reported on a push
+to the default branch, are required - not another push workflow on the same
+commit. A guard that failed at startup is re-run once and no more. A gate that
+never reported, is still running, or still failed after its one re-run sets no
+rule at all, rather than a rule requiring the other gate alone. An existing rule
+is added to and never replaced, and a rule that does not read back is reported
+as not set.
 
 ## Layer 2: the gates every project receives
 
@@ -416,6 +445,7 @@ python scripts/test_handback.py
 python scripts/test_project_guard.py
 python scripts/test_capability_claims.py
 python scripts/test_release.py
+python scripts/test_provision.py
 ```
 
 Run them before opening a pull request here. They are the same commands
