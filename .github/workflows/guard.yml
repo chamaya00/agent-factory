@@ -75,3 +75,8 @@ jobs:
 
       - name: Release resolves the right commit for a major tag
         run: python scripts/test_release.py
+
+      # The one workflow here that holds an admin token for every repository
+      # the person owns. What it refuses is the whole of its safety.
+      - name: Provision refuses what it should refuse
+        run: python scripts/test_provision.py
