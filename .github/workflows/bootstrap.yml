@@ -74,6 +74,11 @@ jobs:
           label agent:revise        BFD4F2 "Delivered and reviewed. Coming back with changes to make."
           label needs-decomposition D93F0B "Too big to work as one issue."
           label needs-human        FBB040 "Waiting on a person, not on a run."
+          # The release lever for the preflight's refusal to read text written
+          # by somebody without write access. Without it a stranger's comment
+          # stops every run on an issue for good, which is a worse problem
+          # than the one being solved.
+          label comments-reviewed   FEF2C0 "A person has read this issue's outside comments; a run may too."
           label role:researcher     5319E7 "Investigates options. Writes to docs/research/."
           label role:analyst        F5A623 "Specifies the event contract and the metrics. Writes to docs/measurement/."
           label role:designer       E99695 "Specifies flows and states. Writes to docs/design/."
