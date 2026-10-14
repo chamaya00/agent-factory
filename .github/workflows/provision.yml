@@ -336,6 +336,12 @@ jobs:
             todo "Secrets missing after setting them:$absent. The token needs Secrets: read and write. Or add them by hand: github.com/$REPO/settings/secrets/actions"
           fi
 
+      # v3 because v2 targets Node 20, which runners now force onto Node 24
+      # with a deprecation warning on every run. v3 calls `app-id` legacy and
+      # prefers the App's Client ID; it still accepts `app-id`, and switching
+      # would mean one more value in the provision environment, so that is a
+      # separate change.
+      #
       # The App stays installed on selected repositories rather than all of
       # them, so every new one has to be added. Finding the installation takes
       # the App's own key; adding a repository to it takes the person, which is
@@ -343,7 +349,7 @@ jobs:
       - name: Find the agent App's installation
         id: app-account
         continue-on-error: true
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.AGENT_APP_ID }}
           private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
@@ -362,10 +368,13 @@ jobs:
             echo "result=no-installation" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if gh api -X PUT "/user/installations/$INSTALLATION_ID/repositories/$REPO_ID" >/dev/null; then
+          if detail="$(gh api -X PUT "/user/installations/$INSTALLATION_ID/repositories/$REPO_ID" 2>&1 >/dev/null)"; then
             echo "result=added" >> "$GITHUB_OUTPUT"
           else
             echo "result=refused" >> "$GITHUB_OUTPUT"
+            # One line of what GitHub said, for the report. It is the
+            # difference between a missing token permission and anything else.
+            echo "detail=$(printf '%s' "$detail" | head -n 1 | tr -d '\r`')" >> "$GITHUB_OUTPUT"
           fi
 
       # The read-back is the exact thing every agent run does first: mint a
@@ -373,7 +382,7 @@ jobs:
       - name: The agent App can act in the repository
         id: app-here
         continue-on-error: true
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.AGENT_APP_ID }}
           private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
@@ -382,20 +391,33 @@ jobs:
           permission-metadata: read
 
       - name: Record the App installation
+        id: app-record
         env:
           ADDED: ${{ steps.app-add.outputs.result }}
+          DETAIL: ${{ steps.app-add.outputs.detail }}
           HERE: ${{ steps.app-here.outcome }}
         run: |
           set +e -uo pipefail
           done_() { printf -- '- [x] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "confirmed: $1"; }
           todo() { printf -- '- [ ] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "::warning::$1"; }
 
+          said=""
+          [ -n "${DETAIL:-}" ] && said=" GitHub said: $DETAIL."
+
           if [ "$HERE" = "success" ]; then
-            if [ "$ADDED" = "added" ]; then
-              done_ "The agent App is installed on \`$REPO\` and can mint a token for it."
-            else
-              done_ "The agent App can mint a token for \`$REPO\`; it was already covered."
-            fi
+            case "$ADDED" in
+              added)
+                done_ "The agent App is installed on \`$REPO\` and can mint a token for it." ;;
+              refused)
+                # Ticked, because every agent run here will work. But the add
+                # was refused, and the only way the App still reaches a
+                # repository nobody added is an installation on all of them -
+                # the wider setting ADR 0003 declined. Said on the line itself,
+                # because a ticked report closes its issue and nobody reads on.
+                done_ "The agent App can mint a token for \`$REPO\`, but only because its installation already covered it: adding the repository was refused.$said That usually means the App is installed on all repositories, which ADR 0003 decided against, and the token lacks GitHub App installation repository access. Check github.com/settings/installations, Configure, Repository access." ;;
+              *)
+                done_ "The agent App can mint a token for \`$REPO\`; it was already covered." ;;
+            esac
             exit 0
           fi
 
@@ -403,7 +425,7 @@ jobs:
             no-installation)
               todo "The agent App. It is not installed on this account, or \`AGENT_APP_ID\` and \`AGENT_APP_PRIVATE_KEY\` belong to a different App. Install it once, on selected repositories: github.com/settings/installations" ;;
             refused)
-              todo "The agent App. Adding \`$REPO\` to its installation was refused: the token needs GitHub App installation repository access: read and write. Or add it by hand: github.com/settings/installations, Configure, Repository access." ;;
+              todo "The agent App. Adding \`$REPO\` to its installation was refused.$said The token needs GitHub App installation repository access: read and write. Or add it by hand: github.com/settings/installations, Configure, Repository access." ;;
             *)
               todo "The agent App. \`$REPO\` was added to its installation and the App still cannot mint a token for it. Check github.com/settings/installations." ;;
           esac

@@ -458,6 +458,50 @@ def protection_cases() -> None:
     )
 
 
+# --- the App installation ---------------------------------------------------
+
+
+def app_case(name: str, *, added: str, here: str, detail: str = "",
+             expect_ticked: bool, expect_mention: list[str] | None = None) -> None:
+    env = {"ADDED": added, "DETAIL": detail, "HERE": here, "REPO": TARGET}
+    result = run_step("provision", "app-record", env)
+    problems = []
+    if result["code"] != 0:
+        problems.append(f"exit {result['code']}; this step records and carries on")
+    line = result["report"].strip()
+    if expect_ticked and not line.startswith("- [x]"):
+        problems.append(f"report reads {line!r}, expected it ticked")
+    if not expect_ticked and not line.startswith("- [ ]"):
+        problems.append(f"report reads {line!r}, expected it unticked")
+    for word in expect_mention or []:
+        if word not in line:
+            problems.append(f"report does not say {word!r}: {line!r}")
+    check(name, problems, result)
+
+
+def app_cases() -> None:
+    print("the App installation")
+    app_case("added and able to mint a token is ticked",
+             added="added", here="success", expect_ticked=True, expect_mention=["installed"])
+    # The live failure this group exists for: the add was refused, the App
+    # still reached the repository through an installation on all of them,
+    # and the line said only "already covered" - so the report closed its
+    # issue with the wider setting nobody had chosen unmentioned.
+    app_case("refused but already covered is ticked and says the add was refused",
+             added="refused", here="success",
+             detail="Resource not accessible by personal access token (HTTP 403)",
+             expect_ticked=True,
+             expect_mention=["refused", "all repositories", "HTTP 403", "github.com/settings/installations"])
+    app_case("refused and unable to mint a token is unticked, with what GitHub said",
+             added="refused", here="failure", detail="Not Found (HTTP 404)",
+             expect_ticked=False, expect_mention=["refused", "HTTP 404"])
+    app_case("no installation at all is unticked",
+             added="no-installation", here="failure",
+             expect_ticked=False, expect_mention=["not installed"])
+    app_case("added and still unable to mint a token is unticked",
+             added="added", here="failure", expect_ticked=False)
+
+
 def main() -> int:
     if subprocess.run(["which", "jq"], capture_output=True).returncode != 0:
         print("test_provision: jq is not installed, and the workflow's steps use it")
@@ -465,6 +509,7 @@ def main() -> int:
     request_cases()
     gate_cases()
     protection_cases()
+    app_cases()
     if failures:
         print(f"\ntest_provision: {failures} case(s) failed")
         return 1
