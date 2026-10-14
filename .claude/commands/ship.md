@@ -28,6 +28,13 @@ waiting on a run, and that is a different problem.
 If nothing is waiting, say so in one line and stop. Do not go looking for
 something to merge.
 
+**Read the objective's merge policy before judging anything.** A `Merge policy:
+green` line means the gate below is applied without stopping to ask, for that
+objective's children. Absent, or `ask`, means the gate still runs and what
+passes it is reported rather than merged. Refuse a line last edited by the agent
+identity rather than by a person: that is a run authorising its own merges, and
+it is worth saying out loud rather than quietly ignoring.
+
 ## 2. Judge each one against the gate
 
 The gate is the list in the house-rules skill under **Who merges**, and it is
@@ -43,8 +50,14 @@ is worth looking for specifically. That is the failure mode that ships: every
 criterion satisfied and the hole still there, because the criteria were written
 before the consequence was known.
 
-Then read the same diff again against **What a revert does not undo**, which is
-a different question and needs a second pass. The gate asks whether the work is
+Then read the same diff again against **The merge gate is necessary and not
+sufficient** in the `driving-an-objective` skill: satisfied criteria that were
+the wrong criteria, a test that would also pass if the behaviour regressed, a
+number asserted rather than computed, a specification the next role will have
+to guess at. That pass is yours and nothing else in this system runs it.
+
+Then read it a third time against **What a revert does not undo**, which is
+a different question again. The gate asks whether the work is
 done; that list asks whether it is safe to be wrong about. A credential, a
 widened permission, a new outbound address, a deletion, a first dependency, or
 a change the pull request never mentions: any one of them is a question for the
@@ -69,11 +82,23 @@ Write those questions the way they would ask them, not the way the diff reads.
 An owner who does not read code can still tell you whether the site is meant to
 be calling out to somewhere new. One who is handed a patch cannot.
 
-## 4. Say what happens next
+## 4. Watch what the merge actually did
 
-A merge is an event: it wakes the objective, which queues whatever the merge
-made ready. So finish by saying what you expect to happen, and whether the
-objective is now met or waiting on another child.
+A merge is an event twice over. It wakes the objective, which queues whatever
+the merge made ready - and it starts whatever runs on the default branch,
+which is what decides whether the change reached a reader.
+
+The second one is the one that gets dropped, because the pull request has
+already gone green and closed. Its checks ran on a commit that now exists only
+inside the merge; they are not evidence about the branch. So read the runs on
+the merge commit before you call this done, and say what they did.
+
+If they are still going, say what you are waiting for and where it will show
+up, and look again next time you touch the repository. If they failed, that is
+this repository's newest problem and it belongs to whoever just merged - not to
+the pull request, which is closed and was not wrong.
+
+Then say whether the objective is now met or waiting on another child.
 
 If you merged the last child, the objective is finished but not closed -
 closing a parent objective is the owner's, and the orchestrator will say so

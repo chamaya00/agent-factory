@@ -16,7 +16,9 @@ In order, and the order is the point.
 
 1. **[The checkpoint](checkpoint.md)** - the steps only a human can do: the
    subscription token, the repository secrets, the agent identity App, the
-   release tag. Written for an iPhone, since that is the only device involved.
+   release tag, and the provisioning workflow that turns the per-repository
+   part into one approval. Written for an iPhone, since that is the only
+   device involved.
 2. **[Proving the gate](proving-the-gate.md)** - confirm by hand that a red
    check blocks a merge, on a throwaway repository, before any agent is
    pointed at it. An agent aimed at a gate you do not trust produces work you
@@ -28,6 +30,9 @@ In order, and the order is the point.
 
 ## Reference
 
+- **[Getting started](getting-started.md)** - the walkthrough a session
+  follows when it is opened with a greeting instead of a task, so the answer
+  to "hi" is a guided run of `/new-project` rather than a menu.
 - **[What is checked](what-is-checked.md)** - which parts of the system are
   verified automatically, which are verified by hand, and which are not
   verified at all. Start here if you are asking whether any of this works.
@@ -37,5 +42,8 @@ In order, and the order is the point.
 - **[How a change reaches a project](versioning.md)** - what a release tag
   is, why the callers pin one, and why cutting a tag changes nothing on its
   own.
+- **[Driving an objective](driving-an-objective.md)** - a proposal, not
+  yet built: what the interactive session's role is, and how a person's
+  "merge when green" survives the end of the session they said it in.
 - **[Implementation plan](implementation-plan.md)** - the document this was
   built from, phase by phase. Kept for the reasoning behind each phase.

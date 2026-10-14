@@ -13,6 +13,21 @@ directory - which here is the entire product, so an agent working in this
 repository would be forbidden from everything worth changing. Sessions here are
 human or interactive, and that is the design rather than a gap in it.
 
+## Getting started
+
+A session opened here with no stated task yet - "hi", "help", "start", "new",
+"getting started", or anything else that is a greeting rather than an
+instruction - is a session that came to run `/new-project` and does not know
+that yet. Meet it with the walkthrough in `docs/getting-started.md` instead of
+asking what it wants: say what the factory does in a couple of sentences, ask
+for the `owner/repo` being provisioned, name the steps that will come back to
+the person before running anything, then run `/new-project` and let its own
+report close things out.
+
+A message that already names a task - a repository, a bug, a file, an
+objective - skips this. The walkthrough is for the message that gives you
+nothing to act on yet, not a detour before every task.
+
 ## Layout, and the one thing sessions get backwards
 
 `plugins/agent-factory/` is the source. `.claude/` is a byte-identical copy of
@@ -34,17 +49,25 @@ file, or `.claude/hooks/`.
 
 ## Commands
 
-There is no package manager here and no build. The gate is six Python scripts,
-run in this order by `.github/workflows/guard.yml`:
+There is no package manager here and no build. The gate is the Python scripts
+below, run in this order by `.github/workflows/guard.yml`. No count is given
+because a count is the thing that goes stale; `validate_plugin.py` checks that
+this list, `docs/what-is-checked.md`, and `guard.yml` name the same scripts.
 
 - `python scripts/validate_plugin.py` - manifests, roles, skills, portability,
-  and the mirror
+  the mirror, and prose that disagrees with a role's own tool list
 - `python scripts/validate_workflows.py` - the workflows parse and stay inside
   their limits (needs `pyyaml`)
 - `python scripts/test_ci.py` - the gate still fails what it should fail
 - `python scripts/test_preflight.py` - agent-run still refuses what it should refuse
 - `python scripts/test_handback.py` - a finished child still wakes its parent
+- `python scripts/test_project_guard.py` - a privilege change cannot arrive
+  undeclared
+- `python scripts/test_capability_claims.py` - the capability checks still fire
+  on drift and stay quiet on prose
 - `python scripts/test_release.py` - release still refuses to tag unmerged history
+- `python scripts/test_provision.py` - provision still refuses a request, an
+  approval gate, or a check name it should refuse
 
 `python -m pip install --quiet pyyaml` is the only dependency. The SessionStart
 hook installs it and runs the first script, so a session that opened cleanly has
@@ -82,9 +105,17 @@ Do not read all of `docs/`. Read the one that matches what you are doing:
   touching anything in `scripts/`
 - `docs/versioning.md` - the pin and release model, before touching a template
   or the manifest
+- `docs/decisions/` - the ADRs, when a change alters a category rather than an
+  implementation. `0001` records why the factory's own `owner/repo` is declared
+  in the manifest rather than inferred from a remote
 - `docs/checkpoint.md` - the steps only a human with account access can do
 - `docs/open-questions.md` - what is still undecided, and where an answer has
   to land before an entry may be deleted
+- `docs/driving-an-objective.md` - the interactive session's role and the
+  per-objective merge policy, before changing a command or the project
+  template's CLAUDE.md
+- `docs/getting-started.md` - the onboarding walkthrough script, before
+  changing the trigger phrases above or how a session opens `/new-project`
 - `docs/proving-the-gate.md` and `docs/smoke-test.md` - the two runbooks
 - `README.md` - the tour, if none of the above is the thing
 
@@ -94,7 +125,7 @@ is where the last person's mistake is written down.
 
 ## Lessons
 
-Repository-specific lessons live here rather than in `.claude/memory/<role>.md`,
+Repository-specific lessons live here rather than in `docs/memory/<role>.md`,
 because no role runs in this repository and the memory protocol already sends a
 lesson every role needs to `CLAUDE.md`. Same rules as a memory file: one line,
 stated as a rule with the reason attached, proposed in a pull request, and this

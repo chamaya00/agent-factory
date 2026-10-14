@@ -8,7 +8,7 @@ Three separable layers, and the separation is the point:
 |---|---|---|
 | Agent roles and process | the `agent-factory` plugin | copied into each repo's `.claude/`, loads from the clone |
 | Automation | this repo's reusable workflows | each project calls them in one line |
-| Project-specific learning | each project's own repo, under `.claude/memory/` | never leaves that repo |
+| Project-specific learning | each project's own repo, under `docs/memory/` | never leaves that repo |
 
 The third row is what keeps the first two reusable. Agents get smarter inside a project without contaminating any other project.
 
@@ -18,7 +18,7 @@ The third row is what keeps the first two reusable. Agents get smarter inside a 
 .claude-plugin/marketplace.json      marketplace manifest
 plugins/agent-factory/
   .claude-plugin/plugin.json         plugin manifest (explicit name, always)
-  agents/                            the four roles
+  agents/                            the roles
   skills/                            the process instructions
   commands/                          slash commands
   templates/project/                 what /new-project drops into a fresh repo
@@ -31,11 +31,12 @@ docs/                                the operating documentation, also a Pages s
 
 Everything except the two manifests sits at the plugin root, not inside `.claude-plugin/`.
 
-## The four roles
+## The roles
 
 - `orchestrator` - reads an objective, produces 2-5 child issues with acceptance criteria. No file writes, no grandchildren.
 - `researcher` - investigates options and constraints, writes to `docs/research/`. No source access.
-- `designer` - produces flows, states, and component specs, writes to `docs/design/`. No source access.
+- `analyst` - specifies the event contract, the exposure event, and the metrics a result is read with, writes to `docs/measurement/`. No source access.
+- `designer` - produces flows, states, and component specs, plus a rendered mock when the issue is visual, writes to `docs/design/`. No source access.
 - `engineer` - implements against the acceptance criteria, writes the tests, opens the pull request.
 
 ## Commands
@@ -43,6 +44,7 @@ Everything except the two manifests sits at the plugin root, not inside `.claude
 - `/new-project <owner/repo>` - provisions a fresh repo: caller workflows, `CLAUDE.md`, memory files, and the labels. Three of its steps are handed to a human rather than scripted - see below.
 - `/decompose <issue>` - runs the orchestrator on one issue by hand.
 - `/retro` - proposes memory updates for the current repo as a pull request.
+- `/self-driving [objectives] [until ...]` - starts a long autonomous run, day or night: one round of questions, then the session drives the named objectives to done on delegated judgment, logging every call it makes on the person's behalf, until they close, the stated end arrives, or the person says stop.
 - `/update-agents [version]` - brings one repo's copy of the roles, skills, and workflow pins up to a release, as one reviewable pull request. Nothing else moves.
 
 ## Workflows
@@ -179,7 +181,7 @@ The cost of copying is drift, so `scripts/validate_plugin.py` fails the build if
 
 In order, and the order is the point:
 
-1. `docs/checkpoint.md` - the things only a human can do: the subscription token, the secrets, the agent identity App, the plugin install, publishing for the project repo. Written for an iPhone, since that is the only device involved.
+1. `docs/checkpoint.md` - the things only a human can do: the subscription token, the secrets, the agent identity App, the plugin install, publishing for the project repo, and step 7 - the provisioning workflow that turns the per-repository part of all that into one approval. Written for an iPhone, since that is the only device involved.
 2. `docs/proving-the-gate.md` - prove a red check blocks a merge, by hand, on a throwaway repo, before any agent is pointed at it. An agent aimed at a gate you do not trust produces work you have to read line by line, which is the thing the system exists to avoid.
 3. `docs/smoke-test.md` - two objectives through the whole loop, building a site the repository publishes so the result is judged by opening a URL rather than by reading a diff. What to watch for at each step, and the eight failure modes worth recognising on sight.
 
@@ -192,3 +194,5 @@ In order, and the order is the point:
 `docs/` is a GitHub Pages site as well as a folder, served from `main` at the `/docs` source with `docs/_config.yml` and `docs/index.md` as its entry point. Nothing built it: the source is a repository setting under Settings, Pages, and there is no deploy workflow on purpose. Building from a branch needs nothing added to `.github/workflows/`, and a system whose agents must never touch those files should not grow a workflow it does not need.
 
 Every page renders as plain Markdown with no front matter, and links between `.md` files work in both places, so a document is edited once and reads correctly on github.com and on the site.
+
+That build is the one thing here the gate does not run, so `docs/` is held to one rule the rest of the repository is not: no Liquid syntax, because Jekyll renders it before Markdown and backticks do not protect it. `validate_plugin.py` refuses it, and ADR 0002 records what that covers of the gap and what it leaves to somebody opening the page.

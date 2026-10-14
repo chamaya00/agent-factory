@@ -146,10 +146,14 @@ and will hit the cap after two real ones.
 
 ---
 
-## 4. Two of the four roles have still never run
+## 4. Some roles have still never run
 
 `researcher` and `orchestrator` are both proven under `v1.4.0`, on runs
 33792437707 and 33843275814 respectively.
+
+`analyst` has not run at all: it was added in `v1.29.0` and no objective has
+yet been split in a way that queues one, so every claim its role file makes
+about what a run produces is untested.
 
 `designer` and `engineer` have not run. The engineer is the one to watch,
 because it is the only role that needs `Bash(npm run:*)` to work and the only
@@ -187,6 +191,14 @@ for that number in its report, and asks for the smallest child to be queued
 first for exactly this reason: the answer is wanted before a larger child spends
 an attempt discovering it.
 
+**What has been measured since.** One project raised its own caller to 160
+after design runs with rendered mocks took 139 turns. Its engineer children
+building screens then ended `error_max_turns` at 161 five times across three
+issues, usually with one or two criteria landed. Raised again to 300 turns and
+90 minutes, every engineer child after it finished in one attempt. That is one
+project, and its children carried render matrices; it is evidence for the
+template's 80 being low for UI work, not yet a number to ship to everyone.
+
 **What changes.** If it lands near 40, raise the cap in the template and in
 `agent-run.yml`'s default. Do not raise it pre-emptively: the cap exists
 because a Pro subscription is a fixed budget, and a cap nobody has hit is not
@@ -194,34 +206,38 @@ evidence of anything.
 
 ---
 
-## 6. Should a run pin the model?
+## 6. Is a pinned model worth its cost for the other four roles?
 
-**What changed.** Every role file used to carry `model: opus` in its
-frontmatter. In an Actions run that line does nothing: the agent is started by
-a prompt telling it to follow the role definition, not through the subagent
-mechanism that reads the frontmatter, so the action's own default applies. Run
-33843275814 ran the "opus" orchestrator on `claude-sonnet-5` and
-`claude-haiku-4-5`. The line has been deleted rather than left to describe
-something that was not happening.
+**What is settled.** A run resolves its model per role, in the `Resolve the
+model for this role` step of `agent-run.yml`, beside the allowlist for the same
+role. The researcher is pinned to Opus there; the other four take the action's
+default, which is a choice rather than an omission. The caller's `model` input
+still overrides all of it for a whole repository.
 
-**What is unresolved.** Deleting it settles the honesty problem and leaves the
-policy one: the caller has a `model` input that is passed through to
-`--model`, and nothing sets it. So every role in every project runs on whatever
-the action defaults to, and that default can change under you between runs
-without anything in this repository moving.
+That replaces the arrangement this entry used to describe, where the roles
+carried a `model: opus` line that did nothing in an Actions run and the caller's
+input was never set by anything. The reasoning for the researcher's pin is in
+the comment on that step, at the length it deserves.
 
-The same deletion also gives up Opus for the roles used as interactive
-subagents, where the frontmatter did work. Whether that matters depends on
-whether `/decompose` run by hand should be a more careful thing than the same
-role run in Actions - which is a real question and not obviously "no".
+**What is still open, and it is the same measurement.** The pin is a bet. It was
+argued from the shape of the role - the only one whose output is judgement all
+the way down, and the only one whose failure mode is a document that reads fine
+- and not from two runs anybody compared. The other four were left on the
+default by the same untested reasoning running the other way.
 
-**How to answer it.** Compare a decomposition from a pinned run against an
-unpinned one on the same objective, and see whether the difference is worth a
-fixed cost per run.
+**How to answer it.** Run one objective twice, once with the caller's `model`
+input set and once without, and read the two sets of artifacts side by side. The
+orchestrator is the cheapest role to test this on, because a decomposition is
+small, and the analyst is the most interesting, because its contract is the
+thing a later measurement is built on and a weak one fails silently in exactly
+the way the researcher's does.
 
-**What changes.** Either the caller starts passing `model:` and the roles are
-pinned in one place where a reader can see it, or this entry is deleted and the
-default is documented as deliberate in `agent-run.yml`.
+**What changes.** Either another role joins the researcher in the case block
+with its own comment saying what the comparison showed, or this entry is
+deleted and a line goes into that step saying the default was tested and kept.
+Do not widen the pin without the comparison: "judgement matters here too" is an
+argument that fits every role, which is why it cannot be the reason for any of
+them.
 
 ---
 
@@ -258,7 +274,46 @@ subscription, and that risk has not changed. So the loss is no longer silent,
 which was the part that made it dangerous, and recovery is still a human
 removing and re-adding a label.
 
+**What happened since (1.39.0).** It fired, from a source this entry did not
+count. A project drove four objectives from one session, and the orchestrator
+run a merge wakes is itself a pending run: it cancelled queued children twice
+in one evening, and a third child was displaced twice before it started. The
+driver now treats the repository as one queue slot across every objective and
+checks after each merge that nothing it queued was displaced - the
+`driving-an-objective` skill carries that - but it is still a convention.
+
 What is genuinely still open is whether that is enough. If the report turns out
 to fire often, the answer is to loosen the group - per-issue rather than
 per-repo, with the budget protected some other way - rather than to let a
 watchdog start spending. If it never fires, this entry can go.
+
+---
+
+## 8. Do `app-render` and `contrast` work inside a run?
+
+**What is known.** Both ship in the project template, both are named in the
+role files, and both were exercised by hand before they shipped: `contrast`
+against six known pairs including the WCAG boundary cases, `app-render` against
+a built page whose stylesheet and script load from root-absolute paths - the
+exact case that made `design-render` useless for a built page, photographed
+correctly over a served origin and incorrectly over `file://`.
+
+**What is not known.** Whether a role can run them. Nothing in this repository
+runs an agent, so the allowlist entry that grants them - `Bash(./scripts/*)`,
+which both roles already held - has never been exercised against these two
+names, and `app-render` additionally runs whatever `BUILD_CMD` a project puts
+in it. That inner command is checked against the role's allowlist rather than
+the script's grant, and a project that fills it in with something no role may
+run has a script that works by hand and refuses in a run. The script's own
+header says so; nothing enforces it.
+
+**How to answer it.** Provision or update a repository, fill in `BUILD_CMD` and
+`SERVE_DIR`, and give the designer a visual issue. One run answers both: the
+pull request either carries pictures of the built page or names the refusal.
+
+**What changes.** Either this entry is deleted and the fact goes into the
+smoke-test runbook as a step that has been seen to pass, or the allowlist gains
+whatever the inner build command needs and the script's header stops being the
+only thing saying so.
+
+---

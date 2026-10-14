@@ -169,6 +169,64 @@ def check_roles_can_work() -> None:
                 )
 
 
+# What a revision round needs in order to reach the branch its pull request is
+# on. `git show origin/<ref>:<path>` is enough to READ that branch; writing to
+# it needs a local ref, and only these build one.
+REVISION_GIT = ("Bash(git fetch", "Bash(git checkout")
+
+
+def check_every_role_can_reach_its_revision_branch() -> None:
+    """Any role can be sent back with agent:revise, so any role must be able to
+    check out the branch its own pull request is on.
+
+    The prompt tells a revision round to "work on the branch and the pull
+    request that already exist" and the run starts on a fresh branch holding
+    neither. Without fetch and checkout the role can read the real branch and
+    has no way to write to it - both push paths send a local branch, and
+    nothing else permitted builds a local ref at the pull request's history.
+
+    This is the check for the failure that produced it. These sat in the
+    engineer's branch alone, so a researcher sent back on
+    background-research-agents#3 read the review, worked out the whole fix, was
+    refused every command that could reach its branch, and stopped. The round
+    was spent and the pull request never moved. Nothing reported it, because
+    every visible signal - the label, the run, the budget - behaved normally.
+    """
+    workflow = WORKFLOWS / "agent-run.yml"
+    if not workflow.exists() or not AGENTS.is_dir():
+        return
+
+    script = ""
+    for step in agent_run_steps():
+        if step.get("name") == ALLOWLIST_STEP:
+            script = step.get("run") or ""
+    if not script:
+        return
+
+    common = ""
+    for line in script.splitlines():
+        match = re.match(r"""common=['"](.*)['"]\s*$""", line.strip())
+        if match:
+            common = match.group(1).replace("$common", common)
+
+    for role_file in sorted(AGENTS.glob("*.md")):
+        role = role_file.stem
+        start = script.find(f"{role})")
+        if start == -1:
+            continue
+        end = script.find(";;", start)
+        branch = script[start : end if end != -1 else len(script)]
+        granted = granted_tools(branch, common)
+
+        for needed in REVISION_GIT:
+            if not any(name.startswith(needed) for name in granted):
+                errors.append(
+                    f"role {role!r} is not granted {needed}...); a revision "
+                    f"round cannot reach the branch its pull request is on, so "
+                    f"the round is spent and the diff never moves"
+                )
+
+
 # Runners that do not assume a package.json. The engineer has to be able to run
 # the checks the gate runs, and ci.yml's commands path means the gate is not
 # necessarily a Node gate.
@@ -269,6 +327,7 @@ def check_allowlist_entries_can_match() -> None:
 
 HANDBACK_STEP = "Hand back to a human"
 PRIVILEGE_STEP = "A change to privilege is declared, not slipped in"
+SWEEP_STEP = "Name what is not moving"
 ATTEMPT_MARKER = "<!-- agent-factory:attempt -->"
 
 
@@ -309,6 +368,37 @@ def check_prompt_states_the_turn_budget() -> None:
                 ".github/workflows/agent-run.yml: the agent prompt never states "
                 "the turn budget. A cap the agent cannot see is a cap it cannot "
                 "spend deliberately; name inputs.max-turns in the prompt."
+            )
+        return
+
+
+def check_prompt_names_the_body_form_that_works() -> None:
+    """The prompt must tell the agent how to pass a multi-line body.
+
+    `gh issue create --body "..."` with a newline followed by `#` inside the
+    quoted text is refused by the shell's permission check, whatever the
+    allowlist grants, and markdown is exactly that shape. The role reads the
+    refusal as a configuration fault, which its prompt tells it to name and
+    stop on, so the work is lost. Whether a run hit it depended on how the
+    model happened to quote the body that day: the same orchestrator created
+    two children with headings, then could not create the next objective's
+    one (background-research-agents#91, run 36608077345) and could not amend a
+    brief (#85, run 36598879748).
+
+    `--body-file -` with a quoted heredoc passes with the grants every role
+    already has, so the fix is a sentence rather than a privilege. This keeps
+    the sentence.
+    """
+    for step in agent_run_steps():
+        if not str(step.get("uses") or "").startswith("anthropics/claude-code-action"):
+            continue
+        prompt = ((step.get("with") or {}).get("prompt")) or ""
+        if "--body-file - <<'EOF'" not in prompt:
+            errors.append(
+                ".github/workflows/agent-run.yml: the agent prompt does not name "
+                "`--body-file - <<'EOF'` as the way to pass a multi-line body. "
+                "Without it a role passes markdown as --body \"...\", the "
+                "permission check refuses it, and the role stops."
             )
         return
 
@@ -444,9 +534,8 @@ def check_a_merge_can_wake_an_objective() -> None:
     """A merge is the other half of the loop and needs its own trigger and job.
 
     The hand-back tells an objective that a child's run ended. It cannot tell
-    it that the child's work landed - the researcher and designer push a branch
-    and a human merges it later - and landing is what makes the next child
-    ready. Without this an objective reports "waiting on the merge", the merge
+    it that the child's work landed - every role opens a pull request and a
+    human merges it later - and landing is what makes the next child ready. Without this an objective reports "waiting on the merge", the merge
     happens, and nothing wakes it.
     """
     template = TEMPLATES / "project" / ".github" / "workflows" / "agent-run.yml"
@@ -642,11 +731,48 @@ def check_privilege_cannot_arrive_undeclared() -> None:
                         f"project-guard.yml: the {PRIVILEGE_STEP!r} step no "
                         f"longer looks for {why}."
                     )
-            if "^Privilege change:" not in script:
+            # Reading the body out of the event payload alone makes the
+            # check unfixable under a re-run: the payload is replayed frozen,
+            # so a corrected declaration is invisible to every attempt after
+            # the first. Observed twice on one pull request before anybody
+            # worked out that clicking re-run could not possibly help.
+            if "gh pr view" not in script or "--json body" not in script:
                 errors.append(
                     f"project-guard.yml: the {PRIVILEGE_STEP!r} step does not "
-                    "require the declaration to start a line, so the phrase "
-                    "quoted anywhere in a body would pass it."
+                    "read the pull request body live, so a re-run replays the "
+                    "body the pull request opened with and a corrected "
+                    "declaration can never clear it."
+                )
+            # Anchoring is what is being protected here, not the exact prefix.
+            # The pattern may tolerate a heading or a bold lead-in - a
+            # declaration written `## Privilege change: ...` reads as correct to
+            # everyone except a regex demanding a bare line start - but it still
+            # has to be anchored, or the phrase quoted mid-sentence passes and
+            # the check means nothing.
+            if not re.search(r"grep -qE '\^[^']*Privilege change:[^']*'", script):
+                errors.append(
+                    f"project-guard.yml: the {PRIVILEGE_STEP!r} step does not "
+                    "match the declaration with a line-anchored pattern, so the "
+                    "phrase quoted anywhere in a body would pass it."
+                )
+
+            # Two failures, and they must not share a sentence. A body with no
+            # declaration and a body whose declaration is wrapped in backticks
+            # both exit 1, and the generic text tells the second author to go
+            # and write a declaration their body already contains - which reads
+            # as the check being broken rather than as two characters needing
+            # deleting, and sent one real incident an hour in the wrong
+            # direction. Collapsing them back into one message is the
+            # regression this asserts against, so it wants both the second
+            # anchored test and the sentence that distinguishes them.
+            anchored = re.findall(r"grep -qE '\^[^']*Privilege change:[^']*'", script)
+            if len(anchored) < 2 or "no line begins with it" not in script:
+                errors.append(
+                    f"project-guard.yml: the {PRIVILEGE_STEP!r} step has one "
+                    "message for two different failures. A declaration the "
+                    "formatting hid has to be told that it is there and not "
+                    "starting its line, separately from a body that never "
+                    "declared anything."
                 )
             # The documentation exclusion is a narrowing, and a narrowing is
             # how a check dies quietly: one more extension each time it is
@@ -686,6 +812,141 @@ def check_privilege_cannot_arrive_undeclared() -> None:
     )
 
 
+def check_the_guard_reruns_when_the_body_changes() -> None:
+    """A check that reads a pull request body has to re-run when it changes.
+
+    project-guard refuses a widening diff whose body carries no line starting
+    `Privilege change:`. The body is the thing under test, and a body is edited
+    far more often than it is pushed to - so a caller listening only for the
+    default pull_request types (opened, synchronize, reopened) can reject a
+    missing declaration and then have no way to observe one being added. The
+    author's exits are a manual re-run or an empty commit, and the house rules
+    forbid the second by name.
+
+    Found by writing the declaration inside backticks, where it no longer
+    starts a line. The check was right, the fix was one character, and applying
+    it needed a click nothing in the repository told anybody to make.
+    """
+    template = TEMPLATES / "project" / ".github" / "workflows" / "guard.yml"
+    if not template.exists():
+        return
+    data = yaml.safe_load(template.read_text())
+    triggers = (data or {}).get("on", (data or {}).get(True)) or {}
+    if "pull_request" not in triggers:
+        errors.append(
+            f"{template.relative_to(ROOT)}: no pull_request trigger, so "
+            "nothing guards a pull request at all."
+        )
+        return
+    types = (triggers.get("pull_request") or {}).get("types")
+    if not types:
+        errors.append(
+            f"{template.relative_to(ROOT)}: the pull_request trigger names no "
+            "`types`, so it takes the default set, which has no `edited` - "
+            "correcting a body this guard rejected cannot re-run the guard "
+            "that reads it."
+        )
+        return
+    if "edited" not in types:
+        errors.append(
+            f"{template.relative_to(ROOT)}: the pull_request trigger does not "
+            "list `edited`, so correcting a body this guard rejected cannot "
+            "re-run the guard that reads it."
+        )
+    # Only once `types` is named, because naming it replaces the default set
+    # rather than extending it: the three that were free by default now have
+    # to be written out, and dropping one would not fail anything visibly - it
+    # would just quietly stop guarding those pull requests.
+    for required in ("opened", "synchronize", "reopened"):
+        if required not in types:
+            errors.append(
+                f"{template.relative_to(ROOT)}: `types` is named, which "
+                f"replaces the default set, and `{required}` is not in it - "
+                "those pull requests would go unguarded."
+            )
+
+
+def check_the_sweep_looks_past_the_queue() -> None:
+    """Whether the default branch shipped is asked before the queue is read.
+
+    The failure this exists for had nothing queued: the objective was finished
+    and closed, and the deployment had been failing for nineteen hours. A
+    watchdog that returns early on an empty queue never looks at the branch,
+    and an empty queue is exactly the state a finished objective leaves behind.
+
+    So the order is the guarantee, and it is invisible in a diff - moving the
+    check below the queue fetch reads as tidying and silently restores the
+    blind spot.
+    """
+    for step in agent_run_steps():
+        if step.get("name") != SWEEP_STEP:
+            continue
+        script = step.get("run") or ""
+        if "gh run list" not in script:
+            errors.append(
+                f".github/workflows/agent-run.yml: the {SWEEP_STEP!r} step does "
+                "not read runs on the default branch, so a merge that shipped "
+                "nothing is invisible to it."
+            )
+            return
+        looked = script.index("gh run list")
+        queue = script.index("gh issue list")
+        if looked > queue:
+            errors.append(
+                f".github/workflows/agent-run.yml: the {SWEEP_STEP!r} step reads "
+                "the queue before it reads the default branch. An empty queue "
+                "must not stop it looking - a finished objective leaves one."
+            )
+        return
+    errors.append(
+        f".github/workflows/agent-run.yml: no {SWEEP_STEP!r} step."
+    )
+
+
+def check_the_gate_does_not_rename_itself() -> None:
+    """The ci job name is what branch protection matches on, so it must not
+    differ between the placeholder gate and the real one.
+
+    This is a lesson with a scar behind it. The template used to ship
+    `check-name: scaffolding` while the reusable workflow defaulted to the four
+    Node script names, so a project that replaced its placeholder gate also
+    renamed its required check - and a required check that stops reporting
+    blocks every merge rather than gating them, including the pull request
+    doing the replacing. The fix was one stable name on both paths, and the
+    only way that stays true is if something fails when the two drift apart.
+    """
+    reusable = WORKFLOWS / "ci.yml"
+    template = TEMPLATES / "project" / ".github" / "workflows" / "ci.yml"
+    if not reusable.is_file() or not template.is_file():
+        return
+
+    default = ((yaml.safe_load(reusable.read_text()) or {}).get(True) or {})
+    default = ((default.get("workflow_call") or {}).get("inputs") or {})
+    default = (default.get("check-name") or {}).get("default")
+
+    shipped = (yaml.safe_load(template.read_text()) or {}).get("jobs") or {}
+    shipped = ((shipped.get("ci") or {}).get("with") or {}).get("check-name")
+
+    if default is None or shipped is None:
+        errors.append(
+            "ci.yml: could not read check-name from the reusable workflow's "
+            "default and the project template's caller. One of them stopped "
+            "declaring it, and the name branch protection matches on is no "
+            "longer pinned to anything."
+        )
+        return
+
+    if default != shipped:
+        errors.append(
+            f"ci.yml: the reusable workflow defaults check-name to {default!r} "
+            f"but the project template ships {shipped!r}. A project that "
+            "swaps its placeholder gate for the real one would rename its "
+            "required check, and a required check that no longer reports "
+            "blocks every merge - including the pull request doing the swap. "
+            "Keep one name on both paths."
+        )
+
+
 def main() -> int:
     paths = sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml"))
     if TEMPLATES.is_dir():
@@ -697,8 +958,10 @@ def main() -> int:
         check(path)
     check_roles_can_work()
     check_engineer_can_run_tests()
+    check_every_role_can_reach_its_revision_branch()
     check_allowlist_entries_can_match()
     check_prompt_states_the_turn_budget()
+    check_prompt_names_the_body_form_that_works()
     check_failure_is_diagnosed()
     check_only_the_attempt_marker_counts_attempts()
     check_concurrency_gates_the_agent_not_the_preflight()
@@ -708,6 +971,9 @@ def main() -> int:
     check_something_notices_the_silence()
     check_a_delivered_run_is_a_review()
     check_privilege_cannot_arrive_undeclared()
+    check_the_guard_reruns_when_the_body_changes()
+    check_the_sweep_looks_past_the_queue()
+    check_the_gate_does_not_rename_itself()
     if errors:
         print(f"guard: {len(errors)} problem(s)\n")
         for error in errors:

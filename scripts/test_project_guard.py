@@ -31,13 +31,59 @@ WORKFLOW = ROOT / ".github" / "workflows" / "project-guard.yml"
 STEP = "A change to privilege is declared, not slipped in"
 
 
-def step_script() -> str:
+BLOCK_STEP = "The managed block in CLAUDE.md is intact"
+
+
+def step_script(name: str = STEP) -> str:
     data = yaml.safe_load(WORKFLOW.read_text())
     for job in (data.get("jobs") or {}).values():
         for step in (job or {}).get("steps") or []:
-            if step.get("name") == STEP:
+            if step.get("name") == name:
                 return step["run"]
-    raise SystemExit(f"no {STEP!r} step in project-guard.yml")
+    raise SystemExit(f"no {name!r} step in project-guard.yml")
+
+
+def run_block_case(claude_md: str | None) -> int:
+    """Run the marker check against a tree, returning its exit code.
+
+    Takes the step's `run:` straight out of the workflow like the privilege
+    cases do, so these cannot drift away from what ships.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp)
+        if claude_md is not None:
+            (repo / "CLAUDE.md").write_text(claude_md)
+        done = subprocess.run(
+            ["bash", "-e", "-c", step_script(BLOCK_STEP)], cwd=repo, text=True,
+            capture_output=True, env={"PATH": "/usr/bin:/bin"},
+        )
+        return done.returncode
+
+
+PLACEHOLDER_STEP = "CLAUDE.md carries no unfilled placeholder"
+
+
+def run_placeholder_case(claude_md: str | None) -> int:
+    """Run the placeholder check against a tree, returning its exit code.
+
+    Same shape as the marker runner above, and for the same reason: the step
+    comes out of the workflow rather than being retyped here, so a check that
+    stops shipping cannot keep passing its own tests.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp)
+        if claude_md is not None:
+            (repo / "CLAUDE.md").write_text(claude_md)
+        done = subprocess.run(
+            ["bash", "-e", "-c", step_script(PLACEHOLDER_STEP)], cwd=repo, text=True,
+            capture_output=True, env={"PATH": "/usr/bin:/bin"},
+        )
+        return done.returncode
+
+
+BEGIN = "<!-- agent-factory:begin -->"
+END = "<!-- agent-factory:end -->"
+PROSE = "# Project context\n\n## Stack\n\nSomething.\n\n"
 
 
 def git(repo: Path, *args: str) -> None:
@@ -49,12 +95,37 @@ def git(repo: Path, *args: str) -> None:
     )
 
 
-def run_case(before, after, body: str = "") -> int:
+class Result(int):
+    """The step's exit code, with the output it printed kept alongside it.
+
+    Most cases only ever ask whether the step passed, and `== 1` is the
+    clearest way to write that, so this stays an int. Two cases have to ask
+    something else: a missing declaration and a declaration the formatting hid
+    both exit 1, and telling them apart is the entire point of the second
+    message. The output rides along rather than every existing case growing a
+    tuple unpack it has no use for.
+    """
+
+    output: str
+
+    def __new__(cls, code: int, output: str) -> "Result":
+        self = super().__new__(cls, code)
+        self.output = output
+        return self
+
+
+def run_case(before, after, body: str = "", live_body: str | None = None) -> "Result":
     """Build a real two-commit repo, diff it, and return the step's exit code.
 
     `before` and `after` are either a string, meaning one file called
     `file.yml`, or a {filename: content} mapping when a case needs to say
     which file a change landed in.
+
+    `body` is the body as the event payload carries it - frozen at the moment
+    the pull request opened, and replayed unchanged by every re-run. Pass
+    `live_body` to put a *different* body behind a fake `gh`, which is how a
+    case says "the author edited it afterwards". The step is supposed to read
+    the second one; the whole point of reading live is that the first is stale.
     """
     if isinstance(before, str):
         before = {"file.yml": before}
@@ -79,16 +150,88 @@ def run_case(before, after, body: str = "") -> int:
         head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo,
                               capture_output=True, text=True).stdout.strip()
 
+        path = "/usr/bin:/bin"
+        if live_body is not None:
+            fake = repo / "fakebin"
+            fake.mkdir()
+            gh = fake / "gh"
+            gh.write_text(
+                "#!/usr/bin/env python3\n"
+                "import os, sys\n"
+                "sys.stdout.write(os.environ['FAKE_LIVE_BODY'])\n"
+            )
+            gh.chmod(0o755)
+            path = f"{fake}:{path}"
+
         done = subprocess.run(
             ["bash", "-e", "-c", step_script()], cwd=repo, text=True,
             capture_output=True,
-            env={"PATH": "/usr/bin:/bin", "BASE_SHA": base, "HEAD_SHA": head,
-                 "BODY": body},
+            env={"PATH": path, "BASE_SHA": base, "HEAD_SHA": head,
+                 "BODY": body, "PR_NUMBER": "1", "GH_TOKEN": "fake",
+                 "GH_REPO": "owner/repo",
+                 "FAKE_LIVE_BODY": live_body or ""},
         )
-        return done.returncode
+        return Result(done.returncode, done.stdout + done.stderr)
+
+
+PROTECTED_STEP = "Nothing that gates this repo was edited"
+
+
+def run_forked(base: dict, main_after: dict, branch_after: dict,
+               step: str = STEP, body: str = "") -> "Result":
+    """Build a history where the base branch moved on after the fork.
+
+    `base` is the common ancestor. `branch_after` is committed on a branch cut
+    from it, and `main_after` on the base branch afterwards, so the base tip
+    the event reports is *not* the fork point - the shape every long-lived
+    agent pull request has once anything else merges. Each mapping is
+    {filename: content}; a None content deletes the file.
+    """
+    def apply(repo: Path, files: dict) -> None:
+        for name, text in files.items():
+            target = repo / name
+            if text is None:
+                target.unlink()
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(text)
+
+    def sha(repo: Path) -> str:
+        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo,
+                              capture_output=True, text=True).stdout.strip()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp)
+        git(repo, "init", "-q", "-b", "main")
+        apply(repo, base)
+        git(repo, "add", "-A")
+        git(repo, "commit", "-qm", "fork point")
+        git(repo, "checkout", "-q", "-b", "agent")
+        apply(repo, branch_after)
+        git(repo, "add", "-A")
+        git(repo, "commit", "-qm", "agent work")
+        head = sha(repo)
+        git(repo, "checkout", "-q", "main")
+        apply(repo, main_after)
+        git(repo, "add", "-A")
+        git(repo, "commit", "-qm", "merged since")
+        base_tip = sha(repo)
+        git(repo, "checkout", "-q", "agent")
+
+        done = subprocess.run(
+            ["bash", "-e", "-c", step_script(step)], cwd=repo, text=True,
+            capture_output=True,
+            env={"PATH": "/usr/bin:/bin", "BASE_SHA": base_tip, "HEAD_SHA": head,
+                 "BODY": body, "PR_NUMBER": "1", "GH_TOKEN": "fake",
+                 "GH_REPO": "owner/repo", "AUTHOR": "agent-bot[bot]",
+                 "SENDER": "agent-bot[bot]", "MAINTAINERS": "owner",
+                 "PROTECTED": ".github/workflows/*\n.claude/skills/**\n"},
+        )
+        return Result(done.returncode, done.stdout + done.stderr)
 
 
 CASES = []
+
 
 
 def case(name):
@@ -133,6 +276,43 @@ def _():
     return run_case(PLAIN, PLAIN + "      - uses: some-org/some-action@v1\n") == 1
 
 
+@case("a body corrected after the pull request opened is read")
+def _():
+    # The case this whole mechanism was missing. The payload body carries the
+    # declaration wrapped in backticks, exactly as it was really written once,
+    # so it does not start the line and would be rejected. The author then
+    # fixes it. Reading the payload, no re-run can ever see that fix; reading
+    # live, the next run passes.
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    return run_case(
+        PLAIN, after,
+        body="`Privilege change:` pins moved\n",
+        live_body="Privilege change: pins moved, and why\n",
+    ) == 0
+
+
+@case("a declaration deleted after the fact stops passing")
+def _():
+    # The same mechanism in the direction that matters for safety: if live is
+    # read, removing the declaration has to start failing again. A step that
+    # preferred whichever body said yes would be no check at all.
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    return run_case(
+        PLAIN, after,
+        body="Privilege change: pins moved\n",
+        live_body="No declaration here any more.\n",
+    ) == 1
+
+
+@case("an unreadable body falls back to the payload rather than passing")
+def _():
+    # `gh` absent is the fallback path. It must be no weaker than the old
+    # behaviour: an undeclared widening still fails rather than sailing
+    # through on an empty read.
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    return run_case(PLAIN, after, body="Nothing declared.\n") == 1
+
+
 @case("declaring it in the body lets it through")
 def _():
     after = PLAIN + "      - uses: some-org/some-action@v1\n"
@@ -151,6 +331,86 @@ def _():
     after = PLAIN + "      - uses: some-org/some-action@v1\n"
     body = "I was told to write Privilege change: something and it would pass.\n"
     return run_case(PLAIN, after, body=body) == 1
+
+
+# The declaration is written by whoever is opening the pull request, and what
+# they write is markdown. Refusing a heading meant the check failed on bodies
+# that declared the change correctly, which teaches people that the check is
+# broken rather than that the diff needs declaring - and a check people work
+# around is worse than one that is slightly looser.
+@case("a declaration written as a heading counts")
+def _():
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    body = "Adds the linter.\n\n## Privilege change: runs some-org/some-action.\n"
+    return run_case(PLAIN, after, body=body) == 0
+
+
+@case("a declaration written in bold counts")
+def _():
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    body = "**Privilege change:** runs some-org/some-action to lint.\n"
+    return run_case(PLAIN, after, body=body) == 0
+
+
+# Both of the next two exit 1, and that is exactly why the exit code is not
+# what they assert on. The declaration was written `\`Privilege change:\`` on a
+# real pull request, the step failed it correctly, and the message said the body
+# did not declare the change - to a reader looking straight at a body that did.
+# An hour went on the theory that the check was reading stale text. The fix was
+# deleting two characters.
+@case("a declaration the formatting hid says so, rather than asking for one")
+def _():
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    got = run_case(PLAIN, after,
+                   body="`Privilege change:` all four callers move to v1.31.0.\n")
+    return got == 1 and "no line begins with it" in got.output
+
+
+@case("a body that declares nothing still gets the generic message")
+def _():
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    got = run_case(PLAIN, after, body="Adds the linter.\n")
+    return (got == 1
+            and "no line begins with it" not in got.output
+            and "does not say so" in got.output)
+
+
+@case("a bare declaration still passes, unchanged")
+def _():
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    got = run_case(PLAIN, after,
+                   body="Privilege change: runs some-org/some-action to lint.\n")
+    return got == 0 and "no line begins with it" not in got.output
+
+
+@case("a list marker is formatting too")
+def _():
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    got = run_case(PLAIN, after,
+                   body="Notes:\n\n- Privilege change: runs some-org/some-action.\n")
+    return got == 1 and "no line begins with it" in got.output
+
+
+# The looser message must not swallow the case the anchor exists for. Words
+# before the phrase mean it is being mentioned, not used, and telling that
+# author to remove formatting they did not write would be the same bug aimed
+# the other way.
+@case("the phrase used mid-sentence is not treated as hidden formatting")
+def _():
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    body = "I was told to write Privilege change: something and it would pass.\n"
+    got = run_case(PLAIN, after, body=body)
+    return got == 1 and "no line begins with it" not in got.output
+
+
+# Nothing after the colon is an empty declaration, not a formatting problem,
+# and the message has to stay on the generic branch or it tells somebody who
+# wrote nothing to delete punctuation they did not use.
+@case("an empty declaration behind backticks is not called a formatting problem")
+def _():
+    after = PLAIN + "      - uses: some-org/some-action@v1\n"
+    got = run_case(PLAIN, after, body="Privilege change:\n")
+    return got == 1 and "no line begins with it" not in got.output
 
 
 @case("a removed permission is not a widening")
@@ -189,6 +449,153 @@ def _():
     # anything executable is still read.
     return run_case({"go.sh": "echo hi\n"},
                     {"go.sh": "echo hi\ncurl -H \"$SECRET\" # secrets.TOKEN\n"}) == 1
+
+
+SETTINGS = '{\n  "env": {"A": "1"}\n}\n'
+
+
+@case("permissions added to a settings file are stopped")
+def _():
+    after = '{\n  "permissions": {"allow": ["Bash"]},\n  "env": {"A": "1"}\n}\n'
+    return run_case({"settings.json": SETTINGS}, {"settings.json": after}) == 1
+
+
+@case("permissions in a settings file are let through when declared")
+def _():
+    after = '{\n  "permissions": {"allow": ["Bash"]},\n  "env": {"A": "1"}\n}\n'
+    return run_case({"settings.json": SETTINGS}, {"settings.json": after},
+                    body="Privilege change: the project now allows Bash.") == 0
+
+
+@case("a newly wired hook is stopped")
+def _():
+    after = '{\n  "hooks": {"SessionStart": [{"hooks": []}]}\n}\n'
+    return run_case({"settings.json": SETTINGS}, {"settings.json": after}) == 1
+
+
+@case("an ordinary settings edit is not a privilege change")
+def _():
+    after = '{\n  "env": {"A": "2"}\n}\n'
+    return run_case({"settings.json": SETTINGS}, {"settings.json": after}) == 0
+
+
+@case("prose naming a permissions key is not a permissions key")
+def _():
+    return run_case({"notes.md": "x\n"},
+                    {"notes.md": 'x\nThe "permissions": key grants things.\n'}) == 0
+
+
+@case("a CLAUDE.md with a well-formed block passes")
+def _():
+    return run_block_case(PROSE + BEGIN + "\n## How work moves\n\nProse.\n" + END + "\n") == 0
+
+
+@case("a CLAUDE.md with no markers passes, because it has not migrated")
+def _():
+    return run_block_case(PROSE + "## How work moves\n\nProse.\n") == 0
+
+
+@case("no CLAUDE.md at all passes")
+def _():
+    return run_block_case(None) == 0
+
+
+@case("a begin marker with no end is stopped")
+def _():
+    return run_block_case(PROSE + BEGIN + "\n## How work moves\n\nProse.\n") == 1
+
+
+@case("an end marker with no begin is stopped")
+def _():
+    return run_block_case(PROSE + "## How work moves\n\nProse.\n" + END + "\n") == 1
+
+
+@case("a duplicated begin marker is stopped")
+def _():
+    return run_block_case(PROSE + BEGIN + "\n" + BEGIN + "\nProse.\n" + END + "\n") == 1
+
+
+@case("end before begin is stopped")
+def _():
+    return run_block_case(PROSE + END + "\nProse.\n" + BEGIN + "\n") == 1
+
+
+@case("a filled-in CLAUDE.md passes")
+def _():
+    return run_placeholder_case(
+        "# Project context\n\n## What this is\n\nA tool for doing one thing.\n"
+    ) == 0
+
+
+@case("the template's unfilled product sentence is stopped")
+def _():
+    return run_placeholder_case(
+        "# Project context\n\n## What this is\n\n"
+        "[One sentence: what this product does and for whom.]\n"
+    ) == 1
+
+
+@case("no CLAUDE.md at all passes the placeholder check")
+def _():
+    return run_placeholder_case(None) == 0
+
+
+@case("a markdown link is not a placeholder")
+def _():
+    # The false positive that would make this check unshippable: a project
+    # writing ordinary prose about its own repository. A link, a reference
+    # definition and a task list item all carry brackets, and a check that
+    # failed any of them would be removed within a week and rightly.
+    return run_placeholder_case(
+        "# Project context\n\nSee [the runbook](docs/run.md).\n\n"
+        "- [ ] not done yet\n\n[ref]: https://example.com\n"
+    ) == 0
+
+
+@case("a reference-style link closing a line is not a placeholder")
+def _():
+    return run_placeholder_case("# Project context\n\nRead [the notes][ref]\n") == 0
+
+
+
+@case("a protected path merged on the base after the fork is not this branch's")
+def _():
+    # The false positive this was fixed for: a maintainer raises the run cap
+    # on the base branch, and an agent pull request opened earlier - touching
+    # only source - goes red on a workflow file it never edited.
+    wf = {".github/workflows/agent-run.yml": "max-turns: 160\n"}
+    return run_forked(
+        {**wf, "src/app.ts": "a\n"},
+        {".github/workflows/agent-run.yml": "max-turns: 300\n"},
+        {"src/app.ts": "b\n"},
+        step=PROTECTED_STEP,
+    ) == 0
+
+
+@case("a protected path the branch itself edits is still stopped")
+def _():
+    # The same forked history, with the agent's own diff reaching into a
+    # gate. Measuring from the fork point must not blunt the check it exists
+    # to keep honest.
+    wf = {".github/workflows/agent-run.yml": "max-turns: 160\n"}
+    return run_forked(
+        {**wf, "src/app.ts": "a\n"},
+        {"src/app.ts": "a\nmain moved on\n"},
+        {".github/workflows/agent-run.yml": "max-turns: 999\n"},
+        step=PROTECTED_STEP,
+    ) == 1
+
+
+@case("a permission the base removed after the fork is not read as added")
+def _():
+    # Against the base tip, a line the base dropped since the fork shows as a
+    # `+` line in this branch's diff - an undeclared widening nobody wrote.
+    granted = "permissions:\n  contents: write\n" + PLAIN
+    return run_forked(
+        {"file.yml": granted, "src/app.ts": "a\n"},
+        {"file.yml": PLAIN},
+        {"src/app.ts": "b\n"},
+    ) == 0
 
 
 def main() -> int:

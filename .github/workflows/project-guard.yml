@@ -17,7 +17,7 @@ on:
     inputs:
       memory-line-cap:
         description: >-
-          Line cap for each `.claude/memory/<role>.md`. Past the cap the retro
+          Line cap for each `docs/memory/<role>.md`. Past the cap the retro
           rewrites the file rather than appending to it, which is the point of
           the cap rather than a side effect of it.
         type: number
@@ -65,7 +65,17 @@ jobs:
           set -euo pipefail
           failed=0
           shopt -s nullglob
-          for file in .claude/memory/*.md; do
+
+          # Both paths, and that is not belt and braces. Memory moved from
+          # `.claude/memory/` to `docs/memory/` because a run cannot write a
+          # file under `.claude/` at all - the classification that refuses it is
+          # checked before any permission rule, so no allowlist lifts it - and a
+          # repository provisioned before the move still has its lessons at the
+          # old path until `/update-agents` moves them. Capping only the new
+          # path would silently stop capping every repository that has not
+          # migrated yet, which is the shape of failure this whole file is
+          # against: a check that still reports and no longer checks anything.
+          for file in docs/memory/*.md .claude/memory/*.md; do
             lines="$(grep -cve '^[[:space:]]*$' "$file" || true)"
             if [ "$lines" -gt "$CAP" ]; then
               echo "::error file=$file::$lines lines, cap is $CAP. The retro rewrites past the cap - merge or drop entries to make room, do not append."
@@ -73,7 +83,90 @@ jobs:
             fi
           done
           [ "$failed" -eq 0 ] && echo "Memory files are inside the cap."
+
+          # Said once, loudly, and never failed on: the lessons are readable
+          # where they are and the roles read the new path, so an unmigrated
+          # repository is degraded rather than broken, and failing every merge
+          # over a move nobody here agreed to is worse than saying so.
+          if compgen -G '.claude/memory/*.md' >/dev/null; then
+            echo "::warning::Memory is still at .claude/memory/. The roles in this release read docs/memory/, so nothing is reading these lessons. Run /update-agents, which moves them."
+          fi
+
           exit "$failed"
+
+      - name: The managed block in CLAUDE.md is intact
+        run: |
+          set -euo pipefail
+
+          # The block is how shared process prose reaches this repository:
+          # /update-agents replaces everything between the markers and leaves
+          # the rest of CLAUDE.md alone. A half-present pair is the dangerous
+          # state - the command cannot tell where the block was meant to start,
+          # and a wrong guess deletes prose somebody wrote about their own
+          # repository while looking like a successful update.
+          #
+          # Absent entirely is fine and must stay fine: a repository provisioned
+          # before the markers existed has not migrated yet, and failing it here
+          # would block every merge over a chore it never agreed to.
+
+          [ -f CLAUDE.md ] || { echo "No CLAUDE.md; nothing to check."; exit 0; }
+
+          begins="$(grep -c '^<!-- agent-factory:begin -->$' CLAUDE.md || true)"
+          ends="$(grep -c '^<!-- agent-factory:end -->$' CLAUDE.md || true)"
+
+          if [ "$begins" -eq 0 ] && [ "$ends" -eq 0 ]; then
+            echo "CLAUDE.md carries no managed block. Not migrated yet - /update-agents inserts it."
+            exit 0
+          fi
+
+          if [ "$begins" -ne 1 ] || [ "$ends" -ne 1 ]; then
+            echo "::error file=CLAUDE.md::Found $begins agent-factory:begin and $ends agent-factory:end marker(s); each must appear exactly once. /update-agents refuses to replace a block it cannot locate, so shared process prose silently stops reaching this repository."
+            exit 1
+          fi
+
+          begin_line="$(grep -n '^<!-- agent-factory:begin -->$' CLAUDE.md | cut -d: -f1)"
+          end_line="$(grep -n '^<!-- agent-factory:end -->$' CLAUDE.md | cut -d: -f1)"
+          if [ "$begin_line" -ge "$end_line" ]; then
+            echo "::error file=CLAUDE.md::agent-factory:end is at line $end_line, before or at begin on line $begin_line. The block has no contents and /update-agents cannot replace it."
+            exit 1
+          fi
+
+          echo "CLAUDE.md's managed block is intact (lines $begin_line-$end_line)."
+
+      - name: CLAUDE.md carries no unfilled placeholder
+        run: |
+          set -euo pipefail
+
+          # Provisioning fills one bracketed line in from the template: the
+          # sentence saying what this product is and for whom. A bracket that
+          # survives is the failure this whole file is against - a file that
+          # reads as configured and says nothing. It is worse here than
+          # anywhere else, because every agent run loads CLAUDE.md before it
+          # loads anything, so an unfilled line is not a gap in the docs, it is
+          # an instruction addressed to a session that left months ago.
+          #
+          # Whole-line brackets only, and that is the design rather than a
+          # limitation. A link, a task list item and a reference definition all
+          # carry brackets and none of them is ever the entire line, so this
+          # cannot fail a repository for writing ordinary prose.
+          # validate_plugin.py holds the template to that same shape, which is
+          # what makes the pair work: a placeholder this cannot see is one the
+          # template is not allowed to ship.
+          #
+          # No CLAUDE.md is fine, like the marker check above. A repository
+          # that has not migrated is degraded rather than broken, and failing
+          # every merge over a chore it never agreed to is the wrong trade.
+
+          [ -f CLAUDE.md ] || { echo "No CLAUDE.md; nothing to check."; exit 0; }
+
+          if grep -q '^\[.*\]$' CLAUDE.md; then
+            grep -n '^\[.*\]$' CLAUDE.md | while IFS= read -r hit; do
+              echo "::error file=CLAUDE.md,line=${hit%%:*}::${hit#*:} is still the template's placeholder. Replace it with what this repository actually is - every agent run reads this file first, and this line is what it reads instead."
+            done
+            exit 1
+          fi
+
+          echo "CLAUDE.md carries no unfilled placeholder."
 
       - name: Nothing that gates this repo was edited
         if: github.event_name == 'pull_request'
@@ -81,6 +174,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
+          SENDER: ${{ github.event.sender.login }}
           MAINTAINERS: ${{ inputs.maintainers || github.repository_owner }}
           PROTECTED: ${{ inputs.protected-paths }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -95,21 +189,71 @@ jobs:
               ;;
           esac
 
-          changed="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+          # A human pushing a gate fix onto an agent's branch is the ordinary
+          # way a broken gate gets repaired, and binding this check to the
+          # login that opened the pull request refuses exactly that - which
+          # leaves landing the fix on the default branch as the only way
+          # through, and a push to the default branch does not run this check
+          # at all. Refusing the reviewable path and permitting the
+          # unreviewable one is the opposite of the intent.
+          #
+          # So also ask who pushed the commits that triggered this run.
+          # `sender` is GitHub's own account for the event, not metadata
+          # carried inside the commit: a `synchronize` names whoever pushed.
+          # That distinction is the whole reason it is used here. Commit
+          # author and committer are both set by whoever runs `git`, so an
+          # agent asked not to edit gates could simply commit as the owner
+          # and be believed - a bypass written into the check itself. There
+          # is no equivalent way to forge being the sender of a push.
+          #
+          # The narrowness is deliberate. This says "a maintainer pushed what
+          # is being checked right now", not "a maintainer is involved
+          # somewhere in this branch's history". A later push by the agent
+          # makes it fire again while the protected change is still in the
+          # diff, which reads as noise until it is the run that matters.
+          # Both halves have to be non-empty before the comparison is worth
+          # making. An empty sender against an empty maintainer list matches
+          # ",," and passes, which is a bypass hiding in a string test rather
+          # than in any decision anybody made.
+          if [ -n "${SENDER:-}" ] && [ -n "${MAINTAINERS:-}" ]; then
+            case ",$MAINTAINERS," in
+              *",$SENDER,"*)
+                echo "$SENDER pushed this, and is a maintainer. Nothing to check."
+                exit 0
+                ;;
+            esac
+          fi
+
+          # Diff from where this branch forked, not from the base branch's
+          # tip. `pull_request.base.sha` is the tip at the time of the event,
+          # so a two-point diff against it also carries everything that landed
+          # on the base since the fork - reversed. A protected-path change a
+          # maintainer merged there then reads as this pull request's own, and
+          # every agent branch opened before it goes red for work it never
+          # did. That happened: one project raised its own run cap, and the
+          # agent pull request already open failed here on a workflow file its
+          # diff never touched, until a maintainer pushed a base merge onto it.
+          # `fetch-depth: 0` above is what makes the fork point findable; the
+          # fallback keeps the old behaviour if it somehow is not.
+          fork_point="$(git merge-base "$BASE_SHA" "$HEAD_SHA" 2>/dev/null || echo "$BASE_SHA")"
+          changed="$(git diff --name-only "$fork_point" "$HEAD_SHA")"
           failed=0
           while IFS= read -r file; do
             [ -z "$file" ] && continue
+
+            hit=0
             while IFS= read -r pattern; do
               [ -z "$pattern" ] && continue
               case "$file" in
-                $pattern)
-                  echo "::error file=$file::$AUTHOR may not change this. A system that can rewrite its own gates has no gates."
-                  failed=1
-                  ;;
+                $pattern) hit=1 ;;
               esac
             done <<< "$PROTECTED"
+            [ "$hit" -eq 0 ] && continue
+
+            echo "::error file=$file::$AUTHOR may not change this. A system that can rewrite its own gates has no gates. If this change is a maintainer's, push it to this branch from their own account - the last push to a pull request is what this reads, so it clears on that push rather than needing the fix moved to the default branch."
+            failed=1
           done <<< "$changed"
-          [ "$failed" -eq 0 ] && echo "No protected path was touched."
+          [ "$failed" -eq 0 ] && echo "No protected path was touched by the automation."
           exit "$failed"
 
       - name: A change to privilege is declared, not slipped in
@@ -118,8 +262,36 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+
+          # The body is read live, and that is the difference between this
+          # check being fixable and not.
+          #
+          # A re-run replays the event that started the run, so
+          # github.event.pull_request.body is the body as it was when the pull
+          # request opened. An author whose declaration this step rejected then
+          # corrects the body, re-runs the job, and the job reads the old text
+          # again - and no number of re-runs can ever read anything else. That
+          # is not hypothetical: a declaration written wrapped in backticks did
+          # not start its line, this step failed it correctly, and fixing the
+          # body changed nothing twice in a row. The exits left were an empty
+          # commit or a close and reopen, and the house rules forbid both by
+          # name, for reasons that have nothing to do with this.
+          #
+          # The payload stays as a fallback so a failed read is never worse
+          # than the old behaviour, and the log says which was used rather than
+          # leaving somebody to wonder why a corrected body still failed.
+          live="$(gh pr view "$PR_NUMBER" --json body --jq '.body' 2>/dev/null || true)"
+          if [ -n "$live" ]; then
+            BODY="$live"
+            echo "Read the pull request body live, not from the event payload."
+          else
+            echo "::warning::Could not read the body from the API, so this used the event payload - which a re-run replays unchanged. If a corrected body keeps failing, that is why."
+          fi
 
           # Deliberately no maintainer exemption, unlike the protected-paths
           # check above. That one asks who is editing a gate, and trusts the
@@ -136,14 +308,18 @@ jobs:
           # repository that carries it, which is all of them. A check that is
           # routinely red is one people stop reading, and that costs more than
           # the narrowing does. Nothing executable is excluded.
-          files="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" \
+          # From the fork point, for the reason the protected-paths step gives:
+          # against the base tip, a line the base *removed* after the fork
+          # reads as a line this pull request added.
+          fork_point="$(git merge-base "$BASE_SHA" "$HEAD_SHA" 2>/dev/null || echo "$BASE_SHA")"
+          files="$(git diff --name-only "$fork_point" "$HEAD_SHA" \
             | grep -vE '\.(md|markdown|txt)$' || true)"
           if [ -z "$files" ]; then
             echo "Only documentation changed. Nothing here can widen anything."
             exit 0
           fi
 
-          added="$(git diff --unified=0 "$BASE_SHA" "$HEAD_SHA" -- $files \
+          added="$(git diff --unified=0 "$fork_point" "$HEAD_SHA" -- $files \
             | grep -E '^\+' | grep -vE '^\+\+\+' || true)"
 
           scopes='actions|attestations|checks|contents|deployments|discussions'
@@ -166,15 +342,68 @@ jobs:
             "pull_request_target|workflow_run"
           report "An action this repository will execute" "uses:[[:space:]]*[^[:space:]]"
 
+          # The two above are YAML-shaped and miss the settings file entirely.
+          # `permissions:` does not match `"permissions":` - the quote sits
+          # between the word and the colon - so a JSON settings file could grant
+          # what a workflow could not, through the same check, silently.
+          #
+          # This matters because the factory ships `.claude/settings.json`. That
+          # makes it a route by which one release could widen what automation may
+          # do in every project at once, and this step is the only thing that
+          # reads a project's diff before it merges.
+          report "Permissions in a settings file" \
+            '"permissions"[[:space:]]*:'
+          # A hook is arbitrary code this repository starts executing on its own,
+          # without anybody invoking it. Adding one is not forbidden - the
+          # factory ships exactly one - but it is not something to discover
+          # afterwards either.
+          report "A hook this repository will execute on its own" \
+            '"(SessionStart|SessionEnd|UserPromptSubmit|PreToolUse|PostToolUse|Stop|SubagentStop|Notification|PreCompact)"[[:space:]]*:'
+
           if [ -z "$found" ]; then
             echo "Nothing in this diff changes what the automation may do."
             exit 0
           fi
 
-          if printf '%s' "$BODY" | grep -qE '^Privilege change:[[:space:]]*[^[:space:]]'; then
+          # Accept the shapes a person or an agent actually writes: a plain
+          # line, a markdown heading, a bolded lead-in. Demanding a bare line
+          # start rejects `## Privilege change: ...`, which reads as a correct
+          # declaration to every reader except this regex. What is still
+          # required is that the declaration opens its own line and says
+          # something after the colon, so prose mentioning the phrase in
+          # passing still does not pass.
+          if printf '%s' "$BODY" | grep -qE '^[[:space:]]*#{0,6}[[:space:]]*\**[[:space:]]*Privilege change:[[:space:]]*[^[:space:]]'; then
             echo
             echo "Declared in the pull request body. A person still has to agree with it."
             exit 0
+          fi
+
+          # Two situations reach this line, and one message for both once sent
+          # an hour at the wrong problem. A body that never mentions the phrase
+          # is a missing declaration, and the generic error below is right. A
+          # body carrying the phrase behind backticks, a list marker or a quote
+          # has already declared it, and telling that author to "add a line" is
+          # advice about a file they are not looking at - the fix is deleting
+          # two characters from the one they are. They read the generic text,
+          # looked at a body that plainly contained the declaration, and
+          # concluded the check was reading stale text.
+          #
+          # What separates the two is whatever sits before the phrase on its
+          # line. Punctuation is markup, and the declaration is really there. A
+          # word is prose, and the phrase is being mentioned rather than used -
+          # which is the case the anchor exists to reject, so that one keeps
+          # the generic message. Hence at least one non-alphanumeric character
+          # before it and none of the line's own words.
+          #
+          # It asks for something after the colon for the same reason the
+          # accepting pattern does. An empty declaration is not a formatting
+          # problem, and saying "remove the backticks" to somebody who wrote
+          # nothing after the colon would be this same bug pointing the other
+          # way.
+          if printf '%s' "$BODY" | grep -qE '^[[:space:]]*[^[:alnum:][:space:]]+[[:space:]]*Privilege change:[[:space:]]*[^[:space:]]'; then
+            echo
+            echo "::error::The body declares this, but no line begins with it - something before the phrase on the line, usually backticks or a list marker, stops it matching. Do not add a second declaration: remove the formatting around the one already there and leave the line starting with the bare phrase. A heading or a bold lead-in is fine, and so is anything after the colon."
+            exit 1
           fi
 
           echo

@@ -6,15 +6,62 @@ pull request there and merges it.
 
 That is the whole design, and everything below is the mechanics of it.
 
-## Three things travel, separately
+## Five things travel, separately
 
 | What | Lives in a project as | Moves when |
 |---|---|---|
 | Role, skill, and command definitions | copies under `.claude/agents/`, `.claude/skills/`, and `.claude/commands/` | `/update-agents` opens a pull request there and it merges |
 | Workflows (the gates) | four thin callers pinned to a release tag | the same pull request bumps the pins |
-| Repo-specific lessons | `.claude/memory/<role>.md` | never - these are written in that repository and stay there |
+| Shared process prose | the managed block in `CLAUDE.md`, between the `agent-factory:begin` and `agent-factory:end` markers | the same pull request replaces the block |
+| The session-start hook | `.claude/hooks/session-start.sh`, wired by one key in `.claude/settings.json` | the same pull request copies the script and adds only that key |
+| Repo-specific lessons | `docs/memory/<role>.md` | never - these are written in that repository and stay there. The one exception is the move off `.claude/memory/`, which `/update-agents` performs once per repository |
 
-The third row never leaves a repository, and the first row is the reason it
+The second-to-last row is the newest and was missing for a long time, which
+cost something worth writing down. `CLAUDE.md` was skipped by `/update-agents`
+entirely, on the stated grounds that it describes the product rather than the
+process. Measured against a real project that was true of about half the file:
+its stack and its commands are the repository's own, and its account of how work
+moves, what drives an objective, the standing rules and the labels came from
+here.
+
+With two ownerships interleaved in one file and no boundary between them,
+skipping all of it was the only safe thing the command could do - so every
+release that changed process desynchronised every project's description of
+itself, silently, and the drift stayed invisible until somebody read a sentence
+that contradicted the roles they were watching run. That is how a project came
+to be running roles that open their own pull requests while its `CLAUDE.md`
+still told the reader those roles could not.
+
+The markers are the boundary that makes the file updatable without overwriting
+what belongs to the repository. Inside them is ours and gets replaced wholesale;
+outside them is the project's and is never touched. A repository that predates
+the markers keeps working - the guard passes a file that has none - and gets
+them on its next update, which is the one step in that command that shows a
+person what it is about to replace before it does it.
+
+There is one rule underneath all of this, and it is worth stating plainly
+because it now covers three different shapes and will cover more:
+
+**A file the factory wholly owns travels wholesale. A file it shares with the
+project gets a bounded edit and a migration that shows a person what it is about
+to do.**
+
+Roles, skills, commands and the hook script are wholly ours, so they are copied
+over without ceremony. `CLAUDE.md` and `.claude/settings.json` are shared, and
+each gets the narrowest edit that does the job - a marked block in one, a single
+key in the other, because Markdown can carry comment markers and JSON cannot.
+The shapes differ; the rule does not.
+
+The settings file carries one extra constraint the others do not need. It is
+where permissions live, so shipping it at all creates a route by which a single
+release could widen what automation may do in every project at once. Two things
+close that: the shipped copy is checked here to contain hooks and nothing else,
+and `project-guard` fails a project's own pull request that adds a permissions
+key or wires a new hook without a `Privilege change:` line. The first stops the
+factory doing it; the second means no project starts executing something new
+without somebody being told.
+
+The last row never leaves a repository, and the first row is the reason it
 does not have to. The roles are copied in rather than fetched at run time, so a
 project's agents behave the way they behaved the day it was provisioned, and
 its lessons stay next to the roles that learned them.
@@ -25,6 +72,31 @@ commands that are in the repository it cloned. A marketplace named in
 plugins, and a cloud session has nobody to answer that prompt, so a project
 that relied on one would open with no `/retro`, `/decompose`, or
 `/update-agents` at all.
+
+## Which factory, as well as which release
+
+The pin says *which release*. It does not say *which factory*, and for a long
+time nothing did: the four caller templates named an owner literally, so a fork
+provisioned repositories that called upstream's reusable workflows. Every check
+green, every run succeeding, none of it the code the person could edit.
+
+Templates now carry `__FACTORY_REPO__` beside `__FACTORY_VERSION__`, and
+provisioning substitutes both. The owner comes from `repository` in
+`plugins/agent-factory/.claude-plugin/plugin.json`, which is the same file the
+release tag is read from - so which factory and which release are declared in
+one place, and a fork edits one line.
+
+`check_factory_repo_is_declared()` cross-checks that field against the
+checkout's `origin` whenever one is readable. The remote is a witness rather
+than the source: a detached or mirrored checkout has none, and the manifest
+still has to be authoritative there, but a fork that forgets the line gets a
+red build rather than silence.
+`docs/decisions/0001-factory-repo-is-declared-in-the-manifest.md` records why
+that way round.
+
+A fork therefore has exactly one migration step, and it is the first commit
+after cloning: point `repository` at the fork. Until then the guard fails and
+names the field.
 
 ## Cutting a release
 
