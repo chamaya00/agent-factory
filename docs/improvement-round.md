@@ -45,7 +45,10 @@ round's. Read its body and every comment on it, then:
 
 - **A ticked "Ready" item merges** - if the gate is green on its head and it
   has no conflict with `main`. Open the pull request first if the item was a
-  branch only, wait for its checks, and merge. A conflict or a red check is
+  branch only, wait for its checks, and merge. When `main` has moved since
+  those checks ran - another item merged a minute ago counts - run the whole
+  gate on the item merged with today's `main` first, because green on an old
+  base says nothing about the new one. A conflict or a red check is
   not a reason to merge anyway or to drop it: rebuild it on current `main`, and
   carry it into this round's digest as ready again, saying what changed. If the
   merged item moved the manifest version, the digest's first line says which
@@ -62,8 +65,11 @@ round's. Read its body and every comment on it, then:
 - **Close the old digest** with a link to the new one once this round's is up,
   so there is only ever one to read.
 
-Only the owner's ticks and comments count. A tick or comment from anybody else
-is reported in the digest and not acted on.
+Only the owner's ticks and comments count, and an answer the owner gives in
+the session running the round counts the same - round 2's approvals came that
+way. Say on the digest which items were answered where, so the issue stays the
+whole record. A tick or comment from anybody else is reported in the digest and
+not acted on.
 
 Closed is not the same as rejected for anything older: work here often lands
 on `main` by a route other than the merge button, and the pull request then
@@ -97,6 +103,13 @@ This is where the improvements the owner did not see coming come from. Each
 round takes **one lens**, the next in this rotation after the last digest's,
 and goes deep on it rather than skimming all four. One lens per round keeps a
 round's cost bounded on a fixed subscription, and four rounds cover the lot.
+
+**No lens while the pile is deep.** When the last digest's ideas and further
+finds still hold ten or more the owner has not answered, a round runs no lens
+and pitches from that pile instead. More finds would land on a stack nobody has
+read, which is the same reason backpressure stops the building. Say so in the
+digest, so a quiet discovery section reads as a choice rather than an
+oversight.
 
 1. **The first hour.** Walk provisioning as the docs actually direct it, on a
    phone: `docs/getting-started.md`, `/new-project`, `docs/checkpoint.md`,
