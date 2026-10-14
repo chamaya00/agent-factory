@@ -137,11 +137,13 @@ Read the diff, merge it or do not. Repositories you do not run this in stay
 exactly where they are, indefinitely. That is allowed and it is not drift -
 a repository that is finished does not need the newest roles.
 
-One thing about that pull request is worth knowing: its own checks run at the
-*old* pin, because a caller change only takes effect once it is on the default
-branch. So green there means the diff is well-formed, not that the new release
-passes on that repository. The first real run at the new pin is the next pull
-request after it merges.
+One thing about that pull request is worth knowing: which pin its own checks
+run at depends on where its branch lives. From a branch in the same
+repository, Actions takes each workflow file from the pull request, so the
+callers in the diff run and the new release is exercised there - an update
+to v1.18.0 showed its guard running the very check that update introduced.
+From a fork, the old pin runs, and green means only that the diff is
+well-formed. `/update-agents` says which it was rather than assuming.
 
 ## Why not a moving `v1`
 

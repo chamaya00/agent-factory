@@ -420,9 +420,9 @@ the only thing that works: a session reads commands, agents, and skills out of
 the repository it cloned, and installs no plugin. A marketplace declared in
 `.claude/settings.json` is dropped unless the folder has been trusted, and a
 cloud session has nobody to answer the trust prompt, so a project that relied
-on one would open with none of these commands. Copying is what puts `/retro`,
-`/decompose`, `/update-agents`, and `/ship` in a session opened on this
-repository.
+on one would open with none of these commands. Copying is what puts the
+project's commands - the `commands` list in `.claude/agent-factory.json` - in
+a session opened on this repository.
 
 Copying rather than fetching is the whole design. It means this repository's
 agents keep behaving the way they behaved on the day it was provisioned, no
