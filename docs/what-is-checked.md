@@ -260,8 +260,11 @@ quietly skipping this group.
 
 ### test_preflight.py
 
-Fifteen cases against a fake `gh`. This is the only place in the repository
-where a bug spends money, so the preflight gets executed rather than read.
+Cases against a fake `gh`, and deliberately no count here: this section said
+fifteen for long enough to be wrong by more than twenty, and a number in prose
+that nothing checks is worse than no number. Run the script for the figure. This
+is the only place in the repository where a bug spends money, so the preflight
+gets executed rather than read.
 
 An objective runs the orchestrator; one role label runs that role; no role
 label does not run; two role labels refuse rather than guess;
@@ -271,9 +274,28 @@ comment with it runs; the third attempt still runs and the fourth fails the
 job; a docs-only pull request is not worth a run and one touching source is;
 `workflow_dispatch` takes the number from its input.
 
-The fifteenth is not a decision but a trace: refusing a fourth attempt has to
-label the issue `agent:blocked` and comment why, or the refusal reads as a
-flake.
+Some are not decisions but traces: refusing a fourth attempt has to label the
+issue `agent:blocked` and comment why, or the refusal reads as a flake, and
+each budget's refusal has to name its own budget rather than reciting the
+three-strike rule at somebody whose scope was never in question.
+
+Then two groups about text nobody here wrote, which is what a public
+repository adds. Who may **start** a run: a comment carrying the trigger
+phrase from an author without write access is refused, and `CONTRIBUTOR` is
+refused with it - on a public repo that is one merged drive-by typo fix.
+Who may be **read** by one: an issue whose comments or opening body were
+written by somebody without write access is refused entirely, labelled
+`needs-human`, and cleared only by a person labelling it
+`comments-reviewed`.
+
+That second group is where the fixtures earn their keep. The gate exempts
+bots, and it has to: the agent App's own comments - the attempt markers the
+preflight counts - come back from REST as `Bot`/`CONTRIBUTOR`, and a deploy
+bot's as `Bot`/`NONE`. A gate reading `author_association` alone would refuse
+every issue this system has ever written on, which is all of them. Three cases
+hold that line, and the fake answers `gh api` by handing the fixture to the
+real `jq` with the real `--jq` expression, so what is tested is the filter
+that ships rather than a Python restatement of it.
 
 ### test_release.py
 

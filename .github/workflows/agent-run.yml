@@ -120,6 +120,24 @@ on:
         description: Label on an issue that means "run the agent now".
         type: string
         default: 'agent:queued'
+      reviewed-label:
+        description: >-
+          Label that means "a person has read the text from outside on this
+          issue and a run may read it too".
+
+          The release lever for the handbrake below. Without one, anybody with
+          a GitHub account could stop every run on an issue permanently by
+          commenting on it, which is a worse problem than the one being
+          solved. With it, a stranger's comment costs the owner one read and
+          one click.
+
+          It is deliberately not cleared automatically. A second comment
+          arriving after the label does not re-refuse, because the owner has
+          said they are reading this issue's comments; re-arming on every new
+          one would make a busy issue unworkable and teach them to leave the
+          label on for good.
+        type: string
+        default: 'comments-reviewed'
       revise-label:
         description: >-
           Label on an issue that means "this was delivered, somebody read it,
@@ -476,6 +494,8 @@ jobs:
           MARKER: '<!-- agent-factory:attempt -->'
           SUPERVISION_MARKER: '<!-- agent-factory:supervision -->'
           REVISION_MARKER: '<!-- agent-factory:revision -->'
+          REVIEWED_LABEL: ${{ inputs.reviewed-label }}
+          UNTRUSTED_MARKER: '<!-- agent-factory:untrusted-context -->'
         run: |
           set -euo pipefail
 
@@ -560,6 +580,81 @@ jobs:
             fi
           done
           [ -n "$role" ] || skip "No role label and not an objective."
+
+          # --- Text from outside ---------------------------------------------
+          # The trigger gate above decides who may START a run. It says nothing
+          # about what a run READS, and on a public repository those are two
+          # different problems. Anyone with a GitHub account can comment on an
+          # open issue, and the orchestrator is told to read the objective
+          # "including every comment - the latest usually carries the
+          # correction". So the attack needs no trigger at all: the comment
+          # waits, and the owner's own next legitimate run reads it as context.
+          #
+          # Nothing can filter an injection out of prose - the payload arrives
+          # in the same channel as the instruction, and asking the model to
+          # adjudicate its own input is not a control. `claude-code-action`
+          # strips hidden markdown, which defeats a concealed payload and not a
+          # plain one. So this does not try to read the text. It refuses to run
+          # and names who to look at. Fail closed: being a handbrake is the
+          # point.
+          #
+          # `user.type` is what makes this usable rather than a daily false
+          # alarm, and it is why this reads REST rather than `view --json
+          # comments` like the budget count below. The agent App's own comments
+          # - the attempt markers this preflight counts - carry
+          # author_association CONTRIBUTOR, and a deploy or lint bot carries
+          # NONE. An association-only test would therefore refuse every issue
+          # this system has ever written on, which is all of them. Verified
+          # against a real repository before this was written, not assumed.
+          #
+          # Bots are exempt, and that is a trust decision rather than an
+          # oversight: a bot can only comment here if somebody with admin on
+          # this repository installed its App. A human cannot hold a login
+          # ending in `[bot]` - GitHub appends that for App actors and rejects
+          # brackets in usernames - so this is a signal, not a guess.
+          outside="$(gh api "repos/$GH_REPO/issues/$NUMBER/comments" --paginate \
+            --jq '.[]
+                  | select(.user.type != "Bot")
+                  | select(.author_association != "OWNER"
+                           and .author_association != "MEMBER"
+                           and .author_association != "COLLABORATOR")
+                  | .user.login' 2>/dev/null || true)"
+
+          # The body counts too, and it is the easier mistake: a stranger opens
+          # an issue, somebody labels it by hand because it reads like real
+          # work, and every word of it is now the run's instructions.
+          opener="$(gh api "repos/$GH_REPO/issues/$NUMBER" \
+            --jq 'select(.user.type != "Bot")
+                  | select(.author_association != "OWNER"
+                           and .author_association != "MEMBER"
+                           and .author_association != "COLLABORATOR")
+                  | .user.login' 2>/dev/null || true)"
+
+          untrusted="$(printf '%s\n%s\n' "$outside" "$opener" \
+            | grep -v '^[[:space:]]*$' | sort -u || true)"
+
+          if [ -n "$untrusted" ]; then
+            who="$(echo "$untrusted" | tr '\n' ' ' | sed 's/ $//')"
+            if has_label "$REVIEWED_LABEL"; then
+              echo "Carries text from $who, cleared by $REVIEWED_LABEL. Running."
+            else
+              edit --add-label 'needs-human' || true
+              # One comment, however many times a run is requested. The label
+              # is the state; repeating the explanation is noise.
+              if ! view --json comments --jq '.comments[].body' 2>/dev/null \
+                   | grep -qF "$UNTRUSTED_MARKER"; then
+                comment --body "$(printf '%s\n\n%s\n\n%s\n\n%s' \
+                  "$UNTRUSTED_MARKER **Refusing to run: this carries text from outside.**" \
+                  "Comments or an opening body here were written by $who, who does not have write access to this repository. An agent run reads the whole issue as its instructions, and no check can tell a correction from an injection written to look like one - so this refuses rather than guesses." \
+                  "Read what they wrote. Then either delete it, or label this issue \`$REVIEWED_LABEL\` and queue it again - that label says a person has read this issue's outside text and a run may read it too." \
+                  "To stop this arising at all, limit who may comment: the repository's Settings > Moderation > Interaction limits, set to repository collaborators.")" || true
+              fi
+              edit --remove-label "$RUN_LABEL" || true
+              edit --remove-label "$REVISE_LABEL" || true
+              echo "::warning::#$NUMBER carries text from outside ($who). Labelled needs-human; not spending a run."
+              skip "Text from outside and no $REVIEWED_LABEL. A person reads it first."
+            fi
+          fi
 
           # Docs and lockfiles are not worth a slice of the subscription.
           if [ "$KIND" = "pr" ]; then
