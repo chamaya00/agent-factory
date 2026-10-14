@@ -73,7 +73,8 @@ this list, `docs/what-is-checked.md`, and `guard.yml` name the same scripts.
   undeclared
 - `python scripts/test_capability_claims.py` - the capability checks still fire
   on drift and stay quiet on prose
-- `python scripts/test_release.py` - release still refuses to tag unmerged history
+- `python scripts/test_release.py` - release still refuses a tag that would move
+  or disagree with the manifest
 - `python scripts/test_provision.py` - provision still refuses a request, an
   approval gate, or a check name it should refuse
 

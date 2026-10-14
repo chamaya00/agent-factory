@@ -73,7 +73,7 @@ jobs:
       - name: Prose still agrees with what each role is granted
         run: python scripts/test_capability_claims.py
 
-      - name: Release resolves the right commit for a major tag
+      - name: Release refuses a tag that would move or disagree with the manifest
         run: python scripts/test_release.py
 
       # The one workflow here that holds an admin token for every repository
