@@ -1,0 +1,642 @@
+name: provision
+
+# Does the per-repository setup a cloud session cannot, with nobody at a
+# terminal: the Actions permission, the three secrets, adding the repository to
+# the agent identity App, the labels, and branch protection. Every one of them
+# is read back, and the result is posted on the request.
+#
+# Why it exists. None of those steps is inherently manual. Each needs an
+# identity with admin on the new repository, and a session token is a GitHub
+# App installation holding nothing at the account level, so it gets `403
+# Resource not accessible by integration` however it asks. Until this the
+# identity was the person - by hand, or `scripts/setup-project.sh` in a
+# Codespace. Here it is a fine-grained token the person created once, kept in
+# an environment that releases it to a job only after they approve that job.
+# ADR 0003 has the reasoning, and what it costs.
+#
+# How it starts. Either the `provision` label on an issue titled
+# `provision <owner/repo>`, which is what `/new-project` files - a session can
+# label an issue but cannot dispatch a workflow - or Run workflow on the Actions
+# tab with the repository typed in. Both wait for the same approval.
+#
+# What stands between a request and the token:
+#
+# - The label. Applying one takes triage access here, so a stranger opening an
+#   issue starts nothing.
+# - The `request` job, which holds no secret. It refuses a target that is not a
+#   plain owner/repo, belongs to another account, or is this repository, and it
+#   refuses to go further unless the `provision` environment exists with a
+#   required reviewer and a branch policy. A request it refuses never asks
+#   anybody to approve anything, so a malformed one costs nobody a tap.
+# - The environment, which is the gate that matters. Its secrets reach a job
+#   only on the branches it allows and only once a reviewer approves. The check
+#   above confirms that configuration on the honest path. It cannot defend
+#   against an edited copy of this file on another branch - that copy can
+#   delete the check - and the branch policy is what does.
+#
+# The target name is the one untrusted input. It reaches every shell as an
+# environment variable, never interpolated into a script, and only after the
+# request job has checked its shape.
+#
+# Idempotent. Re-running it re-sets the secrets from the environment, which is
+# also how a renewed token reaches a project that already has the old one.
+#
+# What it deliberately leaves alone: creating the repository, and writing its
+# files. The first is the person's. The second is `/new-project`'s, because
+# choosing between a direct push and a pull request means reading the tree, and
+# because those files are what this run waits for before the last two steps.
+
+# The approval screen shows the run's name and not its inputs, so the name is
+# what tells the person which repository they are about to hand the token to.
+# Display only: the request job checks the name before anything uses it.
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+      && format('provision {0}', inputs.repository)
+      || github.event.issue.title }}
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: The repository to provision, as owner/repo. It must already exist.
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+# Labelling the same request twice should not provision twice in parallel.
+concurrency:
+  group: provision-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  request:
+    name: read the request
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'provision'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # Reads the provision environment's protection rules.
+      actions: read
+      # Says on the request why it was refused.
+      issues: write
+    outputs:
+      repo: ${{ steps.request.outputs.repo }}
+      name: ${{ steps.request.outputs.name }}
+    steps:
+      - name: The target is one of this account's repositories
+        id: request
+        env:
+          EVENT: ${{ github.event_name }}
+          TITLE: ${{ github.event.issue.title }}
+          INPUT: ${{ inputs.repository }}
+          OWNER: ${{ github.repository_owner }}
+          FACTORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          refuse() {
+            echo "::error::$1"
+            printf '%s\n' "$1" > "$RUNNER_TEMP/provision-refused.md"
+            exit 1
+          }
+
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            raw="$INPUT"
+          else
+            case "$TITLE" in
+              [Pp]rovision\ *) raw="${TITLE#* }" ;;
+              *) refuse "The issue title has to read \`provision owner/repo\`, and this one does not start with \`provision\`." ;;
+            esac
+          fi
+
+          # Trimmed and nothing else. A name that is not already a plain
+          # owner/repo is refused rather than repaired, because a repaired name
+          # is a guess about which repository to administer.
+          raw="${raw#"${raw%%[![:space:]]*}"}"
+          raw="${raw%"${raw##*[![:space:]]}"}"
+
+          if ! [[ "$raw" =~ ^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$ ]]; then
+            refuse "The target has to be a plain \`owner/repo\`, and this is not one."
+          fi
+
+          owner="${raw%%/*}"
+          name="${raw#*/}"
+
+          case "$name" in
+            . | ..) refuse "\`$name\` is not a repository name." ;;
+          esac
+
+          # The token administers this account's repositories and nobody
+          # else's, so a request naming another owner cannot work - and is
+          # either a typo or somebody trying the door.
+          if [ "${owner,,}" != "${OWNER,,}" ]; then
+            refuse "\`$owner\` is not \`$OWNER\`. Provisioning only reaches this account's own repositories."
+          fi
+
+          if [ "${owner,,}/${name,,}" = "${FACTORY,,}" ]; then
+            refuse "That is the factory itself. Nothing is provisioned here: no agents run in this repository, and its CLAUDE.md says why."
+          fi
+
+          echo "Target: $OWNER/$name"
+          {
+            echo "repo=$OWNER/$name"
+            echo "name=$name"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: The approval gate is in place
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FACTORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          refuse() {
+            echo "::error::$1"
+            printf '%s\n' "$1" > "$RUNNER_TEMP/provision-refused.md"
+            exit 1
+          }
+
+          # A dispatch from another branch runs that branch's copy of this
+          # file. The environment's branch policy is what actually stops it;
+          # this only says so before anybody is asked to approve.
+          if [ "$REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
+            refuse "Provisioning runs from \`$DEFAULT_BRANCH\` only, and this run started from \`$REF\`."
+          fi
+
+          if ! environment="$(gh api "repos/$FACTORY/environments/provision" 2>/dev/null)"; then
+            refuse "There is no \`provision\` environment on $FACTORY that this run can read, so nothing is known to stand between this request and an admin token. Set it up first: docs/checkpoint.md, the provisioning step."
+          fi
+
+          # Counted by rule rather than by reviewer: a required-reviewers rule
+          # cannot be saved empty, and the reviewer list is the part a token
+          # may not be shown.
+          rules="$(printf '%s' "$environment" | jq '[.protection_rules[]? | select(.type == "required_reviewers")] | length')"
+          if [ "$rules" -lt 1 ]; then
+            refuse "The \`provision\` environment has no required reviewer, so its token would reach this run with nobody approving it. Add yourself: Settings, Environments, provision, Required reviewers."
+          fi
+
+          if [ "$(printf '%s' "$environment" | jq '.deployment_branch_policy != null')" != "true" ]; then
+            refuse "The \`provision\` environment lets any branch use it, so an edited copy of this workflow on a branch could reach the token. Set Deployment branches to \`$DEFAULT_BRANCH\` only."
+          fi
+
+          echo "The provision environment requires a reviewer and limits which branches may use it."
+
+      - name: Say why on the request
+        if: failure() && github.event_name == 'issues'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set +e -uo pipefail
+          reason="$(cat "$RUNNER_TEMP/provision-refused.md" 2>/dev/null || echo "The request job failed before it could say why. Read the log.")"
+          {
+            echo "<!-- agent-factory:provision-report -->"
+            echo "## Not provisioned"
+            echo
+            echo "$reason"
+            echo
+            echo "Nothing was changed anywhere, and nobody was asked to approve anything."
+            echo
+            echo "[Run log]($RUN_URL)"
+          } > "$RUNNER_TEMP/provision-comment.md"
+          gh issue comment "$NUMBER" --body-file "$RUNNER_TEMP/provision-comment.md"
+
+  provision:
+    name: provision the repository
+    needs: request
+    runs-on: ubuntu-latest
+    # Most of this is waiting: for the files to land, for bootstrap, and for
+    # the two gates to report. None of it spends anything but runner time.
+    timeout-minutes: 60
+    environment: provision
+    permissions:
+      # The report on the request, and closing it once everything confirmed.
+      # Everything done to the target is done with the environment's token,
+      # never with this one.
+      issues: write
+    env:
+      REPO: ${{ needs.request.outputs.repo }}
+    # The first two steps stop the job when they fail, because nothing after
+    # them can work. Every step after that records what it could not do and
+    # lets the rest carry on, so it opens with `set +e`: a runner starts bash
+    # with -e already on, and one refused call would otherwise skip the steps
+    # that had nothing to do with it and leave them out of the report.
+    steps:
+      - name: The environment holds what this needs
+        env:
+          PROVISION_TOKEN: ${{ secrets.PROVISION_TOKEN }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          AGENT_APP_ID: ${{ secrets.AGENT_APP_ID }}
+          AGENT_APP_PRIVATE_KEY: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          missing=""
+          for name in PROVISION_TOKEN CLAUDE_CODE_OAUTH_TOKEN AGENT_APP_ID AGENT_APP_PRIVATE_KEY; do
+            [ -n "${!name:-}" ] || missing="$missing \`$name\`"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::The provision environment is missing:$missing"
+            printf -- '- [ ] The `provision` environment holds every secret this needs. Missing:%s. They are environment secrets, not repository secrets: docs/checkpoint.md, the provisioning step.\n' "$missing" \
+              >> "$RUNNER_TEMP/provision-report.md"
+            exit 1
+          fi
+
+      - name: The token can administer the target
+        id: target
+        env:
+          GH_TOKEN: ${{ secrets.PROVISION_TOKEN }}
+        run: |
+          set -euo pipefail
+          todo() { printf -- '- [ ] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "::error::$1"; }
+
+          # `permissions.admin` is the person's role on the repository, not the
+          # token's grant, so this proves the repository exists and is theirs.
+          # A token missing a permission shows up in the step that needs it.
+          if [ "$(gh api "repos/$REPO" --jq '.permissions.admin' 2>/dev/null)" != "true" ]; then
+            todo "The token cannot administer \`$REPO\`. Either it does not exist yet - github.com/new - or the token was created for selected repositories rather than all of them."
+            exit 1
+          fi
+
+          branch="$(gh api "repos/$REPO" --jq '.default_branch')"
+          id="$(gh api "repos/$REPO" --jq '.id')"
+
+          if [ "$(gh api "repos/$REPO" --jq '.private')" = "true" ]; then
+            todo "\`$REPO\` is private, so it cannot call the factory's reusable workflows and every check fails before it starts. Make it public: github.com/$REPO/settings"
+          fi
+
+          echo "Repository: $REPO (default branch $branch)"
+          {
+            echo "branch=$branch"
+            echo "id=$id"
+          } >> "$GITHUB_OUTPUT"
+
+      # Off by default on personal-account repositories. With it off every
+      # agent run goes green and silently opens no pull request, and the guard
+      # on the provisioning push fails at startup with no log at all.
+      - name: Actions may create and approve pull requests
+        env:
+          GH_TOKEN: ${{ secrets.PROVISION_TOKEN }}
+        run: |
+          set +e -uo pipefail
+          done_() { printf -- '- [x] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "confirmed: $1"; }
+          todo() { printf -- '- [ ] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "::warning::$1"; }
+
+          gh api -X PUT "repos/$REPO/actions/permissions/workflow" \
+            -f default_workflow_permissions=write \
+            -F can_approve_pull_request_reviews=true >/dev/null
+
+          got="$(gh api "repos/$REPO/actions/permissions/workflow" \
+            --jq '"\(.default_workflow_permissions) \(.can_approve_pull_request_reviews)"' 2>/dev/null || true)"
+          if [ "$got" = "write true" ]; then
+            done_ "Actions has read and write permissions and may create and approve pull requests."
+          else
+            todo "The Actions permission read back as \`${got:-nothing}\`. The token needs Administration: read and write. Or set it by hand: github.com/$REPO/settings/actions"
+          fi
+
+      # Set every time, from the one place they are kept. A project never
+      # holds a value the environment does not, so renewing a token is a
+      # re-run rather than a round of pasting.
+      - name: The three secrets
+        env:
+          GH_TOKEN: ${{ secrets.PROVISION_TOKEN }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          AGENT_APP_ID: ${{ secrets.AGENT_APP_ID }}
+          AGENT_APP_PRIVATE_KEY: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+        run: |
+          set +e -uo pipefail
+          done_() { printf -- '- [x] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "confirmed: $1"; }
+          todo() { printf -- '- [ ] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "::warning::$1"; }
+
+          wanted="CLAUDE_CODE_OAUTH_TOKEN AGENT_APP_ID AGENT_APP_PRIVATE_KEY"
+
+          # On stdin rather than --body, so no value is ever an argument.
+          for name in $wanted; do
+            printf '%s' "${!name}" | gh secret set "$name" --repo "$REPO" >/dev/null ||
+              echo "::warning::could not set $name"
+          done
+
+          present="$(gh secret list --repo "$REPO" --json name --jq '.[].name' 2>/dev/null || true)"
+          absent=""
+          for name in $wanted; do
+            printf '%s\n' "$present" | grep -qx "$name" || absent="$absent \`$name\`"
+          done
+
+          if [ -z "$absent" ]; then
+            done_ "Secrets: \`CLAUDE_CODE_OAUTH_TOKEN\`, \`AGENT_APP_ID\`, \`AGENT_APP_PRIVATE_KEY\`."
+          else
+            todo "Secrets missing after setting them:$absent. The token needs Secrets: read and write. Or add them by hand: github.com/$REPO/settings/secrets/actions"
+          fi
+
+      # The App stays installed on selected repositories rather than all of
+      # them, so every new one has to be added. Finding the installation takes
+      # the App's own key; adding a repository to it takes the person, which is
+      # what the environment's token is.
+      - name: Find the agent App's installation
+        id: app-account
+        continue-on-error: true
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.AGENT_APP_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          permission-metadata: read
+
+      - name: Add the repository to the agent App
+        id: app-add
+        env:
+          GH_TOKEN: ${{ secrets.PROVISION_TOKEN }}
+          INSTALLATION_ID: ${{ steps.app-account.outputs.installation-id }}
+          REPO_ID: ${{ steps.target.outputs.id }}
+        run: |
+          set +e -uo pipefail
+          if [ -z "$INSTALLATION_ID" ]; then
+            echo "result=no-installation" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if gh api -X PUT "/user/installations/$INSTALLATION_ID/repositories/$REPO_ID" >/dev/null; then
+            echo "result=added" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=refused" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The read-back is the exact thing every agent run does first: mint a
+      # token for this one repository. If that works here, it works there.
+      - name: The agent App can act in the repository
+        id: app-here
+        continue-on-error: true
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.AGENT_APP_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ needs.request.outputs.name }}
+          permission-metadata: read
+
+      - name: Record the App installation
+        env:
+          ADDED: ${{ steps.app-add.outputs.result }}
+          HERE: ${{ steps.app-here.outcome }}
+        run: |
+          set +e -uo pipefail
+          done_() { printf -- '- [x] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "confirmed: $1"; }
+          todo() { printf -- '- [ ] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "::warning::$1"; }
+
+          if [ "$HERE" = "success" ]; then
+            if [ "$ADDED" = "added" ]; then
+              done_ "The agent App is installed on \`$REPO\` and can mint a token for it."
+            else
+              done_ "The agent App can mint a token for \`$REPO\`; it was already covered."
+            fi
+            exit 0
+          fi
+
+          case "$ADDED" in
+            no-installation)
+              todo "The agent App. It is not installed on this account, or \`AGENT_APP_ID\` and \`AGENT_APP_PRIVATE_KEY\` belong to a different App. Install it once, on selected repositories: github.com/settings/installations" ;;
+            refused)
+              todo "The agent App. Adding \`$REPO\` to its installation was refused: the token needs GitHub App installation repository access: read and write. Or add it by hand: github.com/settings/installations, Configure, Repository access." ;;
+            *)
+              todo "The agent App. \`$REPO\` was added to its installation and the App still cannot mint a token for it. Check github.com/settings/installations." ;;
+          esac
+
+      - name: Labels, from bootstrap
+        id: labels
+        env:
+          GH_TOKEN: ${{ secrets.PROVISION_TOKEN }}
+          BRANCH: ${{ steps.target.outputs.branch }}
+        run: |
+          set +e -uo pipefail
+          done_() { printf -- '- [x] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "confirmed: $1"; }
+          todo() { printf -- '- [ ] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "::warning::$1"; }
+
+          poll="${POLL_SECONDS:-20}"
+          tries="${FILE_TRIES:-90}"
+
+          # The files are /new-project's to write, and on its direct-push path
+          # they may still be on their way when this starts. Bootstrap has to
+          # be on the default branch before it can be dispatched, so wait for
+          # it rather than failing a race nobody can see.
+          present=""
+          for _ in $(seq 1 "$tries"); do
+            if gh api "repos/$REPO/contents/.github/workflows/bootstrap.yml?ref=$BRANCH" >/dev/null 2>&1; then
+              present=yes
+              break
+            fi
+            sleep "$poll"
+          done
+
+          if [ -z "$present" ]; then
+            echo "files=absent" >> "$GITHUB_OUTPUT"
+            todo "Labels. \`.github/workflows/bootstrap.yml\` never reached \`$BRANCH\`, waiting $(( poll * tries / 60 )) minutes. On the pull request path, merge the provisioning pull request and re-run this."
+            exit 0
+          fi
+          echo "files=present" >> "$GITHUB_OUTPUT"
+
+          before="$(gh run list --repo "$REPO" --workflow bootstrap.yml --limit 20 \
+            --json databaseId --jq '.[].databaseId' 2>/dev/null || true)"
+
+          if ! gh workflow run bootstrap.yml --repo "$REPO" --ref "$BRANCH"; then
+            todo "Labels. Starting bootstrap was refused: the token needs Actions: read and write. Or start it by hand: github.com/$REPO/actions/workflows/bootstrap.yml"
+            exit 0
+          fi
+
+          # The dispatch returns no run id, so find the run that was not there
+          # before it.
+          run_id=""
+          for _ in $(seq 1 30); do
+            sleep 5
+            run_id="$(gh run list --repo "$REPO" --workflow bootstrap.yml --limit 20 \
+              --json databaseId --jq '.[].databaseId' 2>/dev/null \
+              | grep -vxF -f <(printf '%s\n' "$before") | head -n 1 || true)"
+            [ -n "$run_id" ] && break
+          done
+          if [ -n "$run_id" ]; then
+            gh run watch "$run_id" --repo "$REPO" --exit-status --interval 10 >/dev/null 2>&1 || true
+          fi
+
+          # A sample, read back, rather than the run's word for it.
+          missing=""
+          for want in agent:queued role:engineer objective needs-human; do
+            gh api "repos/$REPO/labels/${want//:/%3A}" >/dev/null 2>&1 || missing="$missing $want"
+          done
+          if [ -z "$missing" ]; then
+            done_ "Labels, created by bootstrap (sampled agent:queued, role:engineer, objective, needs-human)."
+          else
+            todo "Labels. Bootstrap ran and these are still missing:$missing. github.com/$REPO/actions/workflows/bootstrap.yml"
+          fi
+
+      - name: Branch protection
+        id: protection
+        env:
+          GH_TOKEN: ${{ secrets.PROVISION_TOKEN }}
+          BRANCH: ${{ steps.target.outputs.branch }}
+          FILES: ${{ steps.labels.outputs.files }}
+        run: |
+          set +e -uo pipefail
+          export LC_ALL=C
+          done_() { printf -- '- [x] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "confirmed: $1"; }
+          todo() { printf -- '- [ ] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "::warning::$1"; }
+
+          poll="${POLL_SECONDS:-15}"
+          tries="${RUN_TRIES:-60}"
+          retry="Open any pull request there so both gates run, then re-run this."
+
+          if [ "${FILES:-}" != "present" ]; then
+            todo "Branch protection. It requires the gates' check names, and the gates are not on \`$BRANCH\` yet."
+            exit 0
+          fi
+
+          sha="$(gh api "repos/$REPO/commits/$BRANCH" --jq '.sha' 2>/dev/null || true)"
+          if [ -z "$sha" ]; then
+            todo "Branch protection. Could not read the tip of \`$BRANCH\`."
+            exit 0
+          fi
+
+          # Which names to require: the two gates', as they reported on a push
+          # to the default branch, and nothing else. Not every check on the
+          # commit - bootstrap, just dispatched, reports there too, and so does
+          # the scheduled sweep. A required check that only runs on dispatch or
+          # on a timer never reports on a pull request, and blocks every merge
+          # including the one that would remove it.
+          filter='.workflow_runs[] | select(.path | test("^\\.github/workflows/(ci|guard)\\.ya?ml")) | [.id, .status, (.conclusion // "none"), .path] | @tsv'
+
+          runs=""
+          reran=""
+          for _ in $(seq 1 "$tries"); do
+            runs="$(gh api "repos/$REPO/actions/runs?head_sha=$sha&event=push&per_page=100" \
+              --jq "$filter" 2>/dev/null || true)"
+            gates="$(printf '%s\n' "$runs" | awk -F'\t' 'NF { print $4 }' | sort -u | wc -l)"
+            pending="$(printf '%s\n' "$runs" | awk -F'\t' 'NF && $2 != "completed"' | wc -l)"
+            if [ "$gates" -ge 2 ] && [ "$pending" -eq 0 ]; then
+              # The guard on the provisioning push fails at startup when it
+              # beat the Actions permission above. That setting is on now, so
+              # one re-run is the fix rather than a retry.
+              stuck="$(printf '%s\n' "$runs" | awk -F'\t' '$3 == "startup_failure" { print $1 }')"
+              if [ -n "$stuck" ] && [ -z "$reran" ]; then
+                reran=yes
+                for id in $stuck; do
+                  gh api -X POST "repos/$REPO/actions/runs/$id/rerun" >/dev/null 2>&1 ||
+                    echo "::warning::re-running run $id was refused"
+                done
+                sleep "$poll"
+                continue
+              fi
+              break
+            fi
+            sleep "$poll"
+          done
+
+          names=""
+          silent=""
+          for gate in ci guard; do
+            line="$(printf '%s\n' "$runs" | awk -F'\t' -v gate="$gate" '$4 ~ ("/" gate "\\.ya?ml") { print; exit }')"
+            id="$(printf '%s' "$line" | cut -f1)"
+            status="$(printf '%s' "$line" | cut -f2)"
+            jobs=""
+            if [ -n "$id" ] && [ "$status" = "completed" ]; then
+              jobs="$(gh api "repos/$REPO/actions/runs/$id/jobs?per_page=100" --jq '.jobs[].name' 2>/dev/null || true)"
+            fi
+            if [ -z "$jobs" ]; then
+              silent="$silent $gate"
+            else
+              names="$names$jobs"$'\n'
+            fi
+          done
+
+          if [ -n "$silent" ]; then
+            todo "Branch protection. Not set, because these gates have no finished run with checks on a push to \`$BRANCH\`:$silent. A guessed name is worse than no rule. $retry"
+            exit 0
+          fi
+
+          names="$(printf '%s' "$names" | grep -v '^$' | sort -u)"
+          contexts="$(printf '%s\n' "$names" | jq -R . | jq -sc .)"
+
+          # An existing rule is added to, never replaced. PUT replaces the
+          # whole rule, so on a repository that already had one it would drop
+          # whatever else somebody set there, silently.
+          if gh api "repos/$REPO/branches/$BRANCH/protection" >/dev/null 2>&1; then
+            printf '{"contexts": %s}\n' "$contexts" |
+              gh api -X POST "repos/$REPO/branches/$BRANCH/protection/required_status_checks/contexts" --input - >/dev/null 2>&1 ||
+              echo "::warning::adding the names to the existing rule was refused"
+          else
+            # "Require a pull request before merging" stays off on purpose, so
+            # a gate can still be repaired by a direct commit.
+            printf '{"required_status_checks": {"strict": true, "contexts": %s}, "enforce_admins": false, "required_pull_request_reviews": null, "restrictions": null}\n' "$contexts" |
+              gh api -X PUT "repos/$REPO/branches/$BRANCH/protection" --input - >/dev/null 2>&1 ||
+              echo "::warning::setting the rule was refused"
+          fi
+
+          got="$(gh api "repos/$REPO/branches/$BRANCH/protection" \
+            --jq '.required_status_checks.contexts[]' 2>/dev/null | sort -u || true)"
+          absent="$(comm -23 <(printf '%s\n' "$names") <(printf '%s\n' "$got"))"
+          listed="$(printf '%s\n' "$names" | sed 's/^/`/; s/$/`/' | paste -sd ',' - | sed 's/,/, /g')"
+
+          if [ -z "$absent" ]; then
+            done_ "Branch protection on \`$BRANCH\`, requiring $listed."
+          else
+            todo "Branch protection. \`$BRANCH\` does not require $listed after setting it. The token needs Administration: read and write. Or set it by hand: github.com/$REPO/settings/branches"
+          fi
+
+      - name: Report on the request
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FACTORY: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          STATUS: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set +e -uo pipefail
+          report="$RUNNER_TEMP/provision-report.md"
+          body="$RUNNER_TEMP/provision-comment.md"
+
+          [ -s "$report" ] ||
+            printf -- '- [ ] Nothing was done: the run stopped before its first step. Read the log.\n' > "$report"
+
+          complete=""
+          if [ "$STATUS" = "success" ] && ! grep -q '^- \[ \]' "$report"; then
+            complete=yes
+          fi
+
+          {
+            # The marker is what /new-project looks for to read this back.
+            echo "<!-- agent-factory:provision-report -->"
+            if [ -n "$complete" ]; then
+              echo "## \`$REPO\` is provisioned"
+            else
+              echo "## \`$REPO\` is partly provisioned"
+            fi
+            echo
+            echo "Each line was read back from the repository after it was set."
+            echo
+            cat "$report"
+            echo
+            if [ -n "$complete" ]; then
+              echo "Nothing is left on this list. \`/objective\` in a session on that repository starts the first piece of work."
+            else
+              echo "Each unticked line says what is missing and where to fix it. Re-running is safe - re-apply the label, or Run workflow on the Actions tab - because every step re-sets or skips what is already done."
+            fi
+            echo
+            echo "[Run log]($RUN_URL)"
+          } > "$body"
+
+          cat "$body" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -n "$NUMBER" ]; then
+            gh issue comment "$NUMBER" --repo "$FACTORY" --body-file "$body" ||
+              echo "::warning::could not comment on #$NUMBER"
+            if [ -n "$complete" ]; then
+              gh issue close "$NUMBER" --repo "$FACTORY" --reason completed || true
+            fi
+          fi
+
+          [ -n "$complete" ]

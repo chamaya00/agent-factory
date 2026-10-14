@@ -57,6 +57,7 @@ that the table, `CLAUDE.md`, and `guard.yml` name the same scripts.
 | `test_project_guard.py` | a privilege change cannot arrive undeclared |
 | `test_capability_claims.py` | the capability checks fire on drift and stay quiet on prose |
 | `test_release.py` | a release tag cannot move or disagree with the manifest |
+| `test_provision.py` | provisioning refuses a bad request or a missing approval gate, and requires only the gates' check names |
 | `test_setup_project.py` | `setup-project.sh --verify` reads every setting back and writes nothing |
 
 Most of the `test_` scripts do not read the workflows as data. They lift the
@@ -111,6 +112,15 @@ five. The ones with a reason behind them rather than a convention:
   both had lost was `check-in` - which the project template's CLAUDE.md tells
   every provisioned repository to run by name. A session following either
   runbook shipped a repository pointing at a command nobody had copied.
+- **The README names every command.** `README.md` has to name each file in
+  `plugins/agent-factory/commands/` as `/<name>`. It is the first page a human
+  reads and it restates the list by hand, and it had drifted to five against
+  eight. The three it lost were `/objective`, `/check-in`, and `/ship`: the
+  command every piece of work starts from, and the two that carry it to a
+  merge. So the first page never mentioned the command `/new-project`'s closing
+  report sends the person to type next. Only presence is checked: each line
+  says what its command is for, which a list generated from filenames would
+  drop, and whether that sentence is still true needs a reader.
 - **The manifest matches disk.** The roles, skills, and commands named in
   `agent-factory.json` have to be the ones actually present, or provisioning
   copies nothing and succeeds.
@@ -170,7 +180,7 @@ five. The ones with a reason behind them rather than a convention:
 
 ### validate_workflows.py
 
-All ten workflows, factory and templates, must parse as YAML, declare an `on:`
+Every workflow, factory and templates, must parse as YAML, declare an `on:`
 block, give every job that is not a `uses:` call a `timeout-minutes`, and never
 request `actions: write`. A system that can rewrite its own gates has no gates.
 
@@ -279,6 +289,34 @@ a missing manifest or a manifest with no version is refused. Then eight
 malformed versions, including the moving pointers `v1`, `v1.2` and `main`, and
 `v1.2.0; rm -rf /`, because the step writes a ref.
 
+### test_provision.py
+
+Thirty-four cases against a fake `gh`, on three steps of `provision.yml`. It is
+the one workflow here that holds an admin token for every repository the person
+owns, so what it refuses is the whole of its safety, and each refusal is
+executed rather than read.
+
+The request: a repository name typed into an issue title or a dispatch box is
+the one untrusted input, and it reaches a shell and `GITHUB_OUTPUT`. A plain
+`owner/repo` on the person's own account is accepted and trimmed; another
+account, the factory itself, a dot, a path, and five shapes that would run
+something or write a second output line are refused, and every refusal has to
+say why on the request. None of it may call `gh`, because that job holds no
+token and needs none.
+
+The approval gate: the run goes no further unless the `provision` environment
+exists, has a required-reviewer rule - a wait timer is a rule and approves
+nothing - and limits which branches may use it. A run started from another
+branch is refused before any call.
+
+Branch protection: only the two gates' check names, as they reported on a push
+to the default branch, are required - not another push workflow on the same
+commit. A guard that failed at startup is re-run once and no more. A gate that
+never reported, is still running, or still failed after its one re-run sets no
+rule at all, rather than a rule requiring the other gate alone. An existing rule
+is added to and never replaced, and a rule that does not read back is reported
+as not set.
+
 ### test_setup_project.py
 
 `scripts/setup-project.sh --verify` is what a person runs after doing the
@@ -332,7 +370,7 @@ that is the whole line counts, so ordinary prose with links in it passes;
 `validate_plugin.py` holds the template to that same shape, which is what keeps
 the pair honest in both directions.
 
-**`bootstrap.yml`** is one-shot and manual. It creates the nine labels - whose
+**`bootstrap.yml`** is one-shot and manual. It creates the labels - whose
 names are load-bearing, since the preflight matches them exactly - and reads
 back the check names actually reported on the default branch, for pasting into
 branch protection. Reading them back rather than assuming them is the point: a
@@ -376,7 +414,8 @@ separate way for it to fail confusingly:
 3. Both Actions settings ticked: read and write permissions, and "Allow GitHub
    Actions to create and approve pull requests". With the second one off the
    run succeeds and no pull request ever appears.
-4. The nine labels, from the `bootstrap` workflow.
+4. Every label the `bootstrap` workflow creates, which is the list under
+   `labels` in the project's `.claude/agent-factory.json`.
 5. Branch protection using the check names that run reported.
 6. A release tag matching the version in the plugin manifest. The callers are
    pinned to it, and a pin with no tag behind it fails as an invalid workflow
@@ -443,6 +482,7 @@ python scripts/test_handback.py
 python scripts/test_project_guard.py
 python scripts/test_capability_claims.py
 python scripts/test_release.py
+python scripts/test_provision.py
 python scripts/test_setup_project.py
 ```
 

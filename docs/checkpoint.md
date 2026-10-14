@@ -7,6 +7,10 @@ agent-side works until steps 1 and 2 are done, and step 3 is the fiddly one.
 All of it is doable from an iPhone. The note about the private key in step 3 is
 the part that catches people out.
 
+Most of it is once, not once per repository. With step 7 set up, provisioning a
+project is: create it, run `/new-project`, approve one deployment. The steps
+below that repeat per repository say so, and say what replaces them.
+
 ---
 
 ## Which path you are on, before anything below
@@ -22,10 +26,15 @@ that are not there.
 
 ### On a personal account
 
-Nothing changes. Steps 0 to 5 below are the list, and steps 2 and 5 repeat for
-every project repository you provision. There is no account-level version of
-them, and that is a property of personal accounts rather than something missing
-here.
+Steps 0 to 5 below are the list, and steps 2 and 5 repeat for every project
+repository you provision. There is no account-level version of them, and that is
+a property of personal accounts rather than something missing here.
+
+What there is instead is step 7: a workflow on this repository that does the
+per-repository part for you, after you approve it. Set it up once and step 2,
+the per-repository half of step 3, and step 6 stop being yours - the run sets
+them and reads each one back. Step 5 is outside it; publishing is not part of
+what a new repository needs. ADR 0003 has the reasoning and what it costs.
 
 ### In an organization
 
@@ -151,6 +160,10 @@ string; anything else silently produces an unauthenticated run.
 You will repeat steps 1 to 5 of this section for each new project repo, but you
 only ever generate the token once - reuse the same value.
 
+**With step 7 set up, skip this section entirely.** The token goes into the
+`provision` environment once, and every provisioning run copies it into the
+project.
+
 ## 3. Create the GitHub App for the agent identity
 
 Why bother, and this is no longer optional. Two reasons, and the second one
@@ -193,10 +206,18 @@ detail.
    Copy everything including the `-----BEGIN` and `-----END` lines.
 
 10. Still on the App's page, left sidebar: **Install App**, install it on your
-    account, and choose the project repositories.
+    account, and choose **Only select repositories** - the project repositories,
+    or with step 7 set up, any one of them. Not **All repositories**: the
+    private key sits in every project's secrets, so "all" would let a key
+    leaked from any one project reach every repository you own, this one
+    included.
 11. Back in each project repo, add two more secrets the same way as step 2:
     - `AGENT_APP_ID` - the App ID from step 8
     - `AGENT_APP_PRIVATE_KEY` - the full contents of the `.pem`
+
+    With step 7 set up, put these two in the `provision` environment instead,
+    once. Every provisioning run copies them into the project and adds the
+    project to the App's installation, so neither 10 nor 11 repeats.
 12. Delete the `.pem` from Files.
 
 Skipping this section used to cost only the approval tap on every pull request.
@@ -306,11 +327,117 @@ The fast-path script avoids this entirely: `scripts/setup-project.sh` runs `gh`
 as you, so `gh workflow run bootstrap.yml` works there, along with the labels
 and branch protection. If you are at a terminal, that is the shorter road.
 
-If you did this page by hand, `bash scripts/setup-project.sh --verify
-<owner/repo>` in the same Codespace reads every one of these settings back and
-changes nothing. It is the only way the Actions permission and branch
-protection get confirmed rather than taken on your word, because a session
-cannot read either of them.
+If you did this page by hand rather than through provisioning (step 7),
+`bash scripts/setup-project.sh --verify <owner/repo>` in the same Codespace
+reads every one of these settings back and changes nothing. A session cannot
+read the Actions permission or branch protection, so without the provisioning
+run's report this is how they get confirmed rather than taken on your word. It
+is worth re-running later on either path: settings drift, and nothing else
+reads them again.
+
+Step 7 avoids it with no terminal: the provisioning run starts `bootstrap`,
+waits for it, samples the labels, and sets branch protection from the check
+names the two gates actually reported.
+
+## 7. Set up provisioning, once
+
+This is what turns every per-repository step above into one approval. It is a
+workflow on this repository, `.github/workflows/provision.yml`, holding a token
+that can administer your repositories, and it only ever gets that token after
+you approve the run that asked for it. Four parts, about ten minutes, all from
+the phone.
+
+Read ADR 0003 first if you want the costs before the steps. The short version:
+this repository then holds a token with admin over every repository you own,
+and the approval is what bounds it.
+
+**The token.**
+
+> 1. Open `github.com/settings/personal-access-tokens/new`
+> 2. Token name: `agent-factory provisioning`. Expiration: the longest it
+>    offers, and put the date somewhere you will see it.
+> 3. Resource owner: your account
+> 4. Repository access: **All repositories**. A token on selected repositories
+>    cannot reach one created after it, which is every repository it will ever
+>    provision.
+> 5. Repository permissions - set exactly these and leave the rest at
+>    **No access**:
+>    - Actions: **Read and write** - starts `bootstrap` and re-runs a gate
+>    - Administration: **Read and write** - the Actions setting and branch
+>      protection
+>    - Contents: **Read-only** - checks the files have landed
+>    - Issues: **Read-only** - reads the labels back
+>    - Secrets: **Read and write**
+>    - GitHub App installation repository access: **Read and write** - adds
+>      each project to the agent App. If your form does not list it, skip it;
+>      the run says so on that one line and links the page that does it by
+>      hand.
+>    - Metadata: **Read-only** (it selects itself)
+> 6. **Generate token** and copy it
+
+Contents stays read-only and Workflows stays at no access on purpose: this
+token sets up a repository, and never writes code or workflow files into one.
+Administration is wider than the two settings it is here for - GitHub files
+renaming and deleting a repository under it too - and there is no narrower
+grant that covers them.
+
+**The environment.** On this repository, not a project:
+
+> 1. Open `github.com/chamaya00/agent-factory/settings/environments`
+> 2. **New environment**, name it exactly `provision`, **Configure environment**
+> 3. Tick **Required reviewers** and add yourself. Leave **Prevent self-review**
+>    unticked: you are the one asking and the one approving.
+> 4. Deployment branches and tags: **Selected branches and tags**, then **Add
+>    deployment branch or tag rule**, and enter `main`
+> 5. **Save protection rules**
+> 6. Under **Environment secrets**, **Add environment secret** four times:
+>    - `PROVISION_TOKEN` - the token above
+>    - `CLAUDE_CODE_OAUTH_TOKEN` - from step 1
+>    - `AGENT_APP_ID` - from step 3, item 8
+>    - `AGENT_APP_PRIVATE_KEY` - the full `.pem` from step 3, item 9
+
+They have to be **environment** secrets, not repository secrets. A repository
+secret is handed to every workflow run here with nobody approving anything,
+which is the one thing this whole arrangement exists to prevent.
+
+The run checks parts 3 and 4 before it asks you to approve anything, and refuses
+in a comment if either is missing. It cannot check that the secrets are
+environment secrets rather than repository ones. That one is yours.
+
+**The label.**
+
+> 1. Open `github.com/chamaya00/agent-factory/labels`
+> 2. **New label**, name it exactly `provision`, **Create label**
+
+**Then, per repository, from now on:**
+
+1. Create it at `github.com/new` - public, with a README - as in `/new-project`
+   step 2.
+2. Run `/new-project <owner/repo>` in a session on this repository. It files an
+   issue here titled `provision <owner/repo>`, labelled `provision`, and goes
+   on writing the files.
+3. GitHub notifies you that a deployment is waiting for your review. Open it -
+   or the run, from the issue or the Actions tab - tap **Review deployments**,
+   tick `provision`, **Approve and deploy**.
+
+The run sets the Actions permission, the three secrets and the App installation
+straight away, waits for the files `/new-project` is pushing, starts
+`bootstrap`, waits for the two gates to report on that push, and sets branch
+protection from the names they reported. Then it comments on the issue: one
+ticked line per thing it confirmed by reading it back, and an unticked line,
+with the page that fixes it, for anything it could not. The session reads that
+comment for its own report. When every line is ticked it closes the issue.
+
+Re-running is safe: re-apply the label, or **Run workflow** on
+`github.com/chamaya00/agent-factory/actions/workflows/provision.yml` with the
+repository typed in. Every step re-sets or skips what is already done.
+
+**When something expires.** The token: generate a new one the same way and
+update `PROVISION_TOKEN` in the environment. Nothing else changes. The
+subscription token from step 1: update `CLAUDE_CODE_OAUTH_TOKEN` in the
+environment, then re-run provisioning once per existing project - every run
+re-sets the secrets from the environment, which is how a renewed value reaches
+a repository that already has the old one.
 
 ## When you are done
 

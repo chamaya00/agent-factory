@@ -1,16 +1,26 @@
 name: guard
 
-# Runs on the factory itself. Six things: the manifests still parse, the
-# plugin still describes how we work rather than what any one project contains,
-# the gate still fails what it is supposed to fail, the agent-run preflight
-# still refuses the runs it is supposed to refuse, the hand-back still finds
-# the parent it has to wake, and release still refuses to point a major tag at
-# unmerged history.
+# Runs on the factory itself, one script per step, and each step's name says
+# what it proves. Between them: the manifests still parse, the plugin still
+# describes how we work rather than what any one project contains, prose still
+# agrees with what each role is granted, and the shell this factory ships still
+# does what it claims - the gate still fails what it is supposed to fail, the
+# agent-run preflight still refuses the runs it is supposed to refuse, the
+# hand-back still finds the parent it has to wake, project-guard still stops a
+# privilege change arriving undeclared, and release still refuses a tag that
+# would move or disagree with the manifest.
 #
-# The second one is what keeps the toolbox portable a year from now. The last
-# three are the places a bug is expensive: one lets a bad pull request merge in
-# every project, one costs subscription quota, and one changes what every
+# The second of those is what keeps the toolbox portable a year from now. The
+# shell is where a bug is expensive, which is why the scripts that cover it
+# execute it rather than read it: the gate can let a bad pull request merge in
+# every project, the preflight spends subscription quota, the hand-back can stop
+# an objective with nothing in any log, project-guard can let a widened
+# permission through a merge nobody read, and release changes what every
 # project runs.
+#
+# No count of the steps is kept here. This comment once said six while the job
+# ran eight, and validate_plugin.py already fails the build if a script in
+# scripts/ has no step below.
 
 on:
   push:
@@ -65,6 +75,11 @@ jobs:
 
       - name: Release resolves the right commit for a major tag
         run: python scripts/test_release.py
+
+      # The one workflow here that holds an admin token for every repository
+      # the person owns. What it refuses is the whole of its safety.
+      - name: Provision refuses what it should refuse
+        run: python scripts/test_provision.py
 
       # The one mode of a provisioning script that promises to write nothing.
       # Executed against a fake gh, so a write that leaks into it fails here

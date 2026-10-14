@@ -1,7 +1,7 @@
 ---
-description: Provision a fresh repository end to end - caller workflows, project files, labels, and the two settings only a human can change.
+description: Provision a fresh repository end to end - caller workflows, project files, labels, secrets, and the settings a session cannot change, by one approved run where the factory has provisioning set up.
 argument-hint: <owner/repo>
-allowed-tools: Bash, Read, Write, Edit, Glob, mcp__github__get_file_contents, mcp__github__create_repository, mcp__github__create_branch, mcp__github__push_files, mcp__github__create_pull_request, mcp__github__get_label, mcp__github__list_branches, mcp__github__actions_run_trigger, mcp__github__actions_list, mcp__github__actions_get, mcp__github__get_job_logs
+allowed-tools: Bash, Read, Write, Edit, Glob, mcp__github__get_file_contents, mcp__github__create_repository, mcp__github__create_branch, mcp__github__push_files, mcp__github__create_pull_request, mcp__github__get_label, mcp__github__list_branches, mcp__github__actions_run_trigger, mcp__github__actions_list, mcp__github__actions_get, mcp__github__get_job_logs, mcp__github__issue_write, mcp__github__issue_read
 ---
 
 Provision `$1` so agents can work in it.
@@ -21,7 +21,67 @@ Two settings cannot be read from here at all. Those are marked, and they are
 reported as taken on trust rather than confirmed - unless the person runs the
 read-back offered below, which reads them with their own login.
 
+## The provisioning path, where the factory has it
+
+The factory can do every step this session cannot - the Actions permission,
+the three secrets, adding the repository to the agent identity App, the labels,
+and branch protection - in one workflow run on the factory, `provision.yml`,
+once the person approves it. It reads each one back and comments the result on
+the request. Where it is set up it is the path, and the handoffs in steps 1, 4,
+5 and 6 below are what it replaces rather than a list to hand over. The
+factory's `docs/checkpoint.md`, step 7, is how it gets set up, and ADR 0003 is
+why it exists and what it costs.
+
+**Is it set up.** Read the `provision` label on the factory with
+`mcp__github__get_label`. The factory is the `owner/repo` in the manifest's
+`repository`, read the same way step 3 reads it. No label: it is not set up,
+say so in one line, and take the handoffs below as written. A label: file the
+request. The run checks the rest of the setup itself - that the environment
+exists, requires a reviewer, and is limited to the default branch - and refuses
+in a comment on the request before anybody is asked to approve anything, so
+filing one against a half-finished setup costs a comment and nothing else.
+
+**When.** Right after step 2 has confirmed the repository exists, and before
+step 3 writes anything. The order matters and is worth saying: the Actions
+permission is the run's first act, and the guard on the provisioning push fails
+at startup if it runs before that permission is on. Filed first, the permission
+is usually set by the time the push lands. Filed late, the run re-runs that
+guard once, which usually recovers it - so late costs a few minutes rather than
+the repository, but first is the order to keep.
+
+**How.** `mcp__github__issue_write` on the factory, creating an issue titled
+`provision $1` with the label `provision`. Then give the person one line, not
+a checklist: GitHub will ask them to approve a deployment, from a notification
+or from the run on the factory's Actions tab, and that one tap is the whole of
+what is left to them. Do not wait for it - go on to step 3. The run waits for
+the files itself.
+
+If the issue comes back without the label, this session cannot apply labels on
+the factory. Ask the person to add it - one tap on the issue - or to start the
+run from the factory's Actions tab with the repository typed in. Either starts
+the same run behind the same approval.
+
+**Reading it back.** The run comments on the request once it has finished,
+which is a few minutes after step 3's push: it waits for the files, for
+`bootstrap`, and for the two gates to report. Read the issue's comments with
+`mcp__github__issue_read` for the one carrying
+`<!-- agent-factory:provision-report -->`. Each ticked line in it was read back
+from the repository after the run set it, so it goes in step 6's confirmed line
+as confirmed - not as taken on trust. Each unticked line names what is missing
+and the page that fixes it, and goes in step 6's remaining list as written. If
+there is no comment yet, say which wait it is in rather than reading silence as
+failure: an approval nobody has tapped yet looks exactly like a run that has
+not started.
+
+Re-running is safe and is the fix for most unticked lines once their cause is
+dealt with: re-apply the label, or start the run from the Actions tab. Every
+step re-sets or skips what is already done.
+
 ## Handing over: the list first, then the offer
+
+On the provisioning path there is next to nothing to hand over: the approval,
+and whatever the run's report leaves unticked. Everything below is for a
+factory without it, and for the unticked lines.
 
 Reach this point once step 3 has pushed the files. Before offering anything,
 **write out every remaining step, in the order the dependencies force, each
@@ -56,7 +116,6 @@ Then make three offers, separately, and let them take any, all, or none:
   protection - reading each one back after setting it. It does not do the agent
   identity App, because creating a GitHub App has no API, so the id, the private
   key and the installation stay with the person whatever they choose here.
-
 - **A read-back, whichever path they take.** `scripts/setup-project.sh
   --verify` writes nothing at all - no setting, no secret, no workflow run -
   and reports every item the script would set as set, not set, or cannot read,
@@ -140,7 +199,8 @@ causes surfaces three steps later, somewhere unrelated.
 
 ## 1. Allow Actions to create and approve pull requests
 
-Stop and hand this to the human. It is off by default on personal-account
+On the provisioning path, skip this handoff: the run sets it first and reads it
+back. Otherwise, stop and hand this to the human. It is off by default on personal-account
 repositories, and with it off every agent run appears to work and then silently
 fails to open a pull request. It cannot be set from a session token: it is a
 repository administration setting.
@@ -390,6 +450,10 @@ that report is then the only place it is said - so do not let it fall out.
 
 ## 4. Labels
 
+On the provisioning path the run starts `bootstrap` itself, waits for it, and
+samples the labels it created; read its report rather than dispatching
+anything here.
+
 The labels are created by the `bootstrap` workflow rather than from here, and
 its names are matched exactly by the agent-run preflight, so they are worth
 getting from one place rather than retyping.
@@ -457,7 +521,13 @@ missing the run did not do what it said, whatever its summary claims.
 
 ## 5. Branch protection
 
-Also a human step, and deliberately so. Setting it needs an administration
+On the provisioning path the run sets it, from the check names the two gates
+reported on a push to the default branch and from nothing else, and reads the
+rule back. On a repository that already has a rule it adds the names to it
+rather than replacing it. Skip the handoff below unless its report leaves this
+line unticked.
+
+Otherwise it is a human step, and deliberately so. Setting it needs an administration
 token, and an identity that can set a gate can remove one - which is the thing
 this whole arrangement is built to prevent. It is worth the minute it costs.
 
@@ -522,7 +592,12 @@ off. Two lines:
 > merge box lists the required checks.
 
 If the script ran in either mode, move what it read back into the first line,
-and carry anything it reported as not set or wrong into the list below.
+and carry anything it reported as not set or wrong into the list below. If
+the provisioning run reported, its ticked lines go there too - the Actions
+permission and branch protection included, because it read them back - and the
+"taken on your word" line then usually has nothing left in it. Say that rather
+than dropping the line, since it is the difference between this report and
+every one before it.
 
 Then everything still waiting on the human, in the order it has to happen, each
 one as the URL that does it. Substitute `$1` and the default branch name. A
