@@ -43,7 +43,7 @@ Everything except the two manifests sits at the plugin root, not inside `.claude
 
 Roughly in the order a project meets them, so `/objective` - where every piece of work starts, and what `/new-project`'s closing report tells the person to type next - comes straight after provisioning. `/new-project` is the one that stays in the factory; the rest are copied into every project it provisions, and that is where they run.
 
-- `/new-project <owner/repo>` - provisions a fresh repo: caller workflows, `CLAUDE.md`, memory files, its own copy of the roles, skills, and commands, and the labels. The steps a session cannot perform are handed to a human in place rather than faked - see below.
+- `/new-project <owner/repo>` - provisions a fresh repo: caller workflows, `CLAUDE.md`, memory files, its own copy of the roles, skills, and commands, and the labels. The steps a session cannot perform go to one approved provisioning run where the factory has that set up, and are handed to a human in place otherwise, never faked - see below.
 - `/objective <rough idea>` - the one command that starts a piece of work. Refines the idea with the person, drafts the objective, asks its merge policy once, files and queues it on a yes, and then drives it.
 - `/check-in [objective]` - runs the driving posture now, the same way whether a person typed it, a scheduled wake fired it, or a pull request's activity woke the session: what is waiting on the person first, then the state of every child, then the merge policy applied to whatever is waiting. With no objective named, takes every open one.
 - `/ship [objective]` - the explicit form of "merge when green". Judges each pull request the objective is waiting on against the house rules' merge gate, merges what passes where the merge policy is `green` and reports it where it is not, and says on the pull request why for any that fail.
@@ -168,8 +168,13 @@ nothing over their settings. Both refusals read `403 Resource not accessible by
 integration`, which names no permission and suggests no fix, so the list below
 is worth more than the error message.
 
-So these are always handed back in provisioning, and `/new-project` asks for
-each in place rather than pretending:
+Where the factory has provisioning set up - `docs/checkpoint.md` step 7 - one
+run of `provision.yml`, started by an issue `/new-project` files and approved
+by the person with one tap, does every step below except creating the
+repository, reads each one back, and comments the result. ADR 0003 records the
+trade: the factory holds a token with admin over the person's repositories,
+bounded by that approval. Without it, `/new-project` hands each of these over
+in place rather than pretending:
 
 - **Creating the repository.** An account-level permission no installation
   carries. Public, with a README, from `github.com/new`.
@@ -183,12 +188,13 @@ each in place rather than pretending:
   itself. Where the repository already had work in it, the files arrive as a
   pull request and that merge comes first: `workflow_dispatch` only sees
   workflows already on the default branch.
-- **Branch protection.** Not automated on purpose, not only for lack of a tool:
-  setting it needs an administration token, and an identity that can set a gate
-  can remove one.
+- **Branch protection.** Setting it needs an administration token, and a
+  session holds none on purpose: an identity that can set a gate can remove
+  one. The provisioning run holds one only behind the person's approval.
 
-The secrets and the agent identity App are the person's too. `/new-project`
-closes with them as links, and `docs/checkpoint.md` walks through both.
+Without the provisioning run, the secrets and the agent identity App are the
+person's too. `/new-project` closes with them as links, and
+`docs/checkpoint.md` walks through both.
 
 ## How the commands get loaded
 
