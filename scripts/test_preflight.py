@@ -35,6 +35,14 @@ kind, verb = args[0], args[1]
 with open(os.environ["GH_CALLS"], "a") as log:
     log.write(" ".join(args) + "\\n")
 
+# The runner setting, read from .claude/agent-factory.json. The real call asks
+# for the raw file and pulls `.runner` out with --jq, so answer with the value
+# itself; no `runner` in the state is a repository that predates the setting.
+if kind == "api" and any("agent-factory.json" in a for a in args):
+    if "runner" in state:
+        print(state["runner"])
+    sys.exit(0)
+
 if verb == "view":
     if "--json" in args and "labels" in args:
         print("\\n".join(state["labels"]))
@@ -163,19 +171,22 @@ def event(**overrides) -> dict:
     return base
 
 
-def state(labels, attempts=0, changed=None, counts=None) -> dict:
+def state(labels, attempts=0, changed=None, counts=None, runner=None) -> dict:
     """`counts` maps a marker substring to the number of comments carrying it.
 
     Use it for any case that turns on which budget the preflight picked. Plain
     `attempts` answers every marker with the same number, which is fine while
     only one budget is in play and useless once two are.
     """
-    return {
+    shaped = {
         "labels": labels,
         "attempts": attempts,
         "changed": changed or [],
         "counts": counts or {},
     }
+    if runner is not None:
+        shaped["runner"] = runner
+    return shaped
 
 
 CASES = [
@@ -362,6 +373,30 @@ CASES = [
         state(["role:researcher"]),
         ("true", "researcher", 0),
     ),
+    (
+        "a session-run repository stands down on a queued child",
+        event(),
+        state(["role:engineer", "agent:queued"], runner="session"),
+        ("false", "", 0),
+    ),
+    (
+        "a session-run repository stands down on a queued objective",
+        event(),
+        state(["objective", "agent:queued"], runner="session"),
+        ("false", "", 0),
+    ),
+    (
+        "a repository that says actions still runs",
+        event(),
+        state(["role:engineer", "agent:queued"], runner="actions"),
+        ("true", "engineer", 0),
+    ),
+    (
+        "a runner nobody recognises still runs",
+        event(),
+        state(["role:engineer", "agent:queued"], runner="sessions"),
+        ("true", "engineer", 0),
+    ),
 ]
 
 
@@ -434,11 +469,28 @@ def main() -> int:
     else:
         print("  ok   refusing an objective names the supervision budget")
 
+    # Standing down has to happen before anything writes. A session-run
+    # repository whose budget is already spent must not be labelled blocked by
+    # a workflow that was never meant to run there: the session owns its
+    # bookkeeping, and two writers on one issue's labels is how a run that is
+    # going fine reads as refused.
+    (_, _, _, calls), _ = run_case(
+        "session runner over budget",
+        event(),
+        state(["role:engineer", "agent:queued"], attempts=3, runner="session"),
+    )
+    writes = [c for c in calls if " edit " in f" {c} " or " comment " in f" {c} "]
+    if writes:
+        failures += 1
+        print(f"  FAIL a session-run repository must stand down before any write, saw: {writes}")
+    else:
+        print("  ok   a session-run repository stands down before any write")
+
     print()
     if failures:
         print(f"preflight: {failures} failing case(s)")
         return 1
-    print(f"preflight: {len(CASES) + 4} cases passed")
+    print(f"preflight: {len(CASES) + 5} cases passed")
     return 0
 
 

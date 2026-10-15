@@ -157,8 +157,13 @@ on:
           LICENSE
     secrets:
       claude-code-oauth-token:
-        description: OAuth token from `claude setup-token`. Bills the subscription rather than API credits.
-        required: true
+        description: >-
+          OAuth token from `claude setup-token`. Bills the subscription rather
+          than API credits. Needed only where a repository runs its agents
+          here; one whose `.claude/agent-factory.json` says `runner` is
+          `session` never reaches the step that reads it, and a required
+          secret would fail every event there for a value nothing uses.
+        required: false
       app-id:
         description: GitHub App ID for the agent identity. Optional but strongly preferred.
         required: false
@@ -488,6 +493,31 @@ jobs:
           comment() { gh "$KIND" comment "$NUMBER" "$@"; }
 
           [ -n "${NUMBER:-}" ] || skip "No issue or pull request in context. Nothing to run."
+
+          # A repository can run its agents in sessions instead of here, and
+          # when it does this workflow stands down before it writes anything.
+          #
+          # The setting lives in `.claude/agent-factory.json` on the default
+          # branch, which is protected: a role cannot flip it, and a person
+          # flips it in a reviewed pull request. Read live rather than passed
+          # as an input, so the caller in every project stays the same file
+          # whichever runner it uses, and switching back is one line.
+          #
+          # Silent on purpose. In a session-run repository a label event is
+          # the request, not the run - the driving session reads the same
+          # label and dispatches the role itself - so skipping here is the
+          # normal case, and a comment saying so on every queued issue would
+          # be noise. Absent, unreadable, or anything but `session` keeps the
+          # old behaviour: a read that fails must never be what stops a run.
+          # The contents API answers with the file base64-encoded and wrapped
+          # every sixty characters; decoding inside gh's own jq keeps this to
+          # one call with nothing the runner image has to provide.
+          runner="$(gh api "repos/$GH_REPO/contents/.claude/agent-factory.json" \
+            --jq '.content | gsub("\n"; "") | @base64d | fromjson | .runner // ""' \
+            2>/dev/null || true)"
+          if [ "$runner" = "session" ]; then
+            skip "This repository runs its agents in sessions: .claude/agent-factory.json says runner is session. A session dispatches #$NUMBER; nothing runs here."
+          fi
 
           # A comment only counts when it carries the trigger phrase AND the
           # person who wrote it can already write to this repository.

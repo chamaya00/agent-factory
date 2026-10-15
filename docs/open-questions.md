@@ -120,6 +120,12 @@ the correct ones.
 interactive and Actions contexts, badly enough to pay a container pull per run.
 Do not reopen it for sub-issues; that part works.
 
+**Since 1.42.0, half of this is moot.** A repository whose runner is `session`
+runs every role as a session subagent or child session, where the
+`mcp__github__*` names the role files carry are the real tools, checked on
+2026-10-15. The translation to `gh` survives only for `runner: actions`, and so
+does this question.
+
 ---
 
 ## 3. A tooling failure should not burn an attempt
@@ -265,6 +271,12 @@ automated path that used to hit this no longer does.
 **How to answer it.** Label two ready issues `agent:queued` within a few seconds
 and watch whether both run. That confirms the shape; the decision after it is a
 judgement, not an observation.
+
+**Since 1.42.0, this is an Actions-only question.** Under `runner: session` there
+is no concurrency group and no pending slot: `/dispatch` starts one run at a time
+and a queued label waits, visibly, for the next session to read it. The loss
+described here cannot happen there; the one-at-a-time rule stays, for the
+subscription's sake rather than the queue's.
 
 **What was done about it, and what is left.** The second option, halfway. A
 `stale-queue` job now ticks on a schedule and comments on any issue carrying the

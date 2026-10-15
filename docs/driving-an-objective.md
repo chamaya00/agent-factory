@@ -546,3 +546,33 @@ against the base branch's tip rather than its fork point, so a gate change a
 maintainer merged made every agent pull request opened before it fail as if it
 had edited that gate. Both diff steps now measure from the fork point, with
 cases in `scripts/test_project_guard.py` that fail on the old behaviour.
+
+## Addendum: the driver can be the runner (1.42.0)
+
+Everything above assumed a workflow starts every run, and the driver only
+queues, reads, and merges. The subscription token that workflow depends on is
+the one credential in the system that expires, and when it did, every run in
+every project failed at once as a blocked issue with an attempt spent. ADR 0004
+records the alternative: a repository whose `.claude/agent-factory.json` says
+`"runner": "session"` runs its roles from the driving session instead, and the
+workflow stands down.
+
+Nothing about the posture changes. What changes is that a queued child is now
+waiting on the driver rather than on a run, so the driver starts it:
+`/dispatch` carries the workflow's checks, budgets, labels, marker comments,
+brief, and hand-back, and `/check-in` dispatches what is queued one run at a
+time - as a subagent by default, in a child session when the driver judges a
+run worth one. While nobody is present, a self-driving stretch keeps it going:
+one meant to outlast the session schedules fresh sessions that read its
+decision log and carry on, and the person asking in plain words for work to
+keep moving while they are away starts one as surely as the command does.
+The skill's **Where the runs happen** section is the short form, and
+**How to wake** gains the case it creates: a queued run under `session` is not a
+wait at all.
+
+Two consequences are worth carrying. Under `session` a role's pull request is
+authored by the person, so `project-guard` reads the branch rather than the
+author to tell the automation's work from theirs, and that is a tripwire rather
+than a wall. And dispatching spends the subscription from inside the
+conversation, so a driver says how many runs it started, in the same breath as
+what they produced.

@@ -239,8 +239,15 @@ jobs:
           AGENT_APP_PRIVATE_KEY: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
         run: |
           set -euo pipefail
+          # The OAuth token is not on this list. It is what an agent run in
+          # Actions spends, and a repository whose `.claude/agent-factory.json`
+          # says `runner` is `session` - the template's default - never makes
+          # one, so refusing to provision it for want of a token would make the
+          # one credential that expires the one that blocks everything. When it
+          # is here it is copied like the others; when it is not, the secrets
+          # step says so and carries on.
           missing=""
-          for name in PROVISION_TOKEN CLAUDE_CODE_OAUTH_TOKEN AGENT_APP_ID AGENT_APP_PRIVATE_KEY; do
+          for name in PROVISION_TOKEN AGENT_APP_ID AGENT_APP_PRIVATE_KEY; do
             [ -n "${!name:-}" ] || missing="$missing \`$name\`"
           done
           if [ -n "$missing" ]; then
@@ -316,7 +323,12 @@ jobs:
           done_() { printf -- '- [x] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "confirmed: $1"; }
           todo() { printf -- '- [ ] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "::warning::$1"; }
 
-          wanted="CLAUDE_CODE_OAUTH_TOKEN AGENT_APP_ID AGENT_APP_PRIVATE_KEY"
+          wanted="AGENT_APP_ID AGENT_APP_PRIVATE_KEY"
+          if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
+            wanted="CLAUDE_CODE_OAUTH_TOKEN $wanted"
+          else
+            done_ "No \`CLAUDE_CODE_OAUTH_TOKEN\` in the environment, so none was set. Agents run in sessions here (the template's \`runner\` is \`session\`); add the secret only if this repository is switched to \`actions\`."
+          fi
 
           # On stdin rather than --body, so no value is ever an argument.
           for name in $wanted; do
@@ -331,7 +343,7 @@ jobs:
           done
 
           if [ -z "$absent" ]; then
-            done_ "Secrets: \`CLAUDE_CODE_OAUTH_TOKEN\`, \`AGENT_APP_ID\`, \`AGENT_APP_PRIVATE_KEY\`."
+            done_ "Secrets: $(printf '`%s` ' $wanted)"
           else
             todo "Secrets missing after setting them:$absent. The token needs Secrets: read and write. Or add them by hand: github.com/$REPO/settings/secrets/actions"
           fi

@@ -133,6 +133,14 @@ There is nothing to update locally first. The command reads the factory
 repository at the tag you name rather than an installed copy, so what it
 proposes depends on the tag and not on the container it happened to run in.
 
+One field in that manifest does not move with the release: `runner`, which
+says whether a workflow or a session starts the agents. It is the repository's
+choice, so the update keeps it, and writes `actions` into a manifest from
+before the field existed - that is what such a repository has been doing.
+Asking for the switch is how a repository moves to sessions, for example
+`/update-agents v1.42.0, and switch the runner to session`; ADR 0004 has what
+changes when it does.
+
 Read the diff, merge it or do not. Repositories you do not run this in stay
 exactly where they are, indefinitely. That is allowed and it is not drift -
 a repository that is finished does not need the newest roles.
