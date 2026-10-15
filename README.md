@@ -48,6 +48,8 @@ Roughly in the order a project meets them, so `/objective` - where every piece o
 - `/check-in [objective]` - runs the driving posture now, the same way whether a person typed it, a scheduled wake fired it, or a pull request's activity woke the session: what is waiting on the person first, then the state of every child, then the merge policy applied to whatever is waiting. With no objective named, takes every open one.
 - `/ship [objective]` - the explicit form of "merge when green". Judges each pull request the objective is waiting on against the house rules' merge gate, merges what passes where the merge policy is `green` and reports it where it is not, and says on the pull request why for any that fail.
 - `/self-driving [objectives] [until ...]` - starts a long autonomous run, day or night: one round of questions, then the session drives the named objectives to done on delegated judgment, logging every call it makes on the person's behalf, until they close, the stated end arrives, or the person says stop.
+- `/dispatch <issue> [--child]` - runs one role on one issue from the session, in a repository whose `.claude/agent-factory.json` says `"runner": "session"`: the same checks, budgets, labels, brief, and hand-back the agent-run workflow performs, with no subscription token stored anywhere. In this session as a subagent by default; `--child` starts it in a child session the person can open and read.
+- `/heartbeat [every <N> hours | stop]` - sets up, changes, or stops the scheduled session that runs `/check-in` every few hours in a session-run repository, so queued work keeps moving while nobody has a session open.
 - `/decompose <issue>` - runs the orchestrator on one issue by hand.
 - `/retro` - proposes memory updates for the current repo as a pull request.
 - `/update-agents [version]` - brings one repo's copy of the roles, skills, and workflow pins up to a release, as one reviewable pull request. Nothing else moves.
@@ -68,8 +70,8 @@ Release tags are immutable - `release.yml` refuses one that already exists.
 | Workflow | Called as | What it does |
 |---|---|---|
 | `ci.yml` | `workflow_call` | the gate. No model involved. Runs `package.json` scripts by default, or the caller's own shell commands when it passes `commands`, which is how a non-Node project gets a gate. |
-| `agent-run.yml` | `workflow_call` | one agent run: repo-wide concurrency, queued not cancelled, capped turns and minutes, refuses a fourth attempt on the same issue. |
-| `project-guard.yml` | `workflow_call` | in each project: memory files stay inside the 40-line cap, and nobody but a maintainer edits the files that gate the repo. |
+| `agent-run.yml` | `workflow_call` | one agent run: repo-wide concurrency, queued not cancelled, capped turns and minutes, refuses a fourth attempt on the same issue. Stands down in a repository whose runner is `session`, where `/dispatch` does the same job from a session and no OAuth token is needed. |
+| `project-guard.yml` | `workflow_call` | in each project: memory files stay inside the 40-line cap, and nobody but a maintainer edits the files that gate the repo - with a pull request from an agent branch (`claude/*`) checked whoever opened it, because a session-run role opens its pull requests as the person. |
 | `bootstrap.yml` | `workflow_call` | run once per project, by hand: creates the labels the loop runs on, and reports the check names branch protection needs. |
 | `guard.yml` | this repo only | the checks below. |
 | `release.yml` | this repo only, by hand | cuts an immutable release tag on the tip of `main`, named by the plugin manifest, once the checks pass on it. |

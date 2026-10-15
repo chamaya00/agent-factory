@@ -114,6 +114,12 @@ way that reads as working. Delete it.
 
 ## 1. Generate the subscription token
 
+**Only for a repository whose runner is `actions`.** A repository whose
+`.claude/agent-factory.json` says `"runner": "session"` - what `/new-project`
+provisions by default since 1.42.0 - runs its agents from your own sessions,
+which are already signed in as you, and never reads this token. Skip this
+section and the next for it. ADR 0004 has the trade.
+
 This is what makes runs bill against Pro instead of API credits. One time only.
 
 The token comes from `claude setup-token`, which needs a terminal. A Codespace

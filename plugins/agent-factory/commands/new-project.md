@@ -264,7 +264,10 @@ before there is one.
 **A repository with anything else in it** - existing code, existing workflows,
 a second provisioning attempt. One branch, one pull request:
 `mcp__github__create_branch`, then `mcp__github__push_files` onto that branch,
-then `mcp__github__create_pull_request`. Here the diff is a real question.
+then `mcp__github__create_pull_request`. Name the branch `provision/<version>`,
+not `claude/...`: these files are the gates themselves, and where a
+`project-guard` caller is already in place it refuses them from an agent
+branch whoever opened it. Here the diff is a real question.
 These files land next to work somebody already did, and `ci.yml` in particular
 may be about to replace a gate that is doing its job.
 
@@ -382,7 +385,10 @@ What goes in:
   memory kept there is a protocol nothing can follow. The memory-protocol skill
   carries the whole reason
 - `.claude/agent-factory.json` - the record of which release this repository
-  took, with the version filled in
+  took, with the version filled in. Its `runner` is `session` as the template
+  ships it: agents run from sessions on this repository, and nothing needs a
+  subscription token stored as a secret. Write `actions` instead only when the
+  person asks for the workflow runner, and say which it is in the report
 - `docs/research/`, `docs/measurement/`, `docs/design/`, `docs/decisions/`
   with the ADR template
 - `scripts/design-render`, `scripts/app-render`, `scripts/contrast` - from the
@@ -407,7 +413,7 @@ Then the roles and the commands themselves, copied rather than referenced:
 - `.claude/agents/*.md` - every file in `<factory root>/agents/`
 - `.claude/skills/*/SKILL.md` - every skill in `<factory root>/skills/`
 - `.claude/commands/objective.md`, `retro.md`, `decompose.md`, `update-agents.md`,
-  `ship.md`, `check-in.md`, `self-driving.md` - from
+  `ship.md`, `check-in.md`, `self-driving.md`, `dispatch.md`, `heartbeat.md` - from
   `<factory root>/commands/`. Not `new-project.md`: provisioning is the
   factory's job, and a project that can provision another project is a way to
   get a second factory nobody is maintaining.
@@ -595,8 +601,9 @@ re-lists finished work is one nobody reads to the bottom, and the bottom is
 where the item that actually blocks them usually is.
 
 > 1. **Add the secrets** - `github.com/$1/settings/secrets/actions/new`
->    `CLAUDE_CODE_OAUTH_TOKEN`, and `AGENT_APP_ID` with
->    `AGENT_APP_PRIVATE_KEY` if the agent identity App exists.
+>    `AGENT_APP_ID` with `AGENT_APP_PRIVATE_KEY` if the agent identity App
+>    exists, and `CLAUDE_CODE_OAUTH_TOKEN` only if `runner` is `actions` -
+>    a session-run repository never reads it.
 > 2. **Install the App here** - `github.com/settings/installations`
 >    Nothing to do if there is no App. Without it every agent pull request
 >    lands needing an approval tap before its checks will run, and an
@@ -618,4 +625,7 @@ does not change when its commands do.
 
 Then say what happens next, because the report is otherwise a list of chores
 with no end: once the secrets are in, `/objective` in a session on that
-repository is how the first piece of work starts.
+repository is how the first piece of work starts. Where `runner` is `session`,
+say too that `/heartbeat` in that session sets the clock that keeps work
+moving while no session is open, and that without it nothing runs between the
+sessions the person opens.

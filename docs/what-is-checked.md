@@ -54,7 +54,7 @@ that the table, `CLAUDE.md`, and `guard.yml` name the same scripts.
 | `test_ci.py` | the gate fails what it is supposed to fail |
 | `test_preflight.py` | agent-run refuses the runs it is supposed to refuse |
 | `test_handback.py` | a finished child wakes its parent, and silence gets reported |
-| `test_project_guard.py` | a privilege change cannot arrive undeclared |
+| `test_project_guard.py` | a privilege change cannot arrive undeclared, and a gate edit from an agent branch is stopped whoever opened it |
 | `test_capability_claims.py` | the capability checks fire on drift and stay quiet on prose |
 | `test_release.py` | a release tag cannot move or disagree with the manifest |
 | `test_provision.py` | provisioning refuses a bad request or a missing approval gate, and requires only the gates' check names |
@@ -275,6 +275,13 @@ The fifteenth is not a decision but a trace: refusing a fourth attempt has to
 label the issue `agent:blocked` and comment why, or the refusal reads as a
 flake.
 
+A repository whose `.claude/agent-factory.json` says `runner` is `session`
+stands the preflight down, on a queued child and on a queued objective alike,
+while `actions`, an unrecognised value, and no value at all still run. The
+stand-down also has to come before any write: a session-run issue that is
+already over budget must not be labelled blocked by a workflow that was never
+meant to run there.
+
 ### test_release.py
 
 Fifteen cases against real temporary git repositories. A bug here is either a
@@ -332,7 +339,12 @@ than appends. A pull request from a non-maintainer touching
 `.github/workflows/`, `CODEOWNERS`, `.claude/agents/`, `.claude/skills/`,
 `.claude/commands/`, or `agent-factory.json` fails. It reads the pull request
 author, which is why a maintainer's pull request passes it and an agent's would
-not. A diff that widens what the automation may do has to say so in the body.
+not - and the head branch, because a role dispatched from a session opens its
+pull request as the person, so the author alone cannot tell them apart. A
+maintainer-authored pull request from a branch matching `agent-branches`
+(`claude/*` by default) is checked as the automation's, with no author or
+sender exemption; ADR 0004 says why that is a tripwire rather than a wall. A
+diff that widens what the automation may do has to say so in the body.
 
 Two things it checks about the project's own `CLAUDE.md`, both for the same
 reason - that file is the first thing every agent run loads, so a defect in it

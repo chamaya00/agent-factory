@@ -178,7 +178,8 @@ PROTECTED_STEP = "Nothing that gates this repo was edited"
 
 
 def run_forked(base: dict, main_after: dict, branch_after: dict,
-               step: str = STEP, body: str = "") -> "Result":
+               step: str = STEP, body: str = "",
+               who: dict | None = None) -> "Result":
     """Build a history where the base branch moved on after the fork.
 
     `base` is the common ancestor. `branch_after` is committed on a branch cut
@@ -186,6 +187,11 @@ def run_forked(base: dict, main_after: dict, branch_after: dict,
     the event reports is *not* the fork point - the shape every long-lived
     agent pull request has once anything else merges. Each mapping is
     {filename: content}; a None content deletes the file.
+
+    `who` overrides the identity half of the event - AUTHOR, SENDER,
+    HEAD_REF, AGENT_BRANCHES - for the cases that ask who opened a pull
+    request rather than what it changed. Left out, the pull request is an
+    agent App's, from a branch no pattern names, as it always was here.
     """
     def apply(repo: Path, files: dict) -> None:
         for name, text in files.items():
@@ -218,14 +224,15 @@ def run_forked(base: dict, main_after: dict, branch_after: dict,
         base_tip = sha(repo)
         git(repo, "checkout", "-q", "agent")
 
+        env = {"PATH": "/usr/bin:/bin", "BASE_SHA": base_tip, "HEAD_SHA": head,
+               "BODY": body, "PR_NUMBER": "1", "GH_TOKEN": "fake",
+               "GH_REPO": "owner/repo", "AUTHOR": "agent-bot[bot]",
+               "SENDER": "agent-bot[bot]", "MAINTAINERS": "owner",
+               "PROTECTED": ".github/workflows/*\n.claude/skills/**\n"}
+        env.update(who or {})
         done = subprocess.run(
             ["bash", "-e", "-c", step_script(step)], cwd=repo, text=True,
-            capture_output=True,
-            env={"PATH": "/usr/bin:/bin", "BASE_SHA": base_tip, "HEAD_SHA": head,
-                 "BODY": body, "PR_NUMBER": "1", "GH_TOKEN": "fake",
-                 "GH_REPO": "owner/repo", "AUTHOR": "agent-bot[bot]",
-                 "SENDER": "agent-bot[bot]", "MAINTAINERS": "owner",
-                 "PROTECTED": ".github/workflows/*\n.claude/skills/**\n"},
+            capture_output=True, env=env,
         )
         return Result(done.returncode, done.stdout + done.stderr)
 
@@ -596,6 +603,66 @@ def _():
         {"file.yml": PLAIN},
         {"src/app.ts": "b\n"},
     ) == 0
+
+
+# The session runner's half of the protected-path check. A role dispatched from
+# a session opens its pull request as the person the session runs for, so the
+# author and the sender are both the owner, and the branch is the only thing
+# left that says the automation wrote it.
+GATE_EDIT = {".github/workflows/ci.yml": "run: make\n", "src/app.ts": "a\n"}
+GATE_EDITED = {".github/workflows/ci.yml": "run: true\n"}
+SOURCE_EDITED = {"src/app.ts": "b\n"}
+SESSION = {"AUTHOR": "owner", "SENDER": "owner",
+           "HEAD_REF": "claude/issue-12-engineer", "AGENT_BRANCHES": "claude/*\n"}
+
+
+def session_case(branch_after: dict, **who: str) -> "Result":
+    return run_forked(GATE_EDIT, {"src/app.ts": "a\nmoved on\n"}, branch_after,
+                      step=PROTECTED_STEP, who={**SESSION, **who})
+
+
+@case("a gate edit from an agent branch is stopped though the owner opened it")
+def _():
+    # The hole this closes: before it, the author check read `owner`, called
+    # it a maintainer, and passed every pull request a session role opened.
+    result = session_case(GATE_EDITED)
+    return result == 1 and "agent branch" in result.output
+
+
+@case("the owner pushing to an agent branch does not clear a gate edit either")
+def _():
+    # In a session the sender is the owner too, so the push exemption would
+    # reopen the same hole one step later.
+    return session_case(GATE_EDITED, SENDER="owner") == 1
+
+
+@case("an agent branch that touches no gate still passes")
+def _():
+    return session_case(SOURCE_EDITED) == 0
+
+
+@case("the owner's gate edit from a branch outside the pattern still passes")
+def _():
+    # The deliberate path out: a person's own change, on a branch they named.
+    return session_case(GATE_EDITED, HEAD_REF="update-agents/v1.42.0") == 0
+
+
+@case("an empty agent-branches input leaves the author check as it was")
+def _():
+    return session_case(GATE_EDITED, AGENT_BRANCHES="") == 0
+
+
+@case("the agent App's branch still clears on a maintainer's push")
+def _():
+    # The Actions runner keeps its own escape: the App opened it, a maintainer
+    # pushed the gate fix, and the sender check is what lets that through.
+    return session_case(GATE_EDITED, AUTHOR="agent-bot[bot]", SENDER="owner") == 0
+
+
+@case("the agent App's own gate edit is still stopped")
+def _():
+    return session_case(GATE_EDITED, AUTHOR="agent-bot[bot]",
+                        SENDER="agent-bot[bot]") == 1
 
 
 def main() -> int:

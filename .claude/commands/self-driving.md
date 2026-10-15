@@ -91,6 +91,12 @@ objective, a turn-cap ending read as a budget finding, and a question a role
 raises answered on the record when the delegation covers it and carried to the
 log when it does not.
 
+Where `.claude/agent-factory.json` says `runner` is `session`, the runs are
+this stretch's too: every wake dispatches what is queued, per step 4 of
+`/check-in`. Start the long ones with `/dispatch --child`, so this session stays
+free to answer a pull request's events while the run works, and say in the
+ledger which child session holds which issue.
+
 ## 7. Close out
 
 When every objective is closed, the stated end arrives, or the person says

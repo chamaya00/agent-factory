@@ -77,6 +77,16 @@ role label, and then queues them itself as each one becomes ready. A small
 objective may be a single engineer issue - when it is, the orchestrator says
 which roles it skipped, so a thin plan is visible rather than assumed.
 
+**Who starts a run is a setting.** `.claude/agent-factory.json` names the
+runner. Under `session` - the default for a new repository - nothing starts a
+run but a session: the one driving the work, or the scheduled one `/heartbeat`
+sets up, runs the role through `/dispatch` with the same checks, budgets,
+labels, and brief the workflow used, and the agent-run workflow reads the line
+and stands down. Under `actions`, a label starts that workflow, which spends the
+`CLAUDE_CODE_OAUTH_TOKEN` secret. Everything below reads the same either way:
+`agent:queued` is a request under both, and a wake means whichever runner is in
+charge starts the next run.
+
 It stays with the objective after the split. A child reaching `agent:review` or
 `agent:blocked` wakes it: it reads the state of every child, queues whatever the
 merge has just unblocked, rewrites and re-queues a child that blocked on its own
@@ -152,6 +162,13 @@ session, a scheduled wake, or a subscribed pull request's activity firing one,
 it runs the same catch-up: what is waiting on the person first, then the state
 of every child, then the two reading passes over each waiting diff, merging
 under the policy where it applies.
+
+**Starting a run is `/dispatch`, and the clock is `/heartbeat`.** Where the
+runner is `session`, a queued role starts when a session starts it, and
+`/check-in` does that one run at a time. `/heartbeat` sets a scheduled session
+that runs `/check-in` every few hours, so the work keeps moving while nobody
+has a session open - without it, nothing runs between the sessions the person
+opens.
 
 **Long autonomous runs are `/self-driving`.** When the person wants one or more
 objectives taken to done without them in the loop - overnight, or a day spent
