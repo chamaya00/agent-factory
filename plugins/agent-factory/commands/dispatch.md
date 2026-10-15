@@ -1,11 +1,10 @@
 ---
 description: Run one role on one issue from this session instead of in Actions - the checks, the booking, the brief, and the hand-back the agent-run workflow performs, done by the driving session in a repository whose runner is session.
-argument-hint: <issue-number> [--child]
+argument-hint: <issue-number>
 ---
 
 Run the role issue `$1` calls for, and hand its result back exactly as a
-workflow run would. `--child` anywhere in `$ARGUMENTS` starts it in a child
-session rather than in this one.
+workflow run would.
 
 This command exists because runs stopped needing Actions. A repository whose
 `.claude/agent-factory.json` says `"runner": "session"` has no workflow
@@ -72,21 +71,40 @@ Before anything starts, so the booking survives a run that dies:
   `agent:revise` and `agent:review`.
 - Comment `<marker> Starting **<role>**, attempt N of B.` - or `revision round
   N of B`, or `supervision run N of B` - and on the next line where it runs:
-  `Runner: session.`, or the child session's link.
+  `Runner: this session.`, or the child session's link and why it is one.
 
 Note the time. Step 4 reads what was said on the issue after it.
 
 ## 3. Start the role
 
-**Where.** The orchestrator always runs in this session, as a subagent: its
-output is the brief this session reads next, and the tool list in its
-definition keeps it from writing code or files. Every other role runs here as a
-subagent too, in its own worktree where the environment offers one, so its
-branch never moves this session's checkout - unless `--child` was given, or this
-session has to stay free while the run works: a self-driving stretch with
-something else to watch, or a run the person wants to open and read for
-themselves. Then start a child session on this repository (`create_session`,
-where there is one) with the brief below as its first message.
+**Where.** In this session, as a subagent, is the default and the usual
+answer. The run starts with only the brief, the role's own tool list holds it
+to what the role may do, and what it returns lands here, where the next
+decision is made. Give it its own worktree where the environment offers one,
+so its branch never moves this session's checkout.
+
+The orchestrator always runs here: its output is the brief this session reads
+next, so running it anywhere else only adds a round trip.
+
+For any other role, a child session - a separate session on this repository,
+started with the brief below as its first message (`create_session`, where
+there is one) - is your call, run by run. It is worth it when one of these is
+true, and only then:
+
+- **This session has to stay free while the run works.** A self-driving stretch
+  with other pull requests to answer, or a person in the middle of a
+  conversation the run would otherwise hold up.
+- **The run would crowd this session out.** A heavy build or a large
+  dependency install that would eat this container's disk, or work long enough
+  that its tool output would swamp this session's context.
+- **The person wants to watch or steer it.** A run they asked to open and read
+  for themselves, or to talk to mid-way.
+
+Otherwise it is not worth it. A child session is a second session spending the
+subscription and loading the repository from scratch, it says nothing when it
+finishes cleanly unless told to, and a run whose result you need before you can
+do anything else gains nothing from running elsewhere. Say which you chose and,
+for a child session, the reason, on the line the booking comment gives it.
 
 Either way, one run at a time across the repository. The subscription is one
 budget whichever runner spends it, and two runs at once are how two children

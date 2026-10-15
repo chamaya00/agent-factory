@@ -413,7 +413,7 @@ Then the roles and the commands themselves, copied rather than referenced:
 - `.claude/agents/*.md` - every file in `<factory root>/agents/`
 - `.claude/skills/*/SKILL.md` - every skill in `<factory root>/skills/`
 - `.claude/commands/objective.md`, `retro.md`, `decompose.md`, `update-agents.md`,
-  `ship.md`, `check-in.md`, `self-driving.md`, `dispatch.md`, `heartbeat.md` - from
+  `ship.md`, `check-in.md`, `self-driving.md`, `dispatch.md` - from
   `<factory root>/commands/`. Not `new-project.md`: provisioning is the
   factory's job, and a project that can provision another project is a way to
   get a second factory nobody is maintaining.
@@ -626,6 +626,7 @@ does not change when its commands do.
 Then say what happens next, because the report is otherwise a list of chores
 with no end: once the secrets are in, `/objective` in a session on that
 repository is how the first piece of work starts. Where `runner` is `session`,
-say too that `/heartbeat` in that session sets the clock that keeps work
-moving while no session is open, and that without it nothing runs between the
-sessions the person opens.
+say too that agents run while a session on that repository is open, and that
+asking that session to keep the work going while they are away - overnight, or
+for days - starts a self-driving stretch, which schedules sessions of its own
+until it ends.

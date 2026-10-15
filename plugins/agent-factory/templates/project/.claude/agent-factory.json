@@ -42,8 +42,7 @@
     "ship",
     "check-in",
     "self-driving",
-    "dispatch",
-    "heartbeat"
+    "dispatch"
   ],
   "hooks": [
     "session-start"

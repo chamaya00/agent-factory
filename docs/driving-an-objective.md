@@ -560,8 +560,12 @@ workflow stands down.
 Nothing about the posture changes. What changes is that a queued child is now
 waiting on the driver rather than on a run, so the driver starts it:
 `/dispatch` carries the workflow's checks, budgets, labels, marker comments,
-brief, and hand-back, `/check-in` dispatches what is queued one run at a time,
-and `/heartbeat` keeps a scheduled session doing that while nobody has one open.
+brief, and hand-back, and `/check-in` dispatches what is queued one run at a
+time - as a subagent by default, in a child session when the driver judges a
+run worth one. While nobody is present, a self-driving stretch keeps it going:
+one meant to outlast the session schedules fresh sessions that read its
+decision log and carry on, and the person asking in plain words for work to
+keep moving while they are away starts one as surely as the command does.
 The skill's **Where the runs happen** section is the short form, and
 **How to wake** gains the case it creates: a queued run under `session` is not a
 wait at all.

@@ -51,12 +51,20 @@ Under `session`:
 - **`/dispatch` is the run.** It carries the workflow's checks, budgets,
   marker comments, labels, brief, and hand-back into the driving session, so
   the orchestrator and a person reading the issue cannot tell which runner did
-  the work. The orchestrator always runs in the session as a subagent; other
-  roles run as subagents or, with `--child`, in a child session the person can
-  open.
-- **`/check-in` dispatches what is queued,** one run at a time, and
-  `/heartbeat` creates a scheduled routine that opens a fresh session every
-  few hours to run it. Together they replace the label trigger and the tick.
+  the work. Every role runs in the driving session as a subagent by default.
+  A child session is the driver's call, run by run, against a stated test: this
+  session has to stay free, the run would crowd it out, or the person wants to
+  watch it. The orchestrator never goes to one.
+- **`/check-in` dispatches what is queued,** one run at a time, which replaces
+  the label trigger while a session is open.
+- **A self-driving stretch schedules sessions of its own.** One meant to outlast
+  the driving session - overnight, for days - sets a recurring routine that
+  opens a fresh session every couple of hours, reads the stretch's decision log,
+  and continues it under the delegation recorded there; close-out turns it off.
+  Under `session` that routine is what replaces the label trigger and the
+  twelve-hourly tick while nobody is present. The person asking in their own
+  words to keep the work moving while they are away starts a stretch exactly as
+  the command does.
 - **`project-guard` reads the branch as well as the author.** A
   maintainer-authored pull request from a branch matching `agent-branches`
   (`claude/*` by default) is checked as the automation's, and neither the
@@ -68,10 +76,17 @@ Under `session`:
 ## What was given up, and what replaces it
 
 **The trigger** becomes a session. Nothing starts a run while no session is
-open, except the heartbeat, which runs on the order of hours rather than
-seconds. That is accepted: the work this catches has usually been waiting
-for a person anyway, and a tighter clock spends the subscription fastest exactly
-when nothing is happening.
+open, except a self-driving stretch's scheduled session, which runs on the
+order of hours rather than seconds. That is accepted: the work this catches has
+usually been waiting for a person anyway, and a tighter clock spends the
+subscription fastest exactly when nothing is happening.
+
+The scheduled session lives inside self-driving rather than as a standing
+clock of its own, and that was a choice. A clock that dispatches runs and
+merges under a policy while nobody is present is a delegation, and
+self-driving is where the factory already bounds one: asked for by the person,
+with a stated end, a decision log, and a close-out. A separate always-on clock
+would have been a second, unbounded way to do the same thing.
 
 **The hard limits** become partly convention. Attempts, revisions and
 supervisions are still counted from the same marker comments and refused at the
@@ -115,10 +130,13 @@ preflight check.
 
 **Child sessions for every role.** Each run gets its own container and its own
 context, and the person can open it. But a session that finishes cleanly does
-not report back unless told to, and the orchestrator's output is the very brief
-the driving session reads next, so running it elsewhere only adds a round trip.
-Subagents are the default; a child session is one flag away when isolation or
-visibility is worth the extra moving part.
+not report back unless told to, it loads the repository from scratch on the
+subscription, and the orchestrator's output is the very brief the driving
+session reads next, so running it elsewhere only adds a round trip. Subagents
+are the default. A child session is the driver's judgment rather than the
+person's flag to remember, because the reasons for one - a session that must
+stay free, a run that would crowd it, a person who wants to watch - are things
+the driver can see.
 
 **A webhook from GitHub into a session.** Would restore the event trigger. No
 such bridge exists for issue events: the only GitHub activity a session receives

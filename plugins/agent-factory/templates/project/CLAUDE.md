@@ -79,8 +79,8 @@ which roles it skipped, so a thin plan is visible rather than assumed.
 
 **Who starts a run is a setting.** `.claude/agent-factory.json` names the
 runner. Under `session` - the default for a new repository - nothing starts a
-run but a session: the one driving the work, or the scheduled one `/heartbeat`
-sets up, runs the role through `/dispatch` with the same checks, budgets,
+run but a session: the one driving the work, or one a self-driving stretch
+schedules, runs the role through `/dispatch` with the same checks, budgets,
 labels, and brief the workflow used, and the agent-run workflow reads the line
 and stands down. Under `actions`, a label starts that workflow, which spends the
 `CLAUDE_CODE_OAUTH_TOKEN` secret. Everything below reads the same either way:
@@ -163,14 +163,14 @@ it runs the same catch-up: what is waiting on the person first, then the state
 of every child, then the two reading passes over each waiting diff, merging
 under the policy where it applies.
 
-**Starting a run is `/dispatch`, and the clock is `/heartbeat`.** Where the
-runner is `session`, a queued role starts when a session starts it, and
-`/check-in` does that one run at a time. `/heartbeat` sets a scheduled session
-that runs `/check-in` every few hours, so the work keeps moving while nobody
-has a session open - without it, nothing runs between the sessions the person
-opens.
+**Starting a run is `/dispatch`.** Where the runner is `session`, a queued role
+starts when a session starts it, and `/check-in` does that one run at a time -
+in this session as a subagent by default, or in a child session when the driver
+judges the run is worth one. Between the sessions the person opens, nothing
+runs unless a self-driving stretch is keeping scheduled sessions going.
 
-**Long autonomous runs are `/self-driving`.** When the person wants one or more
+**Long autonomous runs are `/self-driving`**, whether the person types it or
+asks in their own words for the work to keep moving while they are away. When the person wants one or more
 objectives taken to done without them in the loop - overnight, or a day spent
 elsewhere - that command starts the stretch: one round of questions first, a
 decision log for every call made on their behalf, wakes on a clock as well as on

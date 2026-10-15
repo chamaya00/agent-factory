@@ -167,7 +167,7 @@ ROLES = ["orchestrator", "researcher", "analyst", "designer", "engineer"]
 # provision another project is a second factory nobody is maintaining.
 PROJECT_COMMANDS = [
     "objective", "retro", "decompose", "update-agents", "ship", "check-in",
-    "self-driving", "dispatch", "heartbeat",
+    "self-driving", "dispatch",
 ]
 
 # Hooks a provisioned project receives. Unlike roles, skills and commands these

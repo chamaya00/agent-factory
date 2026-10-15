@@ -56,9 +56,8 @@ Read these out of the factory at `$1`:
 - `agents/*.md` - every role
 - `skills/*/SKILL.md` - every skill
 - `commands/objective.md`, `retro.md`, `decompose.md`, `update-agents.md`,
-  `ship.md`, `check-in.md`, `self-driving.md`, `dispatch.md`, `heartbeat.md` -
-  the commands a project gets. Not `new-project.md`, which stays in the
-  factory.
+  `ship.md`, `check-in.md`, `self-driving.md`, `dispatch.md` - the commands a
+  project gets. Not `new-project.md`, which stays in the factory.
 
 Compare each against the copy in `.claude/agents/`, `.claude/skills/`, and
 `.claude/commands/`. Note which are new, which changed, and which exist here
@@ -160,8 +159,10 @@ What goes in the commit:
   manifest with no `runner` predates the field and has been running its agents
   in Actions, so write `"runner": "actions"` - unless the person asked to move
   to sessions, in which case write `"session"` and say in the body what that
-  changes: the agent-run workflow stands down, `/dispatch` and `/heartbeat` are
-  how work moves, and the `CLAUDE_CODE_OAUTH_TOKEN` secret is no longer read.
+  changes: the agent-run workflow stands down, sessions start the runs through
+  `/dispatch`, work moves only while a session is open unless a self-driving
+  stretch is keeping one going, and the `CLAUDE_CODE_OAUTH_TOKEN` secret is no
+  longer read.
   Never flip it on your own reading of what would be better. Which runner
   spends the subscription is the person's call.
 

@@ -1,6 +1,6 @@
 ---
 name: driving-an-objective
-description: How an interactive session drives an objective it filed or was pointed at - the technical judgment it owns, what it may reject and how, what to read and what not to, adopting the merge policy, and surfacing what only the person can decide. Use whenever an objective is in play, a child reaches review, a queued run is waiting for a session to start it, a pull request is waiting, a session is catching up on what happened while nobody was watching, one session is driving several objectives at once, or the person has started a self-driving stretch - a long autonomous run, day or night, in which they have handed over the calls.
+description: How an interactive session drives an objective it filed or was pointed at - the technical judgment it owns, what it may reject and how, what to read and what not to, adopting the merge policy, and surfacing what only the person can decide. Use whenever an objective is in play, a child reaches review, a queued run is waiting for a session to start it, a pull request is waiting, a session is catching up on what happened while nobody was watching, one session is driving several objectives at once, or the person has started a self-driving stretch - a long autonomous run, day or night, in which they have handed over the calls - including when they ask for one in their own words.
 ---
 
 # Driving an objective
@@ -246,8 +246,15 @@ starts a run.
   you. `/dispatch` does what the workflow did - the same checks, budgets,
   labels, marker comments, and brief - and the workflow reads the line and
   stands down. So a queued child you have not dispatched is not waiting on a
-  run; it is waiting on you. `/check-in` dispatches what is queued, and
-  `/heartbeat` keeps a scheduled session doing it while nobody has one open.
+  run; it is waiting on you. `/check-in` dispatches what is queued, and a
+  self-driving stretch keeps a scheduled session doing it while nobody has one
+  open.
+
+Under `session`, where each run happens is also yours. A subagent in this
+session is the default; a child session is worth it only when this session has
+to stay free, the run would crowd it out, or the person wants to watch the run
+themselves. `/dispatch` has the whole test. Decide it run by run and say why on
+the issue, rather than asking the person to pick.
 
 Two things change under `session` that are easy to miss. A role opens its pull
 request as the person, because there is no agent identity, so who opened a pull
@@ -283,9 +290,11 @@ reminder.
   standing in for a person, per **Promise a watch it cannot keep**.
 - **Waiting on a queued run, where the runner is `session`.** Nothing will
   start it but a session, so this is not a wait at all: dispatch it. What
-  covers the hours nobody has a session open is `/heartbeat`, not a reminder -
-  it opens a fresh session that reads the repository's state rather than
-  trusting a reminder's own text.
+  covers the hours nobody has a session open is a self-driving stretch's
+  scheduled session, which reads the repository's state fresh each time rather
+  than trusting a reminder's own text - and only the person starts a stretch.
+  Without one, a queued run waits for the next session they open; say so when
+  you report, so a quiet repository is not mistaken for a busy one.
 - **Waiting on runs during a self-driving stretch.** The other legitimate case,
   and the one **Self-driving** covers: a run that ends on its turn cap, blocks,
   or never starts raises no pull request event, so subscriptions alone cannot
@@ -326,9 +335,14 @@ A person may hand over, for a stretch, the calls that would normally wait for
 them, and ask for the work to keep moving without them - "take these through to
 done, make the judgment calls, write them down". Overnight is the obvious case;
 a working day spent elsewhere, or a hefty objective they want run end to end
-rather than supervised step by step, is the same thing. `/self-driving` is how
-they start one, and it names the objectives, when the stretch ends, and what
-they have already answered.
+rather than supervised step by step, is the same thing. They start one by
+asking: `/self-driving`, or the same thing in their own words - "keep these
+going overnight", "drive this through while I'm away this week". Recognise the
+second as the first, say that you are starting a stretch, and run it as the
+command says: it names the objectives, when the stretch ends, and what they
+have already answered. A request that is only "keep an eye on it" while they
+are still here is not a stretch; one that hands over calls for a period they
+will not be present for is.
 
 That is a real delegation, and it changes what follows and nothing else: the
 merge gate, both reading passes, and **What a revert does not undo** hold
@@ -355,6 +369,14 @@ fold into the loop.
   case the chain breaks. An hourly cadence alone leaves reviewable work idle for
   most of an hour, which across a long stretch is most of it. A wake that finds
   nothing changed says nothing.
+- **Outlast the session.** Reminders wake this session, and a stretch measured
+  in nights or days will outlive it. For one of those, also schedule a fresh
+  session on the repository every couple of hours that reads the decision log
+  first and continues the stretch under the delegation recorded there -
+  `/self-driving` gives the message. Where the runner is `session` this is what
+  keeps runs starting at all while nobody is here, so a long stretch there
+  without it is a stretch that stops when this session does. Turn it off at
+  close-out; a forgotten one keeps spending the subscription on nothing.
 - **Keep a ledger outside the conversation.** A long stretch outlives the
   session's context. A scratch file with one line per state change - what
   merged, what is queued, what comes next - is what every wake reads first, and
