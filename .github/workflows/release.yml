@@ -127,7 +127,7 @@ jobs:
           python scripts/validate_plugin.py
           python scripts/validate_workflows.py
           python scripts/test_ci.py
-          python scripts/test_preflight.py
+          python scripts/test_project_guard.py
           python scripts/test_release.py
 
       - name: Cut the tag

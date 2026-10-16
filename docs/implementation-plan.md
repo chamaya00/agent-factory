@@ -1,5 +1,10 @@
 # Implementation plan: `agent-factory`
 
+> **Historical.** This is the plan the factory was first built from. Its agent
+> runner in GitHub Actions, the `CLAUDE_CODE_OAUTH_TOKEN` subscription token, and
+> the agent identity App were retired by ADR 0005: agents now run from Claude
+> Code sessions and setup needs no credentials. `getting-started.md` is current.
+
 Paste this whole document into Claude Code as your first message. Work through it in order.
 
 ---

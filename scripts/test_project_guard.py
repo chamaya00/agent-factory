@@ -567,13 +567,13 @@ def _():
 
 @case("a protected path merged on the base after the fork is not this branch's")
 def _():
-    # The false positive this was fixed for: a maintainer raises the run cap
-    # on the base branch, and an agent pull request opened earlier - touching
+    # The false positive this was fixed for: a maintainer edits a workflow on
+    # the base branch, and an agent pull request opened earlier - touching
     # only source - goes red on a workflow file it never edited.
-    wf = {".github/workflows/agent-run.yml": "max-turns: 160\n"}
+    wf = {".github/workflows/ci.yml": "timeout-minutes: 10\n"}
     return run_forked(
         {**wf, "src/app.ts": "a\n"},
-        {".github/workflows/agent-run.yml": "max-turns: 300\n"},
+        {".github/workflows/ci.yml": "timeout-minutes: 20\n"},
         {"src/app.ts": "b\n"},
         step=PROTECTED_STEP,
     ) == 0
@@ -584,11 +584,11 @@ def _():
     # The same forked history, with the agent's own diff reaching into a
     # gate. Measuring from the fork point must not blunt the check it exists
     # to keep honest.
-    wf = {".github/workflows/agent-run.yml": "max-turns: 160\n"}
+    wf = {".github/workflows/ci.yml": "timeout-minutes: 10\n"}
     return run_forked(
         {**wf, "src/app.ts": "a\n"},
         {"src/app.ts": "a\nmain moved on\n"},
-        {".github/workflows/agent-run.yml": "max-turns: 999\n"},
+        {".github/workflows/ci.yml": "timeout-minutes: 999\n"},
         step=PROTECTED_STEP,
     ) == 1
 

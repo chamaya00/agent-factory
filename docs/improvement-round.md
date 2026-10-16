@@ -106,8 +106,7 @@ round's cost bounded on a fixed subscription, and four rounds cover the lot.
 2. **Living with several projects.** The morning-after read, the fleet view
    (which project is on which release, which is stuck, which needs the owner),
    the gap between a release and `/update-agents`, and what the agents spent.
-   Read the project template, its hook, the driving commands and
-   `agent-run.yml`'s scheduled jobs.
+   Read the project template, its hook, and the driving commands.
 3. **What the history says breaks next.** Read `git log` bodies on `main`, the
    closed issues, and the incident notes in workflow comments and check
    docstrings. Find the failure patterns that recur, then the instance of each
@@ -136,13 +135,13 @@ These can be pitched as ideas. They are never built until ticked, and some are
 never built at all.
 
 - **A widening of what automation may do in a project** - an allowlist entry,
-  a permission, a tool grant, a label the preflight matches on. Pitched with
+  a permission, a tool grant, a label `/dispatch` matches on. Pitched with
   the widening named in its first line. Built only on a tick, and its pull
   request declares it, the rule `project-guard.yml` holds every project to.
 - **Anything that changes what provisioned projects receive.** It needs a
   version bump and then a tag, and the owner should see it coming.
-- **Anything that spends subscription quota**: run budgets, turn caps, the
-  concurrency group, the preflight's refusals.
+- **Anything that spends subscription quota**: run budgets, and what
+  `/dispatch` refuses or allows.
 - **A rewrite of a page's voice, or a reorganisation of `docs/`.** One change,
   one reason.
 

@@ -5,8 +5,8 @@ name: bootstrap
 # put in the branch protection rule.
 #
 # Re-run it after picking up a factory release that adds one. It is idempotent,
-# and a label the preflight matches on but the repository does not have is a
-# mechanism that fails silently.
+# and a label the roles and /dispatch match on but the repository does not have
+# is a mechanism that fails silently.
 #
 # workflow_dispatch only. Nothing about this should happen automatically.
 #
@@ -17,4 +17,11 @@ on:
 
 jobs:
   bootstrap:
+    # Exactly what the reusable workflow asks for. Declared here because a new
+    # repository's default token is read-only, and a called workflow asking for
+    # more than its caller holds never starts.
+    permissions:
+      contents: read
+      issues: write
+      checks: read
     uses: __FACTORY_REPO__/.github/workflows/bootstrap.yml@__FACTORY_VERSION__

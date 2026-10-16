@@ -7,7 +7,7 @@ name: bootstrap
 # from. A cloud session has no `gh` binary, and there is no tool available to
 # it for creating a label, so the labels are either typed by hand, once each,
 # per project on a phone, or they are created here. The names are
-# load-bearing - the agent-run preflight matches them exactly - which is the
+# load-bearing - the roles and /dispatch match them exactly - which is the
 # same reason they are defined in one place rather than retyped per project.
 #
 # Idempotent. Safe to re-run whenever a label gets renamed or deleted.
@@ -115,9 +115,8 @@ jobs:
             echo
             echo "## Still to do by hand"
             echo
-            echo "1. Branch protection on \`$DEFAULT_BRANCH\`, requiring the checks above."
-            echo "   Deliberately not automated: setting it needs an admin token, and"
-            echo "   an identity that can set a gate can remove it."
-            echo "2. The \`CLAUDE_CODE_OAUTH_TOKEN\` secret on this repository."
-            echo "   Nothing agent-side runs without it, and secrets are per repository."
+            echo "Branch protection on \`$DEFAULT_BRANCH\`, requiring the checks above."
+            echo "Deliberately not automated: setting it needs an admin token, and an"
+            echo "identity that can set a gate can remove it. Then start work with"
+            echo "\`obj <what you want>\` in a Claude Code session on this repository."
           } >> "$GITHUB_STEP_SUMMARY"

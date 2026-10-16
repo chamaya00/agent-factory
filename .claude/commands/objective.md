@@ -83,9 +83,9 @@ had.
 On yes: file it, label it `objective` and `agent:queued`, and give them the
 link. On no: take the correction and show it again.
 
-Where `.claude/agent-factory.json` says `runner` is `session`, that label
-starts nothing on its own. Run `/dispatch` on the objective straight away, so
-the orchestrator splits it while they are still here to see the plan.
+That label starts nothing on its own. Run `/dispatch` on the objective
+straight away, so the orchestrator splits it while they are still here to see
+the plan.
 
 ## 5. Then drive it
 

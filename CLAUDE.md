@@ -67,8 +67,6 @@ this list, `docs/what-is-checked.md`, and `guard.yml` name the same scripts.
 - `python scripts/validate_workflows.py` - the workflows parse and stay inside
   their limits (needs `pyyaml`)
 - `python scripts/test_ci.py` - the gate still fails what it should fail
-- `python scripts/test_preflight.py` - agent-run still refuses what it should refuse
-- `python scripts/test_handback.py` - a finished child still wakes its parent
 - `python scripts/test_project_guard.py` - a privilege change cannot arrive
   undeclared
 - `python scripts/test_capability_claims.py` - the capability checks still fire
@@ -115,8 +113,10 @@ Do not read all of `docs/`. Read the one that matches what you are doing:
   or the manifest
 - `docs/decisions/` - the ADRs, when a change alters a category rather than an
   implementation. `0001` records why the factory's own `owner/repo` is declared
-  in the manifest rather than inferred from a remote
-- `docs/checkpoint.md` - the steps only a human with account access can do
+  in the manifest rather than inferred from a remote; `0005` why agents run
+  only from sessions and setup needs no credentials
+- `docs/checkpoint.md` - what only the factory's owner can do: cutting a
+  release, and the optional provisioning setup
 - `docs/open-questions.md` - what is still undecided, and where an answer has
   to land before an entry may be deleted
 - `docs/driving-an-objective.md` - the interactive session's role and the

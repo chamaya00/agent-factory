@@ -1,18 +1,18 @@
 name: provision
 
-# Does the per-repository setup a cloud session cannot, with nobody at a
-# terminal: the Actions permission, the three secrets, adding the repository to
-# the agent identity App, the labels, and branch protection. Every one of them
-# is read back, and the result is posted on the request.
+# Does the two per-repository steps a cloud session cannot, with nobody at a
+# terminal: running `bootstrap` for the labels, and branch protection from the
+# check names the gates actually reported. Both are read back, and the result
+# is posted on the request. Optional: without it, `/new-project` hands the same
+# two steps to the person as one tap and one settings page.
 #
 # Why it exists. None of those steps is inherently manual. Each needs an
 # identity with admin on the new repository, and a session token is a GitHub
 # App installation holding nothing at the account level, so it gets `403
-# Resource not accessible by integration` however it asks. Until this the
-# identity was the person - by hand, or `scripts/setup-project.sh` in a
-# Codespace. Here it is a fine-grained token the person created once, kept in
-# an environment that releases it to a job only after they approve that job.
-# ADR 0003 has the reasoning, and what it costs.
+# Resource not accessible by integration` however it asks. Without this the
+# identity is the person, by hand. Here it is a fine-grained token the person
+# created once, kept in an environment that releases it to a job only after
+# they approve that job. ADR 0003 has the reasoning, and what it costs.
 #
 # How it starts. Either the `provision` label on an issue titled
 # `provision <owner/repo>`, which is what `/new-project` files - a session can
@@ -38,8 +38,7 @@ name: provision
 # environment variable, never interpolated into a script, and only after the
 # request job has checked its shape.
 #
-# Idempotent. Re-running it re-sets the secrets from the environment, which is
-# also how a renewed token reaches a project that already has the old one.
+# Idempotent. Re-running it re-sets or skips what is already done.
 #
 # What it deliberately leaves alone: creating the repository, and writing its
 # files. The first is the person's. The second is `/new-project`'s, because
@@ -234,20 +233,10 @@ jobs:
       - name: The environment holds what this needs
         env:
           PROVISION_TOKEN: ${{ secrets.PROVISION_TOKEN }}
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          AGENT_APP_ID: ${{ secrets.AGENT_APP_ID }}
-          AGENT_APP_PRIVATE_KEY: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          # The OAuth token is not on this list. It is what an agent run in
-          # Actions spends, and a repository whose `.claude/agent-factory.json`
-          # says `runner` is `session` - the template's default - never makes
-          # one, so refusing to provision it for want of a token would make the
-          # one credential that expires the one that blocks everything. When it
-          # is here it is copied like the others; when it is not, the secrets
-          # step says so and carries on.
           missing=""
-          for name in PROVISION_TOKEN AGENT_APP_ID AGENT_APP_PRIVATE_KEY; do
+          for name in PROVISION_TOKEN; do
             [ -n "${!name:-}" ] || missing="$missing \`$name\`"
           done
           if [ -n "$missing" ]; then
@@ -285,140 +274,6 @@ jobs:
             echo "branch=$branch"
             echo "id=$id"
           } >> "$GITHUB_OUTPUT"
-
-      # Off by default on personal-account repositories. With it off every
-      # agent run goes green and silently opens no pull request, and the guard
-      # on the provisioning push fails at startup with no log at all.
-      - name: Actions may create and approve pull requests
-        env:
-          GH_TOKEN: ${{ secrets.PROVISION_TOKEN }}
-        run: |
-          set +e -uo pipefail
-          done_() { printf -- '- [x] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "confirmed: $1"; }
-          todo() { printf -- '- [ ] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "::warning::$1"; }
-
-          gh api -X PUT "repos/$REPO/actions/permissions/workflow" \
-            -f default_workflow_permissions=write \
-            -F can_approve_pull_request_reviews=true >/dev/null
-
-          got="$(gh api "repos/$REPO/actions/permissions/workflow" \
-            --jq '"\(.default_workflow_permissions) \(.can_approve_pull_request_reviews)"' 2>/dev/null || true)"
-          if [ "$got" = "write true" ]; then
-            done_ "Actions has read and write permissions and may create and approve pull requests."
-          else
-            todo "The Actions permission read back as \`${got:-nothing}\`. The token needs Administration: read and write. Or set it by hand: github.com/$REPO/settings/actions"
-          fi
-
-      # Set every time, from the one place they are kept. A project never
-      # holds a value the environment does not, so renewing a token is a
-      # re-run rather than a round of pasting.
-      - name: The three secrets
-        env:
-          GH_TOKEN: ${{ secrets.PROVISION_TOKEN }}
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          AGENT_APP_ID: ${{ secrets.AGENT_APP_ID }}
-          AGENT_APP_PRIVATE_KEY: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
-        run: |
-          set +e -uo pipefail
-          done_() { printf -- '- [x] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "confirmed: $1"; }
-          todo() { printf -- '- [ ] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "::warning::$1"; }
-
-          wanted="AGENT_APP_ID AGENT_APP_PRIVATE_KEY"
-          if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
-            wanted="CLAUDE_CODE_OAUTH_TOKEN $wanted"
-          else
-            done_ "No \`CLAUDE_CODE_OAUTH_TOKEN\` in the environment, so none was set. Agents run in sessions here (the template's \`runner\` is \`session\`); add the secret only if this repository is switched to \`actions\`."
-          fi
-
-          # On stdin rather than --body, so no value is ever an argument.
-          for name in $wanted; do
-            printf '%s' "${!name}" | gh secret set "$name" --repo "$REPO" >/dev/null ||
-              echo "::warning::could not set $name"
-          done
-
-          present="$(gh secret list --repo "$REPO" --json name --jq '.[].name' 2>/dev/null || true)"
-          absent=""
-          for name in $wanted; do
-            printf '%s\n' "$present" | grep -qx "$name" || absent="$absent \`$name\`"
-          done
-
-          if [ -z "$absent" ]; then
-            done_ "Secrets: $(printf '`%s` ' $wanted)"
-          else
-            todo "Secrets missing after setting them:$absent. The token needs Secrets: read and write. Or add them by hand: github.com/$REPO/settings/secrets/actions"
-          fi
-
-      # The App stays installed on selected repositories rather than all of
-      # them, so every new one has to be added. Finding the installation takes
-      # the App's own key; adding a repository to it takes the person, which is
-      # what the environment's token is.
-      - name: Find the agent App's installation
-        id: app-account
-        continue-on-error: true
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.AGENT_APP_ID }}
-          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          permission-metadata: read
-
-      - name: Add the repository to the agent App
-        id: app-add
-        env:
-          GH_TOKEN: ${{ secrets.PROVISION_TOKEN }}
-          INSTALLATION_ID: ${{ steps.app-account.outputs.installation-id }}
-          REPO_ID: ${{ steps.target.outputs.id }}
-        run: |
-          set +e -uo pipefail
-          if [ -z "$INSTALLATION_ID" ]; then
-            echo "result=no-installation" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if gh api -X PUT "/user/installations/$INSTALLATION_ID/repositories/$REPO_ID" >/dev/null; then
-            echo "result=added" >> "$GITHUB_OUTPUT"
-          else
-            echo "result=refused" >> "$GITHUB_OUTPUT"
-          fi
-
-      # The read-back is the exact thing every agent run does first: mint a
-      # token for this one repository. If that works here, it works there.
-      - name: The agent App can act in the repository
-        id: app-here
-        continue-on-error: true
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.AGENT_APP_ID }}
-          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ needs.request.outputs.name }}
-          permission-metadata: read
-
-      - name: Record the App installation
-        env:
-          ADDED: ${{ steps.app-add.outputs.result }}
-          HERE: ${{ steps.app-here.outcome }}
-        run: |
-          set +e -uo pipefail
-          done_() { printf -- '- [x] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "confirmed: $1"; }
-          todo() { printf -- '- [ ] %s\n' "$1" >> "$RUNNER_TEMP/provision-report.md"; echo "::warning::$1"; }
-
-          if [ "$HERE" = "success" ]; then
-            if [ "$ADDED" = "added" ]; then
-              done_ "The agent App is installed on \`$REPO\` and can mint a token for it."
-            else
-              done_ "The agent App can mint a token for \`$REPO\`; it was already covered."
-            fi
-            exit 0
-          fi
-
-          case "$ADDED" in
-            no-installation)
-              todo "The agent App. It is not installed on this account, or \`AGENT_APP_ID\` and \`AGENT_APP_PRIVATE_KEY\` belong to a different App. Install it once, on selected repositories: github.com/settings/installations" ;;
-            refused)
-              todo "The agent App. Adding \`$REPO\` to its installation was refused: the token needs GitHub App installation repository access: read and write. Or add it by hand: github.com/settings/installations, Configure, Repository access." ;;
-            *)
-              todo "The agent App. \`$REPO\` was added to its installation and the App still cannot mint a token for it. Check github.com/settings/installations." ;;
-          esac
 
       - name: Labels, from bootstrap
         id: labels
@@ -529,9 +384,10 @@ jobs:
             gates="$(printf '%s\n' "$runs" | awk -F'\t' 'NF { print $4 }' | sort -u | wc -l)"
             pending="$(printf '%s\n' "$runs" | awk -F'\t' 'NF && $2 != "completed"' | wc -l)"
             if [ "$gates" -ge 2 ] && [ "$pending" -eq 0 ]; then
-              # The guard on the provisioning push fails at startup when it
-              # beat the Actions permission above. That setting is on now, so
-              # one re-run is the fix rather than a retry.
+              # A gate that fails at startup asked for more than its caller
+              # was given. Callers declare their permissions now, so this is a
+              # repository on an older caller or a setting that has since been
+              # fixed by hand - and one re-run is the fix rather than a retry.
               stuck="$(printf '%s\n' "$runs" | awk -F'\t' '$3 == "startup_failure" { print $1 }')"
               if [ -n "$stuck" ] && [ -z "$reran" ]; then
                 reran=yes

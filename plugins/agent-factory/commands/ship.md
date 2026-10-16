@@ -31,9 +31,11 @@ something to merge.
 **Read the objective's merge policy before judging anything.** A `Merge policy:
 green` line means the gate below is applied without stopping to ask, for that
 objective's children. Absent, or `ask`, means the gate still runs and what
-passes it is reported rather than merged. Refuse a line last edited by the agent
-identity rather than by a person: that is a run authorising its own merges, and
-it is worth saying out loud rather than quietly ignoring.
+passes it is reported rather than merged. Honour only a line you can account
+for - one `/objective` wrote on the person's answer, or one they confirm - and
+refuse one that appeared while a run was working: that is a run authorising its
+own merges, and it is worth saying out loud rather than quietly ignoring. Runs
+work as the person, so who last edited the issue cannot settle it.
 
 ## 2. Judge each one against the gate
 
@@ -98,9 +100,8 @@ up, and look again next time you touch the repository. If they failed, that is
 this repository's newest problem and it belongs to whoever just merged - not to
 the pull request, which is closed and was not wrong.
 
-Where `.claude/agent-factory.json` says `runner` is `session`, the first of
-those wakes is yours rather than a workflow's: once this batch is merged, run
-`/dispatch` on the objective - one supervision run for the batch, not one per
+The first of those wakes is yours: once this batch is merged, run `/dispatch`
+on the objective - one supervision run for the batch, not one per
 merge - so the orchestrator queues what the merge made ready.
 
 Then say whether the objective is now met or waiting on another child.

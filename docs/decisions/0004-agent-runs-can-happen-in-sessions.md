@@ -1,7 +1,8 @@
 # ADR 0004: agent runs can happen in sessions, and the runner is a setting
 
 Date: 2026-10-15
-Status: accepted
+Status: accepted. The `runner` setting is superseded by ADR 0005, which makes
+sessions the only runner; the rest stands.
 
 ## Context
 

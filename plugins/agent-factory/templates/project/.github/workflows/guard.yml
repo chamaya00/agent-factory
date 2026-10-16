@@ -31,4 +31,12 @@ on:
 
 jobs:
   guard:
+    # Exactly what the reusable workflow asks for, and nothing more. A new
+    # repository's default token is read-only, and a called workflow that asks
+    # for more than its caller holds never starts - `startup_failure`, no job,
+    # no log - so leaving this to the repository setting meant a person had to
+    # change that setting before the guard could run at all.
+    permissions:
+      contents: read
+      pull-requests: read
     uses: __FACTORY_REPO__/.github/workflows/project-guard.yml@__FACTORY_VERSION__

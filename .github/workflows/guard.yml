@@ -4,19 +4,17 @@ name: guard
 # what it proves. Between them: the manifests still parse, the plugin still
 # describes how we work rather than what any one project contains, prose still
 # agrees with what each role is granted, and the shell this factory ships still
-# does what it claims - the gate still fails what it is supposed to fail, the
-# agent-run preflight still refuses the runs it is supposed to refuse, the
-# hand-back still finds the parent it has to wake, project-guard still stops a
-# privilege change arriving undeclared, and release still refuses a tag that
-# would move or disagree with the manifest.
+# does what it claims - the gate still fails what it is supposed to fail,
+# project-guard still stops a privilege change arriving undeclared and a gate
+# edit arriving from an agent branch, provisioning still refuses what it should,
+# and release still refuses a tag that would move or disagree with the manifest.
 #
 # The second of those is what keeps the toolbox portable a year from now. The
 # shell is where a bug is expensive, which is why the scripts that cover it
 # execute it rather than read it: the gate can let a bad pull request merge in
-# every project, the preflight spends subscription quota, the hand-back can stop
-# an objective with nothing in any log, project-guard can let a widened
-# permission through a merge nobody read, and release changes what every
-# project runs.
+# every project, project-guard can let a widened permission through a merge
+# nobody read, provisioning holds an admin token, and release changes what
+# every project runs.
 #
 # No count of the steps is kept here. This comment once said six while the job
 # ran eight, and validate_plugin.py already fails the build if a script in
@@ -58,12 +56,6 @@ jobs:
 
       - name: The gate fails the runs it is supposed to fail
         run: python scripts/test_ci.py
-
-      - name: Agent-run preflight makes the right decisions
-        run: python scripts/test_preflight.py
-
-      - name: Agent-run hands a finished child back to its parent
-        run: python scripts/test_handback.py
 
       - name: A privilege change cannot arrive undeclared
         run: python scripts/test_project_guard.py

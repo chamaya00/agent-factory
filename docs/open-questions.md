@@ -48,284 +48,95 @@ anything up here:
   one role label each, and a recorded dependency on the sibling objective's
   open framework issue rather than a duplicate of it. 33 turns, $0.63.
 
-The `SDK options:` block near the top of a run log prints the exact
-`allowedTools` array the agent started with, and the `"type": "result"` block
-near the bottom prints turns, cost, denials, and the models actually used.
-Between them they have settled most of the questions that used to be on this
-page.
+Those were runs of the `agent-run` workflow, which ADR 0005 retired. Several
+entries that used to be here were questions about that workflow - its tool
+allowlist, its turn cap, its single pending slot - and were deleted with it:
+the thing each one asked about no longer exists. Runs now start from a session
+through `/dispatch`, and what a run did is in its report and on its issue.
 
 ---
 
-## 1. What are the four permission denials?
+## A failed start should not burn an attempt
 
-Every successful run so far reports `permission_denials_count: 4`. The
-researcher on #4 reported four. The orchestrator on #11 reported four. Nothing
-in either run failed, and the log does not say which tools were refused,
-because the action hides the agent's turns unless `show_full_output` is on.
+**What happened.** Run 33787451101 failed for a configuration reason and was
+labelled `agent:blocked`. The attempt marker counts toward the three-attempt
+cap, so a run that never got to attempt anything consumed a third of the
+issue's budget.
 
-**What the second data point rules out.** This page used to guess the
-researcher was reaching for `gh pr create`, which only the engineer is granted.
-That cannot be the explanation any more: the orchestrator has no `gh pr` grant
-of any kind, does a completely different job with a different allowlist, and
-landed on the same number. Two roles with different grants producing an
-identical count points at something systematic - the action's own harness
-probing a fixed set of tools each run - rather than at either role reaching
-past itself.
+**Where it stands now.** `/dispatch` books a run - label and marker comment -
+before the role starts, on purpose: a booking that survives a dead run is what
+lets the next session hand it back. The same ordering means a session that dies
+before the role does anything still spent the attempt.
 
-**Why it is still worth knowing.** If it is the harness, the number is noise
-and should be written down as noise so nobody investigates it a third time. If
-it is not, then something is being refused in every run regardless of role, and
-that is worth more attention than a per-role slip would have been.
+**Why it was not simply fixed.** The three-strike rule is load-bearing - "three
+failed attempts means the issue was scoped wrong" - and making the dispatcher
+judge *why* a run failed is the kind of cleverness that ends with a system that
+never refuses anything.
 
-**How to answer it.** Re-run any role with `show_full_output: true` and read
-which calls were refused. One run answers it for good.
-
-**What changes.** Either this entry gets deleted and a sentence goes into
-`agent-run.yml` next to the allowlist saying the four denials are expected, or
-the allowlist gains whatever is actually being refused.
+**The shape of a fix, if you want one.** Distinguish "the role ran and did not
+succeed" from "the run never started" - `/dispatch` could strike its own marker
+when the subagent or child session errored before its first tool call. Keep the
+default biased toward counting the attempt.
 
 ---
 
-## 2. `gh` commands, or the GitHub MCP server?
+## No objective has run end to end in sessions
 
-**The situation.** Every role definition names `mcp__github__*` tools. The
-action does not start a GitHub MCP server, so those names do not resolve in a
-run. The fix grants the same capability as scoped `gh` commands instead.
+`researcher` and `orchestrator` were proven under the workflow runner, on runs
+33792437707 and 33843275814. Under sessions, the pieces were checked one at a
+time on 2026-10-15 - a role subagent reaches the GitHub tools, a child session
+reaches GitHub and git, and session pull requests are authored by the owner -
+but no objective has yet gone from `/objective` to merged.
 
-**Why `gh` was chosen.** It uses the CLI and the App token this workflow already
-proves work in three other steps, and it adds nothing to the critical path of a
-plan with a fixed budget. The alternative - a `--mcp-config` pointing at
-`ghcr.io/github/github-mcp-server` - would make the run match the role
-definitions exactly, but it adds a container pull to every run, and the hosted
-server at `api.githubcopilot.com/mcp/` documents PAT and OAuth only, not App
-installation tokens.
+`analyst`, `designer` and `engineer` have not completed a run under either
+runner. The engineer is the one to watch: it is the only role whose output has
+to pass the gate rather than merely exist.
 
-**The cost that turned out not to exist.** This entry used to say `gh` has no
-sub-issue command, so children would link to their parent by body reference
-rather than as real GitHub sub-issues, and that native linking would need
-`gh api graphql` and reopen everything the scoped allowlist closes. Run
-33843275814 disproves that. #12 and #13 both came out of it carrying a real
-`parent_issue_url` pointing at #11, and #13 carries a native `blocked_by` of 2.
-Real hierarchy and real dependencies, from the scoped allowlist as it stands.
-
-**What is genuinely unresolved.** Only the vocabulary argument is left: the
-role definitions name tools that do not exist in a run, and a reader has to
-know that the prompt translates them. That is a real cost, just a much smaller
-one than a missing feature. Closing it means either starting the MCP server or
-rewriting the `tools:` lines to name what a run actually gets - and the second
-breaks the same files' use as interactive subagents, where the MCP names are
-the correct ones.
-
-**What would change the answer.** Wanting one tool vocabulary across the
-interactive and Actions contexts, badly enough to pay a container pull per run.
-Do not reopen it for sub-issues; that part works.
-
-**Since 1.42.0, half of this is moot.** A repository whose runner is `session`
-runs every role as a session subagent or child session, where the
-`mcp__github__*` names the role files carry are the real tools, checked on
-2026-10-15. The translation to `gh` survives only for `runner: actions`, and so
-does this question.
+**How to answer it.** Phase 8, `docs/smoke-test.md`, as it now stands: its
+objectives produce a design document and a published site, so a full pass
+exercises three of the roles rather than one.
 
 ---
 
-## 3. A tooling failure should not burn an attempt
+## Is a pinned model worth its cost for the other four roles?
 
-**What happened.** Run 33787451101 failed for a configuration reason, and the
-`Hand back to a human` step labelled the issue `agent:blocked` on `job.status`
-alone. The attempt marker comment counts toward the three-attempt cap, so a run
-that never got to attempt anything consumed a third of the issue's budget. The
-agent said as much in its own comment and was right.
+**What is settled.** `/dispatch` runs the researcher on `opus` and every other
+role on the dispatching session's own model, and says so in its **Model**
+paragraph.
 
-**Why it was not fixed with the allowlist.** The three-strike rule is a design
-decision, not a bug: "three failed attempts means the issue was scoped wrong" is
-load-bearing, and making the workflow judge *why* a run failed is exactly the
-kind of cleverness that ends with a system that never refuses anything.
+**What is open.** The pin is a bet, argued from the shape of the role - the
+only one whose output is judgment all the way down, and whose failure mode is a
+document that reads fine - and not from two runs anybody compared. The other
+four were left on the default by the same untested reasoning running the other
+way.
 
-**The shape of a fix, if you want one.** Distinguish "the agent ran and did not
-succeed" from "the run never started properly" - a preflight or setup failure
-could remove its own attempt marker rather than leaving it. Keep the default
-biased toward counting the attempt: a rule that is easy to talk your way out of
-is not a rule.
+**How to answer it.** Run one objective twice, with and without a role pinned,
+and read the two sets of artifacts side by side. The orchestrator is the
+cheapest to test, because a decomposition is small; the analyst is the most
+interesting, because its contract is what a later measurement is built on.
 
-**Still live.** #3 carries one spent attempt for a run that never did anything,
-and will hit the cap after two real ones.
-
----
-
-## 4. Some roles have still never run
-
-`researcher` and `orchestrator` are both proven under `v1.4.0`, on runs
-33792437707 and 33843275814 respectively.
-
-`analyst` has not run at all: it was added in `v1.29.0` and no objective has
-yet been split in a way that queues one, so every claim its role file makes
-about what a run produces is untested.
-
-`designer` and `engineer` have not run. The engineer is the one to watch,
-because it is the only role that needs `Bash(npm run:*)` to work and the only
-one whose output has to pass the gate rather than just exist. A role that
-writes files nobody runs is a much easier thing to get right than one that has
-to make `npm run test` green.
-
-Until an engineer run lands a pull request that passes CI, treat the engineer
-step of `docs/smoke-test.md` as untested rather than passing.
-
-**How to answer it.** Both roles run in phase 8 as it now stands: the objectives
-there produce a design document and a published site, so a full pass exercises
-three of the four roles rather than one. That is deliberate - a runbook that
-only ever ran the orchestrator was not testing the loop, it was testing the
-first step of it.
+**What changes.** Another role joins the researcher in that paragraph with a
+line saying what the comparison showed, or this entry is deleted and the
+paragraph says the default was tested and kept.
 
 ---
 
-## 5. Is 40 turns enough for the engineer?
-
-**What is known.** The cap was raised from 15 to 40 in `v1.4.0` because 15 was
-below the floor. Both roles that have run since finished close to the new cap:
-the researcher took 35, the orchestrator took 33. Neither writes code, runs a
-test, or reacts to a failing check.
-
-**Why that is uncomfortable.** The engineer does all three, and a run that hits
-`--max-turns` fails the whole job even if the work itself was finished - which
-then labels the issue `agent:blocked` and spends one of its three attempts on
-something that was not a scoping problem at all. That is question 3 arriving by
-a second route.
-
-**How to answer it.** Run the engineer on the smallest child of phase 8's first
-objective and read `num_turns` in the result block. `docs/smoke-test.md` asks
-for that number in its report, and asks for the smallest child to be queued
-first for exactly this reason: the answer is wanted before a larger child spends
-an attempt discovering it.
-
-**What has been measured since.** One project raised its own caller to 160
-after design runs with rendered mocks took 139 turns. Its engineer children
-building screens then ended `error_max_turns` at 161 five times across three
-issues, usually with one or two criteria landed. Raised again to 300 turns and
-90 minutes, every engineer child after it finished in one attempt. That is one
-project, and its children carried render matrices; it is evidence for the
-template's 80 being low for UI work, not yet a number to ship to everyone.
-
-**What changes.** If it lands near 40, raise the cap in the template and in
-`agent-run.yml`'s default. Do not raise it pre-emptively: the cap exists
-because a Pro subscription is a fixed budget, and a cap nobody has hit is not
-evidence of anything.
-
----
-
-## 6. Is a pinned model worth its cost for the other four roles?
-
-**What is settled.** A run resolves its model per role, in the `Resolve the
-model for this role` step of `agent-run.yml`, beside the allowlist for the same
-role. The researcher is pinned to Opus there; the other four take the action's
-default, which is a choice rather than an omission. The caller's `model` input
-still overrides all of it for a whole repository.
-
-That replaces the arrangement this entry used to describe, where the roles
-carried a `model: opus` line that did nothing in an Actions run and the caller's
-input was never set by anything. The reasoning for the researcher's pin is in
-the comment on that step, at the length it deserves.
-
-**What is still open, and it is the same measurement.** The pin is a bet. It was
-argued from the shape of the role - the only one whose output is judgement all
-the way down, and the only one whose failure mode is a document that reads fine
-- and not from two runs anybody compared. The other four were left on the
-default by the same untested reasoning running the other way.
-
-**How to answer it.** Run one objective twice, once with the caller's `model`
-input set and once without, and read the two sets of artifacts side by side. The
-orchestrator is the cheapest role to test this on, because a decomposition is
-small, and the analyst is the most interesting, because its contract is the
-thing a later measurement is built on and a weak one fails silently in exactly
-the way the researcher's does.
-
-**What changes.** Either another role joins the researcher in the case block
-with its own comment saying what the comparison showed, or this entry is
-deleted and a line goes into that step saying the default was tested and kept.
-Do not widen the pin without the comparison: "judgement matters here too" is an
-argument that fits every role, which is why it cannot be the reason for any of
-them.
-
----
-
-## 7. One pending run, and a wave of two loses one
-
-**What is known.** A concurrency group holds exactly one pending entry, and a
-third arrival cancels the one already waiting. `agent-run.yml` puts that group
-on the agent job, so preflight always runs and only real runs contend - but two
-*real* runs still contend, and the older pending one is cancelled while pending,
-having executed no step. The issue keeps `agent:queued` and nothing runs it,
-with nothing in any log to say so.
-
-**What was done about it.** The orchestrator queues exactly one child at a time,
-which removes the only automated source of a two-at-once wave. That is a
-convention in the role definition, not a mechanism: a human labelling two issues
-`agent:queued` in the same minute still loses one, and so would any future caller
-that queues a wave.
-
-**Why it was left.** Fixing it properly means either giving up the repo-wide
-one-at-a-time guarantee that protects a fixed subscription, or adding a retry for
-the queued-but-idle state - a second path through the one place in this system
-where a bug spends the subscription. Neither is obviously right, and the
-automated path that used to hit this no longer does.
-
-**How to answer it.** Label two ready issues `agent:queued` within a few seconds
-and watch whether both run. That confirms the shape; the decision after it is a
-judgement, not an observation.
-
-**Since 1.42.0, this is an Actions-only question.** Under `runner: session` there
-is no concurrency group and no pending slot: `/dispatch` starts one run at a time
-and a queued label waits, visibly, for the next session to read it. The loss
-described here cannot happen there; the one-at-a-time rule stays, for the
-subscription's sake rather than the queue's.
-
-**What was done about it, and what is left.** The second option, halfway. A
-`stale-queue` job now ticks on a schedule and comments on any issue carrying the
-run label with nothing running it. It does not re-raise anything: re-queueing
-from a watchdog is a second path into the one place where a bug spends the
-subscription, and that risk has not changed. So the loss is no longer silent,
-which was the part that made it dangerous, and recovery is still a human
-removing and re-adding a label.
-
-**What happened since (1.39.0).** It fired, from a source this entry did not
-count. A project drove four objectives from one session, and the orchestrator
-run a merge wakes is itself a pending run: it cancelled queued children twice
-in one evening, and a third child was displaced twice before it started. The
-driver now treats the repository as one queue slot across every objective and
-checks after each merge that nothing it queued was displaced - the
-`driving-an-objective` skill carries that - but it is still a convention.
-
-What is genuinely still open is whether that is enough. If the report turns out
-to fire often, the answer is to loosen the group - per-issue rather than
-per-repo, with the budget protected some other way - rather than to let a
-watchdog start spending. If it never fires, this entry can go.
-
----
-
-## 8. Do `app-render` and `contrast` work inside a run?
+## Do `app-render` and `contrast` work inside a run?
 
 **What is known.** Both ship in the project template, both are named in the
 role files, and both were exercised by hand before they shipped: `contrast`
 against six known pairs including the WCAG boundary cases, `app-render` against
-a built page whose stylesheet and script load from root-absolute paths - the
-exact case that made `design-render` useless for a built page, photographed
-correctly over a served origin and incorrectly over `file://`.
+a built page whose stylesheet and script load from root-absolute paths -
+photographed correctly over a served origin and incorrectly over `file://`.
 
-**What is not known.** Whether a role can run them. Nothing in this repository
-runs an agent, so the allowlist entry that grants them - `Bash(./scripts/*)`,
-which both roles already held - has never been exercised against these two
-names, and `app-render` additionally runs whatever `BUILD_CMD` a project puts
-in it. That inner command is checked against the role's allowlist rather than
-the script's grant, and a project that fills it in with something no role may
-run has a script that works by hand and refuses in a run. The script's own
-header says so; nothing enforces it.
+**What is not known.** Whether they work in the container a session's role runs
+in. `app-render` needs a headless browser and a static server the image is asked
+for rather than given, and runs whatever `BUILD_CMD` a project puts in it.
 
-**How to answer it.** Provision or update a repository, fill in `BUILD_CMD` and
+**How to answer it.** Set up a repository, fill in `BUILD_CMD` and
 `SERVE_DIR`, and give the designer a visual issue. One run answers both: the
-pull request either carries pictures of the built page or names the refusal.
+pull request either carries pictures of the built page or names what refused.
 
 **What changes.** Either this entry is deleted and the fact goes into the
-smoke-test runbook as a step that has been seen to pass, or the allowlist gains
-whatever the inner build command needs and the script's header stops being the
-only thing saying so.
-
----
+smoke-test runbook as a step seen to pass, or the scripts' headers say what a
+session's container lacks and how a project supplies it.

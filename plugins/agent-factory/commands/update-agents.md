@@ -1,7 +1,7 @@
 ---
 description: Bring this repository's copy of the shared roles, skills, and workflow pins up to a factory release, as one reviewable pull request.
 argument-hint: "[version]"
-allowed-tools: Bash, Read, Write, Edit, Glob, Grep, mcp__github__get_file_contents, mcp__github__create_branch, mcp__github__push_files, mcp__github__create_pull_request, mcp__github__list_branches
+allowed-tools: Bash, Read, Write, Edit, Glob, Grep, mcp__github__get_file_contents, mcp__github__create_branch, mcp__github__push_files, mcp__github__delete_file, mcp__github__create_pull_request, mcp__github__list_branches
 ---
 
 Update this repository to a factory release. Nothing here happens on a
@@ -14,7 +14,7 @@ Work out which factory this repository is on before anything else, because
 every read below is against it. `.claude/agent-factory.json` records the
 release this repository took; the `uses:` lines in `.github/workflows/*.yml`
 name the factory itself, as `<owner>/<repo>` before `/.github/workflows/`. All
-four callers must agree - if they do not, stop and say so, because a repository
+the callers must agree - if they do not, stop and say so, because a repository
 half-pointed at two factories is a repository where half its gates come from
 somewhere nobody here chose. Call that `owner/repo` the factory repository, and
 never assume it is any particular account: this command ships to forks, and a
@@ -117,6 +117,23 @@ two halves differently:
   deliberate. Adopting the template's name is a separate, human-sequenced
   change: rename the job and re-point protection in one sitting, once.
 
+- **A job's `permissions:` block is the factory's too.** It declares exactly
+  what the reusable workflow asks for, because a repository's default token is
+  read-only and a called workflow that asks for more than its caller holds never
+  starts. Bring it to the template's shape, and name it under the body's
+  `Privilege change:` line: it widens nothing the workflow did not already ask
+  for, but `project-guard` reads any `permissions:` line as a widening, and it
+  is right to make a person read it.
+- **A caller the release no longer ships is deleted.** `agent-run.yml` is the
+  one: agents run from sessions, through `/dispatch`, and the workflow it called
+  is gone from the factory. Left behind, it keeps its old pin and keeps firing
+  on every queue label, starting runs that fail on a token nothing should hold
+  any more and spending an attempt each time. Delete it, and say in the body
+  that the `CLAUDE_CODE_OAUTH_TOKEN`, `AGENT_APP_ID`, and
+  `AGENT_APP_PRIVATE_KEY` secrets are no longer read and can be deleted from
+  the repository's settings - a person's step, since a session cannot touch
+  secrets.
+
 Never rewrite a caller wholesale from the template. It reads as tidying and it
 deletes the one thing in that file nobody else can reconstruct.
 
@@ -129,7 +146,7 @@ If nothing at all differs, say so and stop.
 
 ## 3. Propose it
 
-One branch, one commit, one pull request:
+One branch, one pull request:
 
 - `mcp__github__create_branch` from the default branch, named
   `update-agents/<version>` - not `claude/...`. This pull request changes the
@@ -137,6 +154,8 @@ One branch, one commit, one pull request:
   `project-guard` refuses from an agent branch; a session opens it as the
   person, and the branch name is what tells the guard this one is theirs.
 - `mcp__github__push_files` with every changed file in a single commit
+- `mcp__github__delete_file` on the same branch for each file the release no
+  longer ships, one commit each, because `push_files` cannot delete
 - `mcp__github__create_pull_request`
 
 What goes in the commit:
@@ -145,9 +164,10 @@ What goes in the commit:
   edit them on the way through. A local edit makes this repository quietly
   disagree with every other one, and the next run of this command overwrites it
   anyway.
-- All four workflow callers moved to the target version together. The roles,
-  the workflows around them, and the commands that maintain them are one
-  release; taking half of it is how they drift apart.
+- Every workflow caller moved to the target version together, and any the
+  release no longer ships deleted. The roles, the workflows around them, and
+  the commands that maintain them are one release; taking half of it is how
+  they drift apart.
 - `.claude/agent-factory.json` with the new version, the role, skill, and
   command lists refreshed to what was actually written, and `labels` copied
   from the release's own manifest. That last one is read at run time rather
@@ -155,16 +175,9 @@ What goes in the commit:
   labels the repository really has, so a stale copy is a hook reporting the
   wrong thing rather than one reporting nothing.
 
-  `runner` is the repository's, not the release's: keep the value it has. A
-  manifest with no `runner` predates the field and has been running its agents
-  in Actions, so write `"runner": "actions"` - unless the person asked to move
-  to sessions, in which case write `"session"` and say in the body what that
-  changes: the agent-run workflow stands down, sessions start the runs through
-  `/dispatch`, work moves only while a session is open unless a self-driving
-  stretch is keeping one going, and the `CLAUDE_CODE_OAUTH_TOKEN` secret is no
-  longer read.
-  Never flip it on your own reading of what would be better. Which runner
-  spends the subscription is the person's call.
+  Drop a `runner` field if the manifest has one. It chose between running
+  agents from sessions and from a workflow, and since 1.43.0 there is only the
+  first.
 
 Leave alone, always:
 

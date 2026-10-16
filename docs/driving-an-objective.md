@@ -529,7 +529,8 @@ session's scrollback.
 **More than one objective at once** is mechanical: the repository has one queue
 slot, not one per objective, so the driver sequences children across all of
 them and checks after each merge that nothing it queued was cancelled (open
-question 7 has the evidence).
+the workflow runner's single pending slot was the evidence, and ADR 0005 retired
+that runner).
 
 **Self-driving** is a delegation with edges, and it is not about the time of
 day: overnight is one case, a working day spent elsewhere or a hefty objective
@@ -576,3 +577,18 @@ author to tell the automation's work from theirs, and that is a tripwire rather
 than a wall. And dispatching spends the subscription from inside the
 conversation, so a driver says how many runs it started, in the same breath as
 what they produced.
+
+## Addendum: sessions are the only runner (1.43.0)
+
+ADR 0005 retires the workflow runner the 1.42.0 addendum kept as an option, and
+with it the agent identity App. Two passages above were written against that
+App and read differently now. The boundary on who may write a `Merge policy:`
+line was drawn at the App - a line last edited by it was refused - and every run
+now works as the person, so the edit history cannot draw it. The `house-rules`
+skill says what holds the line instead: every role and every `/dispatch` brief
+forbids writing one, and a driver honours only a line it can account for - one
+`/objective` wrote on the person's answer, or one they confirm.
+
+Nothing else here changes. The driver was already the runner under `session`;
+it is now the runner everywhere.
+

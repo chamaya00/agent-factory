@@ -1,6 +1,33 @@
 # agent-factory
 
-A reusable toolbox that turns high-level objectives into working code across projects.
+Sets a GitHub repository up so a team of AI agents can turn objectives into
+merged, tested code. You describe what you want in a Claude Code session - from
+a phone if you like - and the session runs an orchestrator and four specialist
+roles, reviews what they deliver against the repository's own checks, and
+merges what passes or brings it to you.
+
+No API key, token, secret, or GitHub App of your own: a session works as you.
+
+## Get started
+
+You need a Claude plan with Claude Code and GitHub connected to Claude. Then,
+for a public repository with at least one commit, start a Claude Code session
+on it and send:
+
+> Set this repository up with the agent factory: clone
+> https://github.com/chamaya00/agent-factory at its latest release and follow
+> plugins/agent-factory/commands/new-project.md from that clone, for this
+> repository.
+
+It writes everything itself and hands back two small steps - one tap to run
+`bootstrap`, and one settings page for branch protection. Then type
+`obj <what you want>` to start the first piece of work.
+
+[`docs/getting-started.md`](docs/getting-started.md) has the whole of it,
+including setting up from a fork of this repository and moving a project off an
+older release.
+
+## How it is built
 
 Three separable layers, and the separation is the point:
 
@@ -43,12 +70,12 @@ Everything except the two manifests sits at the plugin root, not inside `.claude
 
 Roughly in the order a project meets them, so `/objective` - where every piece of work starts, and what `/new-project`'s closing report tells the person to type next - comes straight after provisioning. `/new-project` is the one that stays in the factory; the rest are copied into every project it provisions, and that is where they run.
 
-- `/new-project <owner/repo>` - provisions a fresh repo: caller workflows, `CLAUDE.md`, memory files, its own copy of the roles, skills, and commands, and the labels. The steps a session cannot perform go to one approved provisioning run where the factory has that set up, and are handed to a human in place otherwise, never faked - see below.
+- `/new-project <owner/repo>` - sets a repository up: caller workflows, `CLAUDE.md`, memory files, its own copy of the roles, skills, and commands, and the labels. Runs from a session on the factory, or from a session on the repository itself with the factory cloned. The two steps a session cannot perform - running `bootstrap` and branch protection - are handed to the person with links, never faked.
 - `/objective <rough idea>` - the one command that starts a piece of work. Refines the idea with the person, drafts the objective, asks its merge policy once, files and queues it on a yes, and then drives it.
 - `/check-in [objective]` - runs the driving posture now, the same way whether a person typed it, a scheduled wake fired it, or a pull request's activity woke the session: what is waiting on the person first, then the state of every child, then the merge policy applied to whatever is waiting. With no objective named, takes every open one.
 - `/ship [objective]` - the explicit form of "merge when green". Judges each pull request the objective is waiting on against the house rules' merge gate, merges what passes where the merge policy is `green` and reports it where it is not, and says on the pull request why for any that fail.
 - `/self-driving [objectives] [until ...]` - starts a long autonomous run, day or night: one round of questions, then the session drives the named objectives to done on delegated judgment, logging every call it makes on the person's behalf, until they close, the stated end arrives, or the person says stop. Asking for the same thing in plain words starts it too, and a stretch meant to outlast the session schedules fresh sessions to carry it on.
-- `/dispatch <issue>` - runs one role on one issue from the session, in a repository whose `.claude/agent-factory.json` says `"runner": "session"`: the same checks, budgets, labels, brief, and hand-back the agent-run workflow performs, with no subscription token stored anywhere. In this session as a subagent by default; in a child session when the driver judges a run worth one. `/check-in` calls it for whatever is queued.
+- `/dispatch <issue>` - how every agent run starts: checks the issue may run, books the run on it against the attempt budget, runs the role with a fixed brief, and hands the result back. In this session as a subagent by default; in a child session when the driver judges a run worth one. `/check-in` calls it for whatever is queued.
 - `/decompose <issue>` - runs the orchestrator on one issue by hand.
 - `/retro` - proposes memory updates for the current repo as a pull request.
 - `/update-agents [version]` - brings one repo's copy of the roles, skills, and workflow pins up to a release, as one reviewable pull request. Nothing else moves.
@@ -60,7 +87,7 @@ for example `@v1.1.0`.
 
 The pin is the contract. A merge here reaches no project on its own, ever. A
 project moves when somebody runs `/update-agents` there and merges the pull
-request it opens, which bumps the four pins and refreshes the vendored roles
+request it opens, which bumps the pins and refreshes the vendored roles
 together. Repositories you never run it in stay where they are indefinitely.
 
 Release tags are immutable - `release.yml` refuses one that already exists.
@@ -69,9 +96,9 @@ Release tags are immutable - `release.yml` refuses one that already exists.
 | Workflow | Called as | What it does |
 |---|---|---|
 | `ci.yml` | `workflow_call` | the gate. No model involved. Runs `package.json` scripts by default, or the caller's own shell commands when it passes `commands`, which is how a non-Node project gets a gate. |
-| `agent-run.yml` | `workflow_call` | one agent run: repo-wide concurrency, queued not cancelled, capped turns and minutes, refuses a fourth attempt on the same issue. Stands down in a repository whose runner is `session`, where `/dispatch` does the same job from a session and no OAuth token is needed. |
 | `project-guard.yml` | `workflow_call` | in each project: memory files stay inside the 40-line cap, and nobody but a maintainer edits the files that gate the repo - with a pull request from an agent branch (`claude/*`) checked whoever opened it, because a session-run role opens its pull requests as the person. |
 | `bootstrap.yml` | `workflow_call` | run once per project, by hand: creates the labels the loop runs on, and reports the check names branch protection needs. |
+| `provision.yml` | this repo only, optional | for an owner setting up many repositories: one approved run starts `bootstrap` and sets branch protection. See `docs/checkpoint.md`. |
 | `guard.yml` | this repo only | the checks below. |
 | `release.yml` | this repo only, by hand | cuts an immutable release tag on the tip of `main`, named by the plugin manifest, once the checks pass on it. |
 
@@ -124,11 +151,10 @@ gate ran eight. A glob cannot fall behind.
 Most of the `test_` scripts execute a workflow's own shell rather than reading
 it: each lifts a `run:` block straight out of the YAML and runs it, so a test
 cannot drift from what ships. That is spent where a bug is expensive and quiet.
-`ci` decides what may merge in every project; the agent-run preflight spends
-subscription quota; the hand-back decides whether a finished child wakes its
-parent or the objective stops with nothing in any log to say so;
-`project-guard` decides whether a widened permission can arrive without the
-pull request saying so; and `release` decides what a project can pin to. `ci`
+`ci` decides what may merge in every project; `project-guard` decides whether
+a widened permission or a gate edit can arrive without the pull request saying
+so; `provision` holds an admin token; and `release` decides what a project can
+pin to. `ci`
 is the worst of them to get wrong - a gate that fails a good pull request is
 noticed within the minute, and one that passes a bad one is not noticed at all.
 
@@ -162,40 +188,23 @@ session that says it moved the tag did not.
 
 ## What a session cannot do for you
 
-A cloud session reaches this account's repositories through a GitHub App
-installed on the ones it was granted. That is the shape of the limit: it can
-act inside those repositories, and it holds nothing at the account level and
-nothing over their settings. Both refusals read `403 Resource not accessible by
-integration`, which names no permission and suggests no fix, so the list below
-is worth more than the error message.
+A session reaches GitHub through the Claude GitHub App installed on the
+repositories it was granted. It can act inside those, and it holds nothing at
+the account level and nothing over their settings, so three things in setting
+up a repository are the person's, and `/new-project` hands each back with a
+link rather than pretending:
 
-Where the factory has provisioning set up - `docs/checkpoint.md` step 7 - one
-run of `provision.yml`, started by an issue `/new-project` files and approved
-by the person with one tap, does every step below except creating the
-repository, reads each one back, and comments the result. ADR 0003 records the
-trade: the factory holds a token with admin over the person's repositories,
-bounded by that approval. Without it, `/new-project` hands each of these over
-in place rather than pretending:
+- **Creating the repository.** Public, with a README, from `github.com/new`.
+- **Running `bootstrap` once,** which creates the labels. Starting a workflow
+  usually needs a permission the session's installation lacks; reading the run
+  does not, so the session still reads the check names out of it itself.
+- **Branch protection.** Setting it needs an administration token, and an
+  identity that can set a gate can remove one.
 
-- **Creating the repository.** An account-level permission no installation
-  carries. Public, with a README, from `github.com/new`.
-- **Allow Actions to create and approve pull requests.** Off by default on
-  personal accounts. With it off, every agent run appears to work and no pull
-  request ever appears.
-- **Running `bootstrap`, which creates the labels.** Starting a workflow needs
-  `actions: write`, which the installation a session runs as usually lacks, so
-  the dispatch is tried once and then handed over. Reading the run is not
-  refused, so the session still reads the check names out of its summary
-  itself. Where the repository already had work in it, the files arrive as a
-  pull request and that merge comes first: `workflow_dispatch` only sees
-  workflows already on the default branch.
-- **Branch protection.** Setting it needs an administration token, and a
-  session holds none on purpose: an identity that can set a gate can remove
-  one. The provisioning run holds one only behind the person's approval.
-
-Without the provisioning run, the secrets and the agent identity App are the
-person's too. `/new-project` closes with them as links, and
-`docs/checkpoint.md` walks through both.
+An owner who sets up many repositories can hand the last two to one approved
+run of `provision.yml` - `docs/checkpoint.md` has the setup, and ADR 0003 the
+trade. Both refusals read `403 Resource not accessible by integration`, which
+names no permission and suggests no fix, which is why this list exists.
 
 ## How the commands get loaded
 
@@ -207,15 +216,14 @@ The cost of copying is drift, so `scripts/validate_plugin.py` fails the build if
 
 ## Standing up a project
 
-In order, and the order is the point:
+1. [`docs/getting-started.md`](docs/getting-started.md) - setting a repository up and using it. The whole of it, for anybody.
+2. `docs/checkpoint.md` - what only the factory's owner does: cutting a release after a version bump, cleaning up what older releases needed, and two optional conveniences.
+3. `docs/proving-the-gate.md` - prove a red check blocks a merge, by hand, on a throwaway repo, before trusting agents with it.
+4. `docs/smoke-test.md` - two objectives through the whole loop, building a site the repository publishes so the result is judged by opening a URL rather than by reading a diff.
 
-1. `docs/checkpoint.md` - the things only a human can do: the subscription token, the secrets, the agent identity App, the plugin install, publishing for the project repo, and step 7 - the provisioning workflow that turns the per-repository part of all that into one approval. Written for an iPhone, since that is the only device involved.
-2. `docs/proving-the-gate.md` - prove a red check blocks a merge, by hand, on a throwaway repo, before any agent is pointed at it. An agent aimed at a gate you do not trust produces work you have to read line by line, which is the thing the system exists to avoid.
-3. `docs/smoke-test.md` - two objectives through the whole loop, building a site the repository publishes so the result is judged by opening a URL rather than by reading a diff. What to watch for at each step, and the eight failure modes worth recognising on sight.
+`docs/what-is-checked.md` is the answer to "how do we know any of this works": every script `guard.yml` runs and what each one asserts, the gates a project receives, what `/dispatch` refuses, and the parts nothing verifies yet.
 
-`docs/what-is-checked.md` is the answer to "how do we know any of this works": every script `guard.yml` runs and what each one asserts, the gates a project receives, the preconditions a run refuses on, and the parts nothing verifies yet. It is the page to read before trusting a layer, and the one to update when a check is added.
-
-`docs/open-questions.md` is the register of assumptions this system runs on that have not been tested yet, each with how to settle it and what changes once you do. Read it before trusting a part of the loop nothing has exercised, and delete an entry once its answer lives in the code.
+`docs/open-questions.md` is the register of assumptions this system runs on that have not been tested yet, each with how to settle it and what changes once you do.
 
 ## The documentation site
 
