@@ -176,9 +176,9 @@ When the subagent returns, the child session reports, or it is found dead:
   the brief; read it and carry on driving from it. If it queued a child, that
   child is the next thing to dispatch.
 - **Any other role:** find its pull request, from a branch named
-  `claude/issue-<n>-*`. Open and not a draft: add `agent:review`. Anything else
-  - still a draft, no pull request, no branch, a run that errored or died - add
-  `agent:blocked`, with a comment starting `<!-- agent-factory:diagnosis -->`
+  `claude/issue-<n>-*`. Open and not a draft: add `agent:review`. Anything
+  else (still a draft, no pull request, no branch, a run that errored or died):
+  add `agent:blocked`, with a comment starting `<!-- agent-factory:diagnosis -->`
   that says what was pushed and where it got to (each branch, and its pull
   request or **no pull request**), how the run ended in its own words or the
   error that ended it, and what you checked rather than what you assume.
@@ -190,15 +190,14 @@ When the subagent returns, the child session reports, or it is found dead:
 - **Wake the parent.** A child's parent is its native parent issue, or the
   `Parent: #<n>` line at the top of its body. If that parent is an objective
   and carries none of `agent:blocked`, `needs-decomposition`, or
-  `agent:running`, run this command on it next. That supervision run is what
-  the label used to trigger, and it is how the next child gets queued.
+  `agent:running`, run this command on it next. That supervision run is how
+  the next child gets queued.
 
 ## After a merge
 
 A merge is what makes the next child ready, so it is a wake too, and it is
-yours: after you merge a child, or when
-a check-in finds one merged after the parent's newest supervision marker, run
-this command on the parent. One supervision run covers any number of merges
+yours: after you merge a child, or when a check-in finds one merged after the
+parent's newest supervision marker, run this command on the parent. One supervision run covers any number of merges
 before it, so check for `agent:running` and for a supervision marker newer than
 the merge before starting another.
 

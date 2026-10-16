@@ -105,8 +105,8 @@ Where the files land depends on what is already in the repository. Decide that
 before you write anything.
 
 **A fresh repository** - nothing in it but the README from step 1, or nothing
-at all. Push every file in a single commit straight to the default branch with
-`mcp__github__push_files`. No branch, no pull request.
+at all. Push every file in a single commit straight to the default branch. No
+branch, no pull request.
 
 There is nothing to review against on an empty repository. The diff is the
 whole tree, the alternative to merging it is a repository that does nothing,
@@ -119,10 +119,9 @@ not set until step 4, so this is not routing around a gate - it is arriving
 before there is one.
 
 **A repository with anything else in it** - existing code, existing workflows,
-a second provisioning attempt. One branch, one pull request:
-`mcp__github__create_branch`, then `mcp__github__push_files` onto that branch,
-then `mcp__github__create_pull_request`. Name the branch `provision/<version>`,
-not `claude/...`: these files are the gates themselves, and where a
+a second provisioning attempt. One branch, one pull request: push the commit to
+a branch named `provision/<version>`, then `mcp__github__create_pull_request`.
+Not `claude/...`: these files are the gates themselves, and where a
 `project-guard` caller is already in place it refuses them from an agent
 branch whoever opened it. Here the diff is a real question.
 These files land next to work somebody already did, and `ci.yml` in particular
@@ -143,8 +142,9 @@ execute bit: the hook is wired and silent, the three scripts are present and
 refuse, and the first thing to notice is `ci.yml`'s own placeholder gate, which
 checks `test -x scripts/...` and so fails the first run on a repository that
 was otherwise provisioned perfectly. Clone the target, write the files,
-`chmod +x` the hook and the three scripts, commit, push. The API tools are
-still right for reading the tree and for everything in steps 4 and 5.
+`chmod +x` the hook and the three scripts, commit, push. When this session is
+on the repository being set up, its own working tree is that clone. The API
+tools are still right for reading the tree and for everything in steps 3 and 4.
 
 Everything you copy below comes out of the factory checkout from **Where the
 factory comes from**: its `plugins/agent-factory/` directory is the factory
@@ -160,8 +160,8 @@ A placeholder that survives into the repository fails as an invalid workflow
 reference on the first run, which is loud and easy to fix.
 
 The owner is read rather than typed because this command runs from forks too,
-and a fork's projects have to call the fork. A hardcoded account here would provision
-repositories that run somebody else's workflows: every check green, every run
+and a fork's projects have to call the fork. A hardcoded account here would
+provision repositories that run somebody else's workflows: every check green, every run
 succeeding, none of it the code anybody here can edit. That is silent rather
 than loud, so it is the one worth being careful about.
 `docs/decisions/0001-factory-repo-is-declared-in-the-manifest.md` in the factory
