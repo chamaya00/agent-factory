@@ -156,8 +156,8 @@ with no attention left, and the diff is the part only you can do.
    acceptance criteria as written, and the part of the design, research, or
    measurement document the diff claims to implement. Reach here when a
    criterion reads as satisfied and you cannot see what satisfied it.
-3. **Rarely, and say why: the run log.** Three cases earn it - a run that ended
-   on its turn cap, a child blocked twice, and a claim you cannot settle from
+3. **Rarely, and say why: the run log.** Three cases earn it - a run that was
+   cut off before it finished, a child blocked twice, and a claim you cannot settle from
    the artifacts. A run log is long, mostly process, and written for nobody.
 
 The reciprocal rule belongs to the orchestrator and lives in the `briefing`
@@ -236,35 +236,25 @@ from one that was never raised.
 
 ## Where the runs happen
 
-`.claude/agent-factory.json` names the runner, and it decides one thing: who
-starts a run.
+Nothing starts an agent run but a session, and in practice that is you.
+`/dispatch` is how: it checks the issue may run, books the run on it, starts the
+role with a fixed brief, and hands the result back. So a queued child you have
+not dispatched is not waiting on a run; it is waiting on you. `/check-in`
+dispatches what is queued, and a self-driving stretch keeps a scheduled session
+doing it while nobody has one open.
 
-- **`actions`.** A label starts the agent-run workflow, which books the run,
-  runs the role, and hands it back. You queue and you read; you never start a
-  role yourself.
-- **`session`.** Nothing starts a run but a session, and in practice that is
-  you. `/dispatch` does what the workflow did - the same checks, budgets,
-  labels, marker comments, and brief - and the workflow reads the line and
-  stands down. So a queued child you have not dispatched is not waiting on a
-  run; it is waiting on you. `/check-in` dispatches what is queued, and a
-  self-driving stretch keeps a scheduled session doing it while nobody has one
-  open.
+Where each run happens is yours too. A subagent in this session is the default;
+a child session is worth it only when this session has to stay free, the run
+would crowd it out, or the person wants to watch the run themselves.
+`/dispatch` has the whole test. Decide it run by run and say why on the issue,
+rather than asking the person to pick.
 
-Under `session`, where each run happens is also yours. A subagent in this
-session is the default; a child session is worth it only when this session has
-to stay free, the run would crowd it out, or the person wants to watch the run
-themselves. `/dispatch` has the whole test. Decide it run by run and say why on
-the issue, rather than asking the person to pick.
-
-Two things change under `session` that are easy to miss. A role opens its pull
-request as the person, because there is no agent identity, so who opened a pull
-request says nothing about who wrote it: a role's work is the work on
-`claude/issue-<n>-*`, and that branch is what `project-guard` reads. And
-dispatching is spending. Every run is the subscription; a check-in that started
-five should say so, and the marker comments are where the person sees each one.
-
-Never change the runner yourself. Which runner spends the subscription is the
-person's call, made in a reviewed pull request.
+Two things are easy to miss. A role opens its pull request as the person,
+because there is no separate agent identity, so who opened a pull request says
+nothing about who wrote it: a role's work is the work on `claude/issue-<n>-*`,
+and that branch is what `project-guard` reads. And dispatching is spending.
+Every run is the subscription; a check-in that started five should say so, and
+the marker comments are where the person sees each one.
 
 ## How to wake
 
@@ -288,7 +278,7 @@ reminder.
   then it should wake a session that re-reads the objective's actual state
   rather than trusting the reminder's own text. Say plainly that a timer is
   standing in for a person, per **Promise a watch it cannot keep**.
-- **Waiting on a queued run, where the runner is `session`.** Nothing will
+- **Waiting on a queued run.** Nothing will
   start it but a session, so this is not a wait at all: dispatch it. What
   covers the hours nobody has a session open is a self-driving stretch's
   scheduled session, which reads the repository's state fresh each time rather
@@ -296,38 +286,22 @@ reminder.
   Without one, a queued run waits for the next session they open; say so when
   you report, so a quiet repository is not mistaken for a busy one.
 - **Waiting on runs during a self-driving stretch.** The other legitimate case,
-  and the one **Self-driving** covers: a run that ends on its turn cap, blocks,
+  and the one **Self-driving** covers: a run that is cut off, blocks,
   or never starts raises no pull request event, so subscriptions alone cannot
   see the failures a long autonomous stretch is most likely to hide.
 
 ## More than one objective at once
 
-One session can drive several objectives. The posture does not change; three
+One session can drive several objectives. The posture does not change; two
 mechanics do.
 
-- **The repository has one queue slot, not one per objective.** The agent-run
-  workflow holds a single pending job per repository, and a newer pending job
-  cancels the one already waiting - including the orchestrator run a merge
-  wakes. Queue two children at once, or queue one just before a merge, and one
-  of them is cancelled with nothing said. So queue one child at a time across
-  every objective, see it start before queueing the next, and after each merge
-  check that nothing queued was displaced. Removing and re-adding the queue
-  label re-raises the event; that is the handle when one was. Where the runner
-  is `session` there is no slot to lose a run from, and the rule holds for a
-  different reason: dispatch one run at a time, because the subscription is one
+- **One run at a time, across every objective.** The subscription is one
   budget, and two children running at once can both build on a dependency
-  neither has merged.
+  neither has merged. Dispatch one, read what came back, then the next.
 - **The order across objectives is yours.** Each orchestrator sees one
-  objective; only you see two of them competing for the same slot. Prefer the
+  objective; only you see two of them competing for the next run. Prefer the
   child that unblocks the most downstream work, and say the order you chose on
   each parent so neither brief reads as stalled.
-- **A role that only writes documents may run in this session, if they agree.**
-  A researcher or a designer produces documents, not code, and can run here as
-  a subagent while an engineer holds the queue. That steps around the workflow's
-  attempt counting, so it is the person's call, asked once. The output still
-  arrives as a pull request and still gets both reading passes. Where the runner
-  is `session` this is simply how every role runs, and `/dispatch` books it
-  against the same budgets, so there is nothing to ask.
 
 ## Self-driving
 
@@ -373,15 +347,15 @@ fold into the loop.
   in nights or days will outlive it. For one of those, also schedule a fresh
   session on the repository every couple of hours that reads the decision log
   first and continues the stretch under the delegation recorded there -
-  `/self-driving` gives the message. Where the runner is `session` this is what
-  keeps runs starting at all while nobody is here, so a long stretch there
+  `/self-driving` gives the message. This is what keeps runs starting at all
+  while nobody is here, so a long stretch there
   without it is a stretch that stops when this session does. Turn it off at
   close-out; a forgotten one keeps spending the subscription on nothing.
 - **Keep a ledger outside the conversation.** A long stretch outlives the
   session's context. A scratch file with one line per state change - what
   merged, what is queued, what comes next - is what every wake reads first, and
   what gets rebuilt from the parents and the decision log if it is gone.
-- **A run that ends on its turn cap is a budget finding, not a verdict.** Read
+- **A run that was cut off is a budget finding, not a verdict.** Read
   what it pushed before anything else, then brief the next attempt with what
   already landed, the remaining steps in order, and what not to re-read - a run
   told to rediscover the codebase spends the same budget the same way. A child

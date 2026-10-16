@@ -24,10 +24,10 @@ back to reading diffs, and it will look like a perfectly good criterion.
 
 ## Before you start
 
-Everything phase 7 asked for, still: the provisioned repository, the OAuth
-secret, both Actions settings, every label `bootstrap` creates, branch
-protection on the check names that actually reported, and a release tag
-matching the plugin manifest.
+Everything phase 7 asked for, still: the set-up repository, every label
+`bootstrap` creates, branch protection on the check names that actually
+reported, and a release tag matching the plugin manifest. Run everything below
+from one Claude Code session on that repository.
 
 One thing that reads as a prerequisite and is not. Phase 7 leaves you with a
 real gate; a repository provisioned fresh has the placeholder instead, and that
@@ -90,7 +90,7 @@ File the first as an issue titled "Portfolio site: shell and about", labelled
 > so every link has to work from there. No accounts, no backend, no analytics.
 
 The second waits until the first is merged and visible. Title it "Portfolio
-site: projects and posts", label it `objective`:
+site: projects and posts":
 
 > The site needs a projects section and a posts section. Each project and each
 > post is a content file in the repository: adding one file and nothing else
@@ -102,15 +102,17 @@ decisions, they belong to the roles, and watching them get made and recorded is
 a large part of what this test is for. If you specify them here, you have tested
 your own typing.
 
-Nothing runs yet. `objective` alone does not start anything: the run label does,
-and only a human applies it.
+File each with `/objective` when its turn comes, pasting the text above as the
+idea. When it asks whether it may merge work that passes the gate, answer
+**ask**: in this phase every merge is yours, so you see each step.
 
 ## The run, step by step
 
 Steps 1 to 7 describe objective 1. Objective 2 repeats them, and the notes at
 the end say where it differs.
 
-**1. You label the objective `agent:queued`.**
+**1. You file the objective with `/objective`.** The session files it, queues
+it, and dispatches the orchestrator straight away.
 
 **2. The orchestrator comments a plan, then creates its children.**
 
@@ -136,30 +138,29 @@ project.
 Watch for: grandchildren. There should be none. Anything needing a further
 split should be labelled `needs-decomposition` and left alone.
 
-**3. You queue the research child.**
+**3. The research child runs.**
 
-Pick the one with no dependencies. The plan comment should say which those are.
+The orchestrator queues the child with no dependencies, and the session
+dispatches it. The plan comment should say which that is.
 
 Watch for: an ADR in `docs/decisions/` landing with the research, since choosing
 how the site is generated is a dependency decision and the house rules require
 one in the same diff. Research that recommends a dependency without an ADR is
 the failure to catch here.
 
-**4. You queue the design child.**
+**4. You merge the research, and the design child runs.**
 
 Watch for: a document in `docs/design/` that enumerates the states, not just the
 happy path - what the home page looks like with no content in it, what
 navigation does on a narrow screen. The empty state is the one that gets skipped
 and the one objective 2 will need.
 
-**5. You queue the engineer child. It opens a pull request and the checks pass.**
+**5. The engineer child runs. It opens a pull request and the checks pass.**
 
-Queue the smallest engineer child first, whatever the plan says the order is,
-and read `num_turns` in the run's result block before queueing a larger one.
-This is the first engineer run the system has had, and the turn cap has never
-been tested against a role that builds, runs tests, and reacts to a red check.
-If it lands near the cap, raise it in the template before objective 2 rather
-than after.
+If the plan has more than one engineer child, ask the session to dispatch the
+smallest first, whatever the plan's order. This is the first engineer run under
+sessions, and a run that is cut off part way is easier to read on a small issue
+than on a large one.
 
 Watch for: whether the tests map onto the acceptance criteria one to one. Tests
 that pass without testing the criteria is the failure mode here, and it looks
@@ -171,14 +172,16 @@ committed HTML. Without one, content and markup drift apart silently and the
 published site goes stale while every check stays green. If the engineer does
 not write it, that is the most valuable thing you will learn in this phase.
 
-Watch for: the issue moving through `agent:running` to `agent:review` on its
-own. If the labels do not move, the App token or the labels are wrong, not the
+Watch for: the issue moving through `agent:running` to `agent:review`, with a
+`Starting **engineer**, attempt 1 of 3` comment from `/dispatch`. If the labels
+do not move, the session skipped `/dispatch` or the labels are missing, not the
 agent.
 
-**6. You comment a revision, it pushes a fix.**
+**6. You ask for a revision, it pushes a fix.**
 
-Before merging, comment on the pull request starting with `@claude`, asking for
-one specific change. Without the trigger phrase nothing happens, by design.
+Before merging, tell the session one specific change you want. It writes that
+as a review on the pull request, sends it back with `agent:revise`, and
+dispatches a revision round.
 
 The page is not visible yet, so the basis for the revision is the criteria list
 against the test names, or the design document against what the pull request
@@ -187,7 +190,8 @@ actually gives you: if you cannot find anything to ask for without opening the
 diff, say so in the report, because that is a finding about the criteria.
 
 Watch for: a new commit on the same branch, not a new pull request. And watch
-the attempt counter - this is attempt 2 of 3 on that issue.
+the counter - this is revision round 1 of 2, and it spends none of the issue's
+three attempts.
 
 **7. You merge, then open the site.**
 
@@ -240,9 +244,8 @@ Then, separately, four things that are worth more than the pass or fail:
   a footnote. Nothing, and the design works. All of it, and either the criteria
   were not visible enough or the gate is not trusted yet, and the report should
   say which.
-- **`num_turns` for each engineer run.** `docs/open-questions.md` has an open
-  entry on whether the cap is enough, and there has never been data behind it.
-  This phase is where that entry gets answered or deleted.
+- **Whether any run was cut off before it finished**, and what it had pushed
+  by then.
 - **How many attempts each issue took.** Anything hitting 3 means the
   orchestrator scoped it wrong, and the fix belongs in the orchestrator's role
   definition or in that repo's memory, not in trying again.
@@ -252,10 +255,12 @@ Then, separately, four things that are worth more than the pass or fail:
 
 Ranked by how often they bite, so you can recognise them rather than debug them:
 
-1. `CLAUDE_CODE_OAUTH_TOKEN` missing from this repo. Every run fails
-   immediately at auth. Secrets are per repo.
-2. "Allow Actions to create and approve pull requests" off. The run succeeds and
-   no pull request appears.
+1. **A queued child nobody started.** Nothing starts a run but a session, so a
+   child the orchestrator queued after you closed the session waits for the
+   next one. `/check-in` starts it.
+2. **A label `bootstrap` never created.** The roles and `/dispatch` match
+   labels exactly, and a missing one fails quietly. The session-start hook names
+   any that are missing.
 3. **Links written from the domain root.** The site lives at a subpath, so
    `/assets/site.css` and `/about/` resolve above the site and 404. The page
    loads unstyled, or navigation goes nowhere, and every check stayed green
@@ -269,7 +274,8 @@ Ranked by how often they bite, so you can recognise them rather than debug them:
    is for, and its absence is invisible until the day it matters.
 6. Acceptance criteria too vague, so the engineer builds the wrong thing and it
    passes its own tests. Fix the orchestrator's output, not the engineer.
-7. The run label applied to the parent objective again after the split, which
-   re-runs the orchestrator and produces duplicate children.
+7. The parent objective queued again after the split, which re-runs the
+   orchestrator and can produce duplicate children if its supervision step does
+   not read the children first.
 8. Required check names in branch protection drifting from the job names, so
    nothing is actually required any more.

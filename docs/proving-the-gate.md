@@ -7,8 +7,8 @@ by line, which is the whole thing you were trying to avoid. Until a red check
 reliably blocks a merge, every agent pull request is a manual review. Once it
 does, most of them are a glance at the checks and then at the published page.
 
-So the gate gets proven by hand, on a repo you can throw away, before
-`agent-run.yml` is enabled anywhere.
+So the gate gets proven by hand, on a repo you can throw away, before any
+objective is filed anywhere.
 
 Do not skip to phase 8 because phase 7 is boring. Boring is the result you are
 looking for.
@@ -21,35 +21,30 @@ looking for.
 
 The command does not run start to finish on its own, by design: a cloud session
 holds an installation token on repositories that already exist, so it can
-neither create one nor change a setting on one. Four of its steps are handed to
-you. Expect to be asked for these, in this order:
+neither create one nor change a setting on one. A few of its steps are handed
+to you. Expect to be asked for these, in this order:
 
 1. **Create the repository yourself**, at `github.com/new`. Name it
    `gate-test-public`, make it **public**, and tick **Add a README file**.
    Public because a private repository cannot call the factory's reusable
    workflows; the README because a repository with no commits has no default
    branch to branch from. Then tell the session it exists.
-2. **Tick the two Actions settings** at
-   `github.com/chamaya00/gate-test-public/settings/actions` - "Read and write
-   permissions" and "Allow GitHub Actions to create and approve pull requests".
-   This is the one that fails silently: with it off, every later step appears
-   to work and no pull request ever appears.
-3. **Merge the pull request** the command opens with the caller workflows and
-   project files. `workflow_dispatch` only sees workflows already on the
-   default branch, so nothing in step 4 is possible before this merges.
-4. **Run the `bootstrap` workflow** from the Actions tab. It creates the nine
+2. **Merge the pull request**, if the command opened one rather than pushing
+   to the default branch - it pushes directly to a repository with nothing but
+   a README in it. `workflow_dispatch` only sees workflows already on the
+   default branch, so step 3 waits on this.
+3. **Run the `bootstrap` workflow** from the Actions tab. It creates the nine
    labels and prints the check names you need for branch protection.
-5. **Set branch protection** using the names from that run summary.
+4. **Set branch protection** using the names from that run summary.
 
 Before any of it, confirm a release tag exists for the version in the
 factory's `plugins/agent-factory/.claude-plugin/plugin.json`. `/new-project`
 pins the callers to that version, and a pin with no tag behind it surfaces here
 as an invalid workflow reference naming nothing about a tag in another
-repository. `docs/checkpoint.md` step 0 cuts one.
+repository. `docs/checkpoint.md` step 1 cuts one.
 
 Then confirm by hand:
 
-- The Actions settings above are actually ticked. Look, do not remember.
 - The repo has every label listed under `labels` in its
   `.claude/agent-factory.json`, which is the set `bootstrap` creates.
 - No file under `.github/workflows/` still contains `__FACTORY_VERSION__` or
@@ -122,28 +117,31 @@ Then close that pull request without merging.
 
 ## 5. Prove the containment guard
 
-One more, because this rule is the one an agent is most likely to trip.
+One more, because this rule is the one an agent is most likely to trip, and it
+can now be seen failing by hand.
 
-Open a pull request that adds a line to `.github/workflows/ci.yml`. Since you
-are the repository owner, `project-guard` will pass it - that is correct
-behaviour, and it is why the check reads the pull request author.
+Agents push to branches named `claude/...`, and the guard checks those whoever
+opened the pull request - because a role run from a session opens its pull
+request as you. So, on `gate-test-public`:
 
-To see it fail you need an author who is not a maintainer, which in practice
-means an agent pull request. So do not force this one now: note it, and confirm
-it in phase 8, when the engineer opens its first pull request. If an agent ever
-does touch a workflow file, this check is what catches it.
+1. From the GitHub web editor, edit `.github/workflows/ci.yml` - add a comment
+   line - and choose **Create a new branch**, named `claude/gate-test`.
+2. Open the pull request.
+3. `guard` goes red, naming the file and calling `claude/gate-test` an agent
+   branch.
 
-## 6. Only now enable agent-run
+Then do the same edit on a branch named `gate-test-mine`. `guard` passes:
+you are a maintainer, and a branch outside the agent pattern is how your own
+deliberate gate change gets through. Close both without merging.
 
-When steps 1 to 4 are boring and repeatable, add `CLAUDE_CODE_OAUTH_TOKEN` to
-`gate-test-public` and let `agent-run.yml` stay as it is - it is already in
-the repo from `/new-project`, and it does nothing until an issue carries the
-right labels.
+## 6. Only now point agents at it
 
-Then go to phase 8.
+When steps 1 to 4 are boring and repeatable, go to phase 8. There is nothing to
+enable: agents run from a session on the repository, and nothing runs until an
+objective is filed there.
 
 ## What to report back
 
-For each of steps 1 to 5: worked, or needed hand-holding and what exactly. The
+For each of steps 1 to 4: worked, or needed hand-holding and what exactly. The
 "needed hand-holding" list is the real backlog, and it is worth more than a
 clean report.

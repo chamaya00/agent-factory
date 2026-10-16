@@ -1,7 +1,9 @@
 # ADR 0003: per-repository setup runs in the factory, behind an approved token
 
 Date: 2026-10-13
-Status: accepted
+Status: accepted, narrowed by ADR 0005: provisioning is optional, and now does
+only `bootstrap` and branch protection. The secrets, the agent App, the
+Actions permission, and `scripts/setup-project.sh` described below are gone.
 
 ## Context
 

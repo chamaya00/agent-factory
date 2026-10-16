@@ -10,29 +10,27 @@ The repository is at
 its README covers the layout and the design decisions. These pages are the
 operating documentation.
 
-## Standing a project up
+## Start here
 
-In order, and the order is the point.
+**[Getting started](getting-started.md)** - what you need (a Claude plan with
+Claude Code, and GitHub connected - no tokens, secrets, or Apps), setting a
+repository up from a session on it, and using it day to day. The whole of it,
+for anybody, readable on a phone.
 
-1. **[The checkpoint](checkpoint.md)** - the steps only a human can do: the
-   subscription token, the repository secrets, the agent identity App, the
-   release tag, and the provisioning workflow that turns the per-repository
-   part into one approval. Written for an iPhone, since that is the only
-   device involved.
+## Running the factory
+
+1. **[The checkpoint](checkpoint.md)** - what only the factory's owner does:
+   cutting a release after a version bump, cleaning up what older releases
+   needed, and two optional conveniences.
 2. **[Proving the gate](proving-the-gate.md)** - confirm by hand that a red
-   check blocks a merge, on a throwaway repository, before any agent is
-   pointed at it. An agent aimed at a gate you do not trust produces work you
-   have to read line by line, which is the thing this system exists to avoid.
+   check blocks a merge and that the containment guard refuses an agent branch,
+   on a throwaway repository, before any objective is filed.
 3. **[The smoke test](smoke-test.md)** - two objectives through the whole loop,
    building a site the repository publishes, so the result is judged by opening
-   a URL rather than by reading a diff. What to watch for at each step, and the
-   eight failure modes worth recognising on sight.
+   a URL rather than by reading a diff.
 
 ## Reference
 
-- **[Getting started](getting-started.md)** - the walkthrough a session
-  follows when it is opened with a greeting instead of a task, so the answer
-  to "hi" is a guided run of `/new-project` rather than a menu.
 - **[Improvement rounds](improvement-round.md)** - how a session improves
   the factory on its own judgment: finds needs nobody has named yet, builds the
   small safe ones ahead of approval, and reads it all back as one digest issue
@@ -46,8 +44,9 @@ In order, and the order is the point.
 - **[How a change reaches a project](versioning.md)** - what a release tag
   is, why the callers pin one, and why cutting a tag changes nothing on its
   own.
-- **[Driving an objective](driving-an-objective.md)** - a proposal, not
-  yet built: what the interactive session's role is, and how a person's
-  "merge when green" survives the end of the session they said it in.
+- **[Driving an objective](driving-an-objective.md)** - the design record for
+  the interactive session's role: what it owns, and how a person's "merge when
+  green" survives the end of the session they said it in.
 - **[Implementation plan](implementation-plan.md)** - the document this was
-  built from, phase by phase. Kept for the reasoning behind each phase.
+  built from, phase by phase. Historical: its Actions runner, subscription
+  token, and agent App were retired by ADR 0005.

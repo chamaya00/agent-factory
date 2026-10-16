@@ -1,24 +1,16 @@
 ---
-description: Run one role on one issue from this session instead of in Actions - the checks, the booking, the brief, and the hand-back the agent-run workflow performs, done by the driving session in a repository whose runner is session.
+description: Run one role on one issue from this session - check the issue may run, book the run on it, start the role with its brief, and hand the result back. How every agent run starts.
 argument-hint: <issue-number>
 ---
 
-Run the role issue `$1` calls for, and hand its result back exactly as a
-workflow run would.
+Run the role issue `$1` calls for, and hand its result back.
 
-This command exists because runs stopped needing Actions. A repository whose
-`.claude/agent-factory.json` says `"runner": "session"` has no workflow
-spending the subscription on its behalf - the agent-run workflow reads that
-line and stands down - so the session driving the work does what that workflow
-did: decide whether a run is allowed, book it, start the role with the same
-brief, and say what came back. The labels, the marker comments, and the budgets
-are the workflow's own, so the orchestrator, the brief it writes, and a person
-reading the issue cannot tell which runner did the work - and switching back is
-one line in that file.
-
-Read `.claude/agent-factory.json` first. If `runner` is anything but `session`,
-stop and say so: the workflow owns runs in that repository, and a second runner
-on the same issue spends its budget twice and fights the first for its labels.
+Every agent run starts here. Nothing else starts one - no workflow, no label
+event - so the session driving the work does the whole of it: decide whether a
+run is allowed, book it on the issue, start the role with a fixed brief, and
+say what came back. The labels and the marker comments it writes are the
+record, so a later session, the orchestrator, and a person reading the issue all
+see the same state without having been here.
 
 If `$1` is empty, list the issues labelled `agent:queued` or `agent:revise` and
 ask which one.
@@ -45,8 +37,8 @@ applies:
 A child carrying neither `agent:queued` nor `agent:revise` was not queued by
 anyone. Run it only when the person asked for this issue by number, and say so.
 
-Then the budget, counted from marker comments on the issue exactly as the
-workflow counts them - every comment whose body contains the marker:
+Then the budget, counted from marker comments on the issue - every comment
+whose body contains the marker, whichever session wrote it:
 
 | Run | Marker | Budget |
 |---|---|---|
@@ -107,11 +99,11 @@ do anything else gains nothing from running elsewhere. Say which you chose and,
 for a child session, the reason, on the line the booking comment gives it.
 
 Either way, one run at a time across the repository. The subscription is one
-budget whichever runner spends it, and two runs at once are how two children
+budget whichever session spends it, and two runs at once are how two children
 both build on a dependency neither has merged.
 
-**Model.** The choice the agent-run workflow makes: `opus` for the researcher,
-this session's own model for every other role.
+**Model.** `opus` for the researcher, whose whole output is judgment about what
+is true; this session's own model for every other role.
 
 **The brief.** Fill it in and pass it verbatim:
 
@@ -165,7 +157,7 @@ this session's own model for every other role.
 > - Never skip, disable, or quarantine a test to get a check green.
 > - Stay inside this one issue. Anything else you notice becomes a new issue,
 >   not a bigger diff.
-> - Merge nothing.
+> - Merge nothing, and never write or edit a `Merge policy:` line.
 >
 > End with a short report: the branch, the pull request and whether it is
 > ready or still a draft, each acceptance criterion with the check that proves
@@ -184,9 +176,9 @@ When the subagent returns, the child session reports, or it is found dead:
   the brief; read it and carry on driving from it. If it queued a child, that
   child is the next thing to dispatch.
 - **Any other role:** find its pull request, from a branch named
-  `claude/issue-<n>-*`. Open and not a draft: add `agent:review`. Anything else
-  - still a draft, no pull request, no branch, a run that errored or died - add
-  `agent:blocked`, with a comment starting `<!-- agent-factory:diagnosis -->`
+  `claude/issue-<n>-*`. Open and not a draft: add `agent:review`. Anything
+  else (still a draft, no pull request, no branch, a run that errored or died):
+  add `agent:blocked`, with a comment starting `<!-- agent-factory:diagnosis -->`
   that says what was pushed and where it got to (each branch, and its pull
   request or **no pull request**), how the run ended in its own words or the
   error that ended it, and what you checked rather than what you assume.
@@ -198,18 +190,14 @@ When the subagent returns, the child session reports, or it is found dead:
 - **Wake the parent.** A child's parent is its native parent issue, or the
   `Parent: #<n>` line at the top of its body. If that parent is an objective
   and carries none of `agent:blocked`, `needs-decomposition`, or
-  `agent:running`, run this command on it next. That supervision run is what
-  the label used to trigger, and it is how the next child gets queued.
+  `agent:running`, run this command on it next. That supervision run is how
+  the next child gets queued.
 
 ## After a merge
 
-The workflow also woke the parent on every merge, because a merge is what makes
-the next child ready. Here that wake is yours: after you merge a child, or when
-a check-in finds one merged after the parent's newest supervision marker, run
-this command on the parent. One supervision run covers any number of merges
+A merge is what makes the next child ready, so it is a wake too, and it is
+yours: after you merge a child, or when a check-in finds one merged after the
+parent's newest supervision marker, run this command on the parent. One supervision run covers any number of merges
 before it, so check for `agent:running` and for a supervision marker newer than
 the merge before starting another.
 
-A repository that still carries its agent-run caller has that workflow's merge
-job too, and it labels the parent `agent:queued` when a child merges. That is
-the same request arriving by a second road, not a second run to start.

@@ -20,7 +20,7 @@ Some decisions are not yours at any level of effort: which of two credible direc
 Say so, and say it where it will still be there tomorrow:
 
 1. Comment on your issue with the question. One question, not a list of five - if you have five, the issue was scoped wrong and that is itself the finding. Enough context to answer without opening anything else, in the owner's language rather than the diff's. Give your recommendation and say what you will do if nobody answers, because a question with no default attached stalls the work while one with a default only improves it.
-2. Put `<!-- agent-factory:needs-input -->` in that comment. The run's handback reads the marker and labels the issue `agent:needs-input`, which is how the question outlives every later rewrite of every status comment. You do not apply the label yourself and you do not need permission to; writing the marker is the whole of your part.
+2. Put `<!-- agent-factory:needs-input -->` in that comment. `/dispatch`'s hand-back reads the marker and labels the issue `agent:needs-input`, which is how the question outlives every later rewrite of every status comment. You do not apply the label yourself and you do not need permission to; writing the marker is the whole of your part.
 3. Then **finish the work anyway**, under the answer you recommended, and say in the pull request which way you went and what changes if the answer is the other one.
 
 That last step is the one that makes this worth having. `agent:needs-input` is not a way to stop: it rides alongside `agent:review`, costs no attempt, and blocks nothing except the merge. A run that asks and delivers gives a person a real thing to respond to, which is a far better question than the same words with nothing attached.
@@ -43,7 +43,7 @@ A pull request changes one issue's worth of code. Things noticed along the way b
 
 ## Who merges
 
-Merging stays outside every agent-run role. No role is granted `gh pr merge`, and none should be: it is the one step that is irreversible, outward-facing, and impossible to review after the fact. A role's job ends at a pull request that is ready and a comment saying what needs a person.
+Merging stays outside every role. No role is granted a tool that merges, and none should be: it is the one step that is irreversible, outward-facing, and impossible to review after the fact. A role's job ends at a pull request that is ready and a comment saying what needs a person.
 
 **A session carrying someone's instruction merges on their behalf.** A person who says "merge when green" has decided, in advance, that green is the standard they want applied to this work. That decision holds while the session that received it is working, whether or not they are reading it happen. Watching is not what makes the merge legitimate - the instruction is, and so is being able to revoke it, and so is a merge that points back at the session that made it.
 
@@ -61,7 +61,7 @@ Absent means ask, so nothing changes for an objective that does not carry it. `g
 
 Two limits, and the mechanism is worthless without both:
 
-- **A run may not write it or act on it.** Roles inside the repository authenticate as the agent identity; a driver authenticates as the person. Honour the line only when the objective body was last edited by an account that is not that identity, and refuse it otherwise. A role writing its own merge authority is the loop closing on itself wearing a record that looks like consent.
+- **A run may not write it or act on it.** Every run works as the person who opened the session, so the issue's edit history cannot tell a role's edit from theirs, and no check here pretends otherwise. What holds the line is that every role definition and every `/dispatch` brief forbids writing one, and that a driver honours only a line it can account for - one `/objective` wrote on the person's answer, or one the person confirms. A line that appeared while a run was working is refused and raised with them. A role writing its own merge authority is the loop closing on itself wearing a record that looks like consent.
 - **A driver writes it only when a person answers.** This one has no mechanism behind it and should not pretend to: a driver holding a person's credentials is indistinguishable from that person. What makes it a different risk from an unattended run is structural - a driver is mid-conversation with someone, and a run is not.
 
 A policy authorises merging and nothing else. It never covers the six below, and it never decides what to do about failure: a child that blocks a second time goes to a person, while its siblings keep merging.

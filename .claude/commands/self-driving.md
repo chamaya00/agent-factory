@@ -90,7 +90,7 @@ open-ended "until these are done" - also set:
   > stretch the person started, what they delegated, their answers, and every
   > call made so far; you are continuing it under exactly that delegation, not
   > starting a new one. Run /check-in on <objectives>, dispatching what is
-  > queued where .claude/agent-factory.json says runner is session, and log
+  > queued, and log
   > every call on #<log> as the stretch does. If <end> has passed or every
   > objective is closed, close the stretch out as .claude/commands/self-driving.md
   > step 7 says, turn this routine off, and stop. End with at most three lines:
@@ -103,8 +103,7 @@ open-ended "until these are done" - also set:
   One per stretch: two are two sessions racing for the same queued issue, and
   `agent:running` is the only lock between them.
 
-Where the runner is `session`, that scheduled session is not optional for a
-stretch longer than this one. Nothing else starts a run while no session is
+That scheduled session is not optional for a stretch longer than this one. Nothing else starts a run while no session is
 open, so without it the stretch stops the moment this session does, and the
 objectives sit queued until the person comes back.
 
@@ -124,13 +123,12 @@ decision log before acting.
 ## 6. The loop
 
 Every wake is `/check-in`, plus the mechanics in the skill's **More than one
-objective at once** and **Self-driving** sections: one queue slot across every
-objective, a turn-cap ending read as a budget finding, and a question a role
+objective at once** and **Self-driving** sections: one run at a time across
+every objective, a run that was cut off read as a budget finding, and a question a role
 raises answered on the record when the delegation covers it and carried to the
 log when it does not.
 
-Where `.claude/agent-factory.json` says `runner` is `session`, the runs are
-this stretch's too: every wake dispatches what is queued, per step 4 of
+The runs are this stretch's too: every wake dispatches what is queued, per step 4 of
 `/check-in`. Whether a run goes to a child session is the call `/dispatch`
 describes, and a stretch is where it most often pays - a long build in a child
 session leaves this one free to answer a pull request's events. Say in the

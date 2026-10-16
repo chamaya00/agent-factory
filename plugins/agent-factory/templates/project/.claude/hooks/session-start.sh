@@ -91,13 +91,10 @@ print()
 MISSING
 fi
 
-# Who starts a run here. In a repository whose runner is `session`, nothing
-# starts one but a session, so a queued issue is waiting on whoever just opened
-# this one - the fact a person coming back after a few hours most needs and is
-# least likely to guess, because under the workflow runner a queued issue was
-# one that would start on its own.
-runner="$(python3 -c 'import json; print(json.load(open(".claude/agent-factory.json")).get("runner") or "")' 2>/dev/null)"
-if [ "$runner" = "session" ]; then
+# What is queued and not running. Nothing starts a run but a session, so a
+# queued issue is waiting on whoever just opened this one - the fact a person
+# coming back after a few hours most needs and is least likely to guess.
+if [ -f .claude/agent-factory.json ]; then
   queued="$(api "repos/$repo/issues?labels=agent%3Aqueued&state=open&per_page=50")" || queued=""
   revise="$(api "repos/$repo/issues?labels=agent%3Arevise&state=open&per_page=50")" || revise=""
   python3 - "$queued" "$revise" <<'QUEUED' 2>/dev/null
@@ -117,7 +114,7 @@ for raw in sys.argv[1:]:
             numbers.add(i.get("number"))
 if numbers:
     listed = " ".join(f"#{n}" for n in sorted(numbers))
-    print(f"Agents run from sessions here, and {len(numbers)} issue(s) are queued with nothing running them: {listed}")
+    print(f"{len(numbers)} issue(s) are queued with nothing running them: {listed}")
     print("Nothing starts them but a session. /check-in dispatches them, one at a time.")
     print()
 QUEUED

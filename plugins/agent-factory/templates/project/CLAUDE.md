@@ -70,22 +70,20 @@ would name it back.
 
 ## How work moves
 
-Objectives become issues labelled `objective`. A human labels the objective
-`agent:queued`; nothing else needs labelling by hand. The orchestrator splits it
+Objectives become issues labelled `objective`, filed by `/objective`, which
+also queues them; nothing needs labelling by hand. The orchestrator splits it
 into 1-5 child issues sized to the work, each with acceptance criteria and one
 role label, and then queues them itself as each one becomes ready. A small
 objective may be a single engineer issue - when it is, the orchestrator says
 which roles it skipped, so a thin plan is visible rather than assumed.
 
-**Who starts a run is a setting.** `.claude/agent-factory.json` names the
-runner. Under `session` - the default for a new repository - nothing starts a
-run but a session: the one driving the work, or one a self-driving stretch
-schedules, runs the role through `/dispatch` with the same checks, budgets,
-labels, and brief the workflow used, and the agent-run workflow reads the line
-and stands down. Under `actions`, a label starts that workflow, which spends the
-`CLAUDE_CODE_OAUTH_TOKEN` secret. Everything below reads the same either way:
-`agent:queued` is a request under both, and a wake means whichever runner is in
-charge starts the next run.
+**Runs happen in sessions.** Nothing starts an agent run but a Claude Code
+session on this repository - the one driving the work, or one a self-driving
+stretch schedules - and it does so through `/dispatch`, which checks the issue,
+books the run on it, runs the role, and hands the result back. No token, App,
+or secret is involved: a session works as the person who opened it.
+`agent:queued` is a request for a run, and a wake means the driving session
+starts the next one.
 
 It stays with the objective after the split. A child reaching `agent:review` or
 `agent:blocked` wakes it: it reads the state of every child, queues whatever the
@@ -117,7 +115,7 @@ and no merge policy covers it - that one is always the person's.
 
 **Work that is refused comes back rather than stopping.** A driver that reads a
 pull request and will not take it writes the review, drops `agent:review`, and
-adds `agent:revise`. That starts a run on the branch and pull request that
+adds `agent:revise`. That queues a run on the branch and pull request that
 already exist, holding the review as its brief. It spends a budget of two
 revision rounds rather than one of the three attempts, which is what makes
 rejecting a nearly-right diff affordable instead of a way to strand an issue at
@@ -130,8 +128,8 @@ Labels: `objective`, `agent:queued`, `agent:running`, `agent:review`,
 `needs-human`, `role:researcher`, `role:analyst`, `role:designer`,
 `role:engineer`.
 
-A label the preflight matches on and the repository does not have is a
-mechanism that fails silently. Re-run `bootstrap` from the Actions tab after
+A label the roles and `/dispatch` match on and the repository does not have is
+a mechanism that fails silently. Re-run `bootstrap` from the Actions tab after
 picking up a release that adds one; it is idempotent.
 
 ## Driving an objective
@@ -163,11 +161,11 @@ it runs the same catch-up: what is waiting on the person first, then the state
 of every child, then the two reading passes over each waiting diff, merging
 under the policy where it applies.
 
-**Starting a run is `/dispatch`.** Where the runner is `session`, a queued role
-starts when a session starts it, and `/check-in` does that one run at a time -
-in this session as a subagent by default, or in a child session when the driver
-judges the run is worth one. Between the sessions the person opens, nothing
-runs unless a self-driving stretch is keeping scheduled sessions going.
+**Starting a run is `/dispatch`.** A queued role starts when a session starts
+it, and `/check-in` does that one run at a time - in this session as a subagent
+by default, or in a child session when the driver judges the run is worth one.
+Between the sessions the person opens, nothing runs unless a self-driving
+stretch is keeping scheduled sessions going.
 
 **Long autonomous runs are `/self-driving`**, whether the person types it or
 asks in their own words for the work to keep moving while they are away. When the person wants one or more
