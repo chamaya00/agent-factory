@@ -258,7 +258,7 @@ Then the roles and the commands themselves, copied rather than referenced:
 - `.claude/agents/*.md` - every file in `<factory root>/agents/`
 - `.claude/skills/*/SKILL.md` - every skill in `<factory root>/skills/`
 - `.claude/commands/objective.md`, `retro.md`, `decompose.md`, `update-agents.md`,
-  `ship.md`, `check-in.md`, `self-driving.md`, `dispatch.md` - from
+  `ship.md`, `check-in.md`, `self-driving.md`, `dispatch.md`, `gate.md` - from
   `<factory root>/commands/`. Not `new-project.md`: provisioning is the
   factory's job, and a project that can provision another project is a way to
   get a second factory nobody is maintaining.
@@ -366,9 +366,10 @@ Then **what you verified, separated from what you were told**:
 
 Then whatever is still waiting on the person, in order, each as the URL that
 does it, leaving out anything already done. If the gate went in as a
-placeholder, say so and what replaces it - it is the one outstanding item that
-looks like nothing is wrong, because every check is green and none of them is
-testing the product.
+placeholder, say so and what replaces it - the first engineer pull request
+proposes the real one, and the session applies it with `/gate` on their yes. It
+is the one outstanding item that looks like nothing is wrong, because every
+check is green and none of them is testing the product.
 
 Then what happens next, because otherwise the report is a list of chores with
 no end. In a Claude Code session on `$1`:

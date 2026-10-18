@@ -256,6 +256,28 @@ and that branch is what `project-guard` reads. And dispatching is spending.
 Every run is the subscription; a check-in that started five should say so, and
 the marker comments are where the person sees each one.
 
+## A gate change is theirs, every time
+
+No role writes a workflow. When a child's work needs the gate or any other
+workflow changed, the role commits the whole file at `.github/proposed/<same
+filename>` and says what it does; the guard keeps that pull request red until
+the file is moved, so it cannot merge by accident. Moving it is `/gate`, and it
+is the one thing in this skill that is neither yours nor delegable.
+
+The command shows the person the change in their language - what the check
+will run instead, and whether it touches anything in **What a revert does not
+undo** - and acts only on their explicit yes, in the conversation, to that
+diff. A merge policy does not cover it, a self-driving stretch does not, and a
+role or the orchestrator asking for it changes nothing. You hold their
+credentials and could push the file yourself; that is exactly why the yes has
+to be theirs and has to be about the diff in front of them.
+
+So when a pull request carries a proposed file, read the rest of it as usual,
+then bring the gate change to them, ranked with the other things only they can
+decide. With nobody there to answer, it waits with `needs-human` on it, and you
+say so. A red guard on that pull request is the hand-off working, not a failure
+to send back.
+
 ## How to wake
 
 Session-side timers are not durable - see **What a driver does not do** - so
@@ -334,9 +356,10 @@ fold into the loop.
 - **Make the call, and write it where they will read it.** One issue holds
   every call made on their behalf, numbered, each saying what was decided, why,
   the alternative, and how to reverse it. The delegation never covers what
-  **What a revert does not undo** lists, a merge policy, or anything that needs
-  their credentials or their hands to go live - those still wait, written down
-  on that same issue under what is still theirs.
+  **What a revert does not undo** lists, a merge policy, a gate change - `/gate`
+  waits for their yes, per **A gate change is theirs, every time** - or anything
+  that needs their credentials or their hands to go live. Those still wait,
+  written down on that same issue under what is still theirs.
 - **Wake on a clock as well as on events.** Keep the pull request
   subscriptions, and add a short durable reminder - about fifteen minutes - that
   re-arms itself first thing on every wake, backed by a slower recurring one in

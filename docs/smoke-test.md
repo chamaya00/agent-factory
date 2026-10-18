@@ -38,9 +38,14 @@ has, any real gate fails on a default branch that does not have the stack yet.
 So expect the swap to happen mid-run rather than before it, and expect the first
 engineer pull request to be red when it does: the tripwire firing is the signal,
 not a failure. The research and design children write only to `docs/` and stay
-green. Stop before queueing the first engineer child, or at the latest when its
-pull request goes red, and make the swap on that pull request's branch - the
-comment at the top of `ci.yml` says why that branch and not the default one.
+green. The engineer does not edit `ci.yml`; it commits the replacement at
+`.github/proposed/ci.yml`, and the guard stays red on that pull request until
+it is moved. Be in the session when it arrives: the driver runs `/gate` on it,
+shows you what the gate will run instead, and on your yes opens a replacement
+pull request with the file in place, built on that branch - the comment at the
+top of `ci.yml` says why that branch and not the default one. Check that it
+refuses to act on anything but your yes, and that the replacement's first
+`checks` run is the new gate.
 
 Then one more, and it is new. Publishing has to be set up before an objective is
 filed, because an agent cannot do it:

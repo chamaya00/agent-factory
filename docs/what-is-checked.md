@@ -55,7 +55,7 @@ that the table, `CLAUDE.md`, and `guard.yml` name the same scripts.
 | `validate_plugin.py` | the plugin is structurally intact, still portable, and its prose agrees with each role's tool list |
 | `validate_workflows.py` | every workflow parses and stays inside its limits |
 | `test_ci.py` | the gate fails what it is supposed to fail |
-| `test_project_guard.py` | a privilege change cannot arrive undeclared, and a gate edit from an agent branch is stopped whoever opened it |
+| `test_project_guard.py` | a privilege change cannot arrive undeclared, a gate edit from an agent branch is stopped whoever opened it, and a proposed workflow cannot merge unapplied |
 | `test_capability_claims.py` | the capability checks fire on drift and stay quiet on prose |
 | `test_release.py` | a release tag cannot move or disagree with the manifest |
 | `test_provision.py` | provisioning refuses a bad request or a missing approval gate, and requires only the gates' check names |
@@ -273,7 +273,13 @@ pull request as the person, so the author alone cannot tell them apart. A
 maintainer-authored pull request from a branch matching `agent-branches`
 (`claude/*` by default) is checked as the automation's, with no author or
 sender exemption; ADR 0004 says why that is a tripwire rather than a wall. A
-diff that widens what the automation may do has to say so in the body.
+diff that widens what the automation may do has to say so in the body. A pull
+request into the default branch that would leave a file under
+`.github/proposed/` fails and names `/gate`: that is where a role puts a
+workflow it may not write, and merged as it stands it changes nothing while
+reading as done. The privilege step skips those files for the same reason -
+nothing runs them there - and reads them in full in the pull request `/gate`
+opens, where they become executable. ADR 0006 has the whole hand-off.
 
 Two things it checks about the project's own `CLAUDE.md`, both for the same
 reason - that file is the first thing every agent run loads, so a defect in it

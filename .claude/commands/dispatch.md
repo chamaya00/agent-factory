@@ -154,6 +154,9 @@ is true; this session's own model for every other role.
 >   `.claude/agents/`, `.claude/skills/`, `.claude/commands/`, or
 >   `.claude/agent-factory.json`. If the work seems to need it, comment saying
 >   why and stop.
+> - A workflow change is the one that goes further: commit the whole file as
+>   it should read at `.github/proposed/<same filename>`, say in the pull
+>   request what it changes, and carry on. The driver applies it with `/gate`.
 > - Never skip, disable, or quarantine a test to get a check green.
 > - Stay inside this one issue. Anything else you notice becomes a new issue,
 >   not a bigger diff.

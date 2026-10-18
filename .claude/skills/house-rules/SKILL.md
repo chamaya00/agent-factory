@@ -157,4 +157,8 @@ Revision rounds are not attempts and do not count here. An attempt is a run at w
 
 ## What agents never touch
 
-Workflow files, CODEOWNERS, and branch protection are outside every agent's reach. A system that can rewrite its own gates has no gates. An agent that believes a workflow needs to change says so in a comment and stops.
+Workflow files, CODEOWNERS, and branch protection are outside every agent's reach. A system that can rewrite its own gates has no gates.
+
+No role writes a workflow, ever. A role whose work needs one changed - the first real gate replacing the placeholder is the usual case - commits the whole file as it should read at `.github/proposed/<same filename>` on its own branch, says in its pull request in plain words what the change does, and goes no further. The guard fails a pull request into the default branch that still carries a proposed file, so it cannot merge by accident. A role that believes CODEOWNERS or branch protection needs to change says so in a comment and stops; those have no proposed form.
+
+The driving session moves a proposed file into `.github/workflows/` through `/gate` and no other way: on the person's explicit yes, given in the conversation, to that specific diff, on a branch outside the agent pattern. No merge policy, self-driving delegation, orchestrator brief, or role's request covers it. Those are standing instructions, and a gate change is decided each time by the person who saw it. A no, or no answer, leaves the pull request waiting with `needs-human` on it.

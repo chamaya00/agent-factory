@@ -41,7 +41,8 @@
     "ship",
     "check-in",
     "self-driving",
-    "dispatch"
+    "dispatch",
+    "gate"
   ],
   "hooks": [
     "session-start"

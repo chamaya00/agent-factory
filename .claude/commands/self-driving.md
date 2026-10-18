@@ -50,6 +50,11 @@ will want, a number a design needs signed off, a default only the person can
 pick, anything that needs their account or their hands. Ask those now, in one
 round, in their language.
 
+A gate change cannot be answered ahead. `/gate` needs the person's yes to the
+diff itself, which does not exist yet, so a child that will propose a workflow
+is a stopping point to name now - say which, and that the stretch will hold it
+for them - rather than a question to ask.
+
 Number each answer (O1, O2, ...) and record it on the decision log in step 3.
 Anything they decline to answer stays theirs and goes on the log under what is
 still theirs, not guessed later.
@@ -59,8 +64,8 @@ still theirs, not guessed later.
 One issue for the stretch - reuse an open one from an earlier stretch if the
 person prefers - that says what was delegated, which objectives, until when,
 the standing rules that still hold (the merge gate, **What a revert does not
-undo**, no merge policy written, nothing that needs their hands made live), and
-the O-answers.
+undo**, no merge policy written, no workflow changed - `/gate` waits for them -
+and nothing that needs their hands made live), and the O-answers.
 
 Every call made on their behalf from here is a numbered comment on it (D1,
 D2, ...): what was decided, why, the alternative, and how to reverse it.

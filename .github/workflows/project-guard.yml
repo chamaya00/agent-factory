@@ -309,6 +309,36 @@ jobs:
           [ "$failed" -eq 0 ] && echo "No protected path was touched by the automation."
           exit "$failed"
 
+      - name: No proposed workflow is left on the default branch
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.base.ref == github.event.repository.default_branch
+        run: |
+          set -euo pipefail
+
+          # A role may not edit a workflow, so one whose work needs a gate
+          # changed commits the whole file at `.github/proposed/<same name>`
+          # instead, and the driving session moves it into place with `/gate`
+          # on the person's yes. The proposed file is a hand-off, not something
+          # to keep. Merged as it stands, it changes nothing - the gate the
+          # pull request was meant to replace keeps running - while everything
+          # reads as though the change landed.
+          #
+          # HEAD here is the merge result GitHub checks out for a pull request,
+          # so this reads what the default branch would hold afterwards. A
+          # stale proposal already sitting there fails too, and that is right:
+          # it is still a hand-off nobody finished.
+          left="$(git ls-tree -r --name-only HEAD -- .github/proposed/ || true)"
+          if [ -z "$left" ]; then
+            echo "No proposed workflow would be left on the default branch."
+            exit 0
+          fi
+
+          while IFS= read -r file; do
+            echo "::error file=$file::$file is a proposed workflow, and merging it leaves it unapplied: the gate it was meant to replace keeps running. The session driving this work applies it with \`/gate <pr>\` on the person's yes, which opens a pull request with the file moved into .github/workflows/ to replace this one. Do not merge this pull request as it is."
+          done <<< "$left"
+          exit 1
+
       - name: A change to privilege is declared, not slipped in
         if: github.event_name == 'pull_request'
         env:
@@ -361,14 +391,21 @@ jobs:
           # repository that carries it, which is all of them. A check that is
           # routinely red is one people stop reading, and that costs more than
           # the narrowing does. Nothing executable is excluded.
+          #
+          # A proposed workflow under `.github/proposed/` is excluded too, for
+          # the same reason: nothing runs it there. It reaches
+          # `.github/workflows/` only through `/gate`, in a pull request whose
+          # diff this step reads in full - so the widening is declared where it
+          # becomes executable, rather than on a hand-off the step above
+          # already refuses to merge.
           # From the fork point, for the reason the protected-paths step gives:
           # against the base tip, a line the base *removed* after the fork
           # reads as a line this pull request added.
           fork_point="$(git merge-base "$BASE_SHA" "$HEAD_SHA" 2>/dev/null || echo "$BASE_SHA")"
           files="$(git diff --name-only "$fork_point" "$HEAD_SHA" \
-            | grep -vE '\.(md|markdown|txt)$' || true)"
+            | grep -vE '\.(md|markdown|txt)$' | grep -vE '^\.github/proposed/' || true)"
           if [ -z "$files" ]; then
-            echo "Only documentation changed. Nothing here can widen anything."
+            echo "Only documentation or a proposed workflow changed. Nothing here can widen anything."
             exit 0
           fi
 

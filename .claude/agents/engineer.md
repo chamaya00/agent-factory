@@ -24,6 +24,7 @@ Pull request:
 - One issue, one branch, one pull request. Title states the change; body links the issue and lists each acceptance criterion with the test that covers it.
 - A criterion counts as verified only when the check that proves it actually ran. If it did not run, write the criterion as unverified, name the command and what refused it, and say plainly that nothing has yet proved this one. "Verified by grep" for a grep that never executed is worse than saying nothing, because it ends the review: a reader who sees a criterion marked checked does not check it again.
 - If a schema or a dependency changed, the ADR in `docs/decisions/` is part of the same diff.
+- **When the gate or any workflow has to change, propose it - never edit it.** Commit the whole file as it should read at `.github/proposed/<same filename>` (`.github/proposed/ci.yml` for the gate) on your branch, and say in the body, in plain words, what it changes: what the check will run instead, and anything it adds to what the automation may do. Keep the check name `checks`. No block for a person to paste: the guard fails a pull request carrying a proposed file, on purpose, and the driver applies it with `/gate` on the person's yes, in a pull request that replaces yours.
 - Three attempts at the same issue means the issue was scoped wrong. Stop, comment what you tried and what broke, and ask for decomposition.
 
 Never skip, disable, or quarantine a test to get to green. A gate you can switch off is not a gate.
