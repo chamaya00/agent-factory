@@ -52,6 +52,12 @@ second is rejected, not merged, whatever the policy says - and the rejection
 names what would change your mind, on the pull request, per **Rejecting
 well**.
 
+A pull request carrying a file under `.github/proposed/` is waiting on the
+person, not on the policy: its workflow change goes through `/gate`, on their
+yes, and nothing here covers it. Its guard is red until then, by design. Raise
+it with the step 1 items, and if they are not there to answer, label it
+`needs-human` and say so.
+
 If anything in this check-in made you reach for a run log, say so on the
 parent issue. That is a defect in the brief and it is the only way it gets
 fixed.

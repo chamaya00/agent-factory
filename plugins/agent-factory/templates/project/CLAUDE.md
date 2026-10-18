@@ -167,6 +167,13 @@ by default, or in a child session when the driver judges the run is worth one.
 Between the sessions the person opens, nothing runs unless a self-driving
 stretch is keeping scheduled sessions going.
 
+**Changing a workflow is `/gate`.** No role edits `.github/workflows/`. A role
+whose work needs the gate changed commits the whole file at
+`.github/proposed/<same filename>`, and the driver shows the person what it
+changes and moves it into place only on their yes, in the session, on a
+replacement pull request. No merge policy or self-driving stretch covers that
+yes.
+
 **Long autonomous runs are `/self-driving`**, whether the person types it or
 asks in their own words for the work to keep moving while they are away. When the person wants one or more
 objectives taken to done without them in the loop - overnight, or a day spent

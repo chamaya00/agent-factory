@@ -83,12 +83,16 @@ name: ci
 # invisible until it has been wrong for a day.
 #
 # Where that swap is made still matters. What trips the tripwire is the first
-# engineer pull request, and an agent may not edit this file, so a human makes
-# the change. Making it on the default branch fails on the Node path, whose
+# engineer pull request, and no role edits this file. So the engineer commits
+# the whole replacement at `.github/proposed/ci.yml` on its own branch, and the
+# session driving the objective runs `/gate` on that pull request: it shows the
+# person what the gate will run instead, and only on their yes in the session
+# moves the file here, on a replacement pull request built from the engineer's
+# branch. Not on the default branch first: that fails on the Node path, whose
 # first step is to find a lockfile that is in that pull request rather than on
-# the default branch yet. Push the replacement onto the engineer's pull request
-# branch instead: the commands run against the code that needs them, and the
-# default branch stays green from the first commit.
+# the default branch yet. Built on the engineer's branch, the commands run
+# against the code that needs them, and the default branch stays green from the
+# first commit.
 #
 # If the project has no package manager - a static site, a shell tool, anything
 # the commands path exists for - then this path is the destination rather than a

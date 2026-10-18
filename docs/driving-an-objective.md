@@ -592,3 +592,19 @@ forbids writing one, and a driver honours only a line it can account for - one
 Nothing else here changes. The driver was already the runner under `session`;
 it is now the runner everywhere.
 
+
+## Addendum: a gate change is the person's yes (1.44.0)
+
+The first real gate in a project was the one step a driver could not take. No
+role may edit a workflow, so the swap was handed to the person as a chore -
+the web editor, a block pasted out of a pull request body, a commit - and in
+one project it held an objective for a day. ADR 0006 replaces it. A role
+commits the workflow it wants at `.github/proposed/<same filename>`, and the
+driver applies it with `/gate`: shown to the person in their language, moved
+into place only on their explicit yes in the session, on a replacement pull
+request that records the approval.
+
+What the driver gains is a procedure, not an authority: the decision stays
+the person's, made each time about the diff in front of them. The skill's **A gate change is theirs, every time** says why no merge policy and no
+self-driving delegation covers that yes, and `project-guard` now fails a pull
+request that would merge a proposal unapplied.

@@ -81,6 +81,33 @@ def run_placeholder_case(claude_md: str | None) -> int:
         return done.returncode
 
 
+PROPOSED_STEP = "No proposed workflow is left on the default branch"
+
+
+def run_proposed_case(tree: dict) -> "Result":
+    """Run the proposed-workflow check against one commit holding `tree`.
+
+    `tree` is {path: content}. The step reads HEAD, which on a pull request is
+    the merge result GitHub checks out, so a single commit standing for that
+    result is the whole fixture. Same extraction as every other case here: the
+    step's `run:` comes out of the workflow, so it cannot drift from what ships.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp)
+        git(repo, "init", "-q", "-b", "main")
+        for name, text in tree.items():
+            target = repo / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(text)
+        git(repo, "add", "-A")
+        git(repo, "commit", "-qm", "merge result")
+        done = subprocess.run(
+            ["bash", "-e", "-c", step_script(PROPOSED_STEP)], cwd=repo, text=True,
+            capture_output=True, env={"PATH": "/usr/bin:/bin"},
+        )
+        return Result(done.returncode, done.stdout + done.stderr)
+
+
 BEGIN = "<!-- agent-factory:begin -->"
 END = "<!-- agent-factory:end -->"
 PROSE = "# Project context\n\n## Stack\n\nSomething.\n\n"
@@ -563,6 +590,55 @@ def _():
 def _():
     return run_placeholder_case("# Project context\n\nRead [the notes][ref]\n") == 0
 
+
+
+# The hand-off a role makes instead of editing a gate. The proposed file has to
+# be moved into place by `/gate` before anything merges, or the pull request
+# lands looking finished while the old gate keeps running.
+PROPOSED_GATE = "name: ci\non: [pull_request]\njobs:\n  ci:\n    uses: owner/factory/.github/workflows/ci.yml@v1.44.0\n"
+
+
+@case("a pull request that would leave a proposed workflow is stopped, naming /gate")
+def _():
+    got = run_proposed_case({"src/app.ts": "a\n",
+                             ".github/proposed/ci.yml": PROPOSED_GATE})
+    return got == 1 and "/gate" in got.output and ".github/proposed/ci.yml" in got.output
+
+
+@case("the replacement /gate opens, with the file moved into place, passes")
+def _():
+    return run_proposed_case({"src/app.ts": "a\n",
+                              ".github/workflows/ci.yml": PROPOSED_GATE}) == 0
+
+
+@case("a pull request with no proposed workflow passes the proposed check")
+def _():
+    return run_proposed_case({"src/app.ts": "a\n"}) == 0
+
+
+@case("every proposed file is named, not just the first")
+def _():
+    got = run_proposed_case({".github/proposed/ci.yml": PROPOSED_GATE,
+                             ".github/proposed/guard.yml": PROPOSED_GATE})
+    return (got == 1 and ".github/proposed/ci.yml" in got.output
+            and ".github/proposed/guard.yml" in got.output)
+
+
+@case("a proposed workflow is not a widening, because nothing runs it there")
+def _():
+    # The whole proposed file is new, so every `uses:` line in it reads as
+    # added. Without the exclusion every hand-off would also need a
+    # declaration, on a pull request that is never meant to merge.
+    return run_forked({"src/app.ts": "a\n"}, {"src/app.ts": "a\nmoved on\n"},
+                      {".github/proposed/ci.yml": PROPOSED_GATE}) == 0
+
+
+@case("the same file moved into .github/workflows/ still has to be declared")
+def _():
+    # The other half of the exclusion: the pull request /gate opens is where
+    # the file becomes executable, and that one is read in full.
+    return run_forked({"src/app.ts": "a\n"}, {"src/app.ts": "a\nmoved on\n"},
+                      {".github/workflows/ci.yml": PROPOSED_GATE}) == 1
 
 
 @case("a protected path merged on the base after the fork is not this branch's")

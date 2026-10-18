@@ -114,7 +114,8 @@ Do not read all of `docs/`. Read the one that matches what you are doing:
 - `docs/decisions/` - the ADRs, when a change alters a category rather than an
   implementation. `0001` records why the factory's own `owner/repo` is declared
   in the manifest rather than inferred from a remote; `0005` why agents run
-  only from sessions and setup needs no credentials
+  only from sessions and setup needs no credentials; `0006` why a workflow
+  changes only through `/gate`, on the person's yes in session
 - `docs/checkpoint.md` - what only the factory's owner can do: cutting a
   release, and the optional provisioning setup
 - `docs/open-questions.md` - what is still undecided, and where an answer has
